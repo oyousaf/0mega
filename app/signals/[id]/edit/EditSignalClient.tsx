@@ -55,7 +55,7 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
 
     if (diffSec < 60) {
       updatedDisplay = "just now";
-    } else if (diffMin < 1440) {
+    } else if (diffMin < 60) {
       updatedDisplay = `${diffMin} min ago`;
     } else {
       updatedDisplay = `on ${updatedAt.toLocaleDateString()} at ${updatedAt.toLocaleTimeString()}`;
