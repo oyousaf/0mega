@@ -11,7 +11,6 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-import { updateSignal } from "@/app/signals/actions/updateSignal";
 
 type SignalFormProps = {
   mode: "add" | "edit";
@@ -59,28 +58,25 @@ export default function SignalForm({
     setLoading(true);
 
     try {
+      // EDIT MODE → Parent handles everything (and parent shows toast)
       if (onSubmit) {
         await onSubmit(form);
         onSuccess?.();
-        showSnackbar("Signal saved!", "success");
         setLoading(false);
         return;
       }
 
-      if (mode === "edit") {
-        await updateSignal(form.id, form);
-        showSnackbar("Signal updated successfully", "success");
-      } else {
-        const res = await fetch("/api/signals", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        });
+      // ADD MODE → Form handles POST & toast
+      const res = await fetch("/api/signals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-        if (!res.ok) throw new Error("Failed to create signal");
-        showSnackbar("Signal added successfully", "success");
-        setForm(emptyForm);
-      }
+      if (!res.ok) throw new Error("Failed to create signal");
+
+      showSnackbar("Signal added successfully", "success");
+      setForm(emptyForm);
     } catch (err) {
       console.error(err);
       showSnackbar("Something went wrong", "error");
@@ -89,6 +85,7 @@ export default function SignalForm({
     setLoading(false);
   }
 
+  // Shared input styling
   const filledStyles = {
     "& .MuiFilledInput-root": {
       backgroundColor: "rgba(255,255,255,0.1)",
@@ -96,13 +93,14 @@ export default function SignalForm({
     },
     "& .MuiFilledInput-input": { color: "var(--omega-gold)" },
     "& .MuiInputLabel-root": { color: "var(--omega-gold)" },
+    "& .Mui-focused .MuiInputLabel-root": { color: "var(--omega-dark-gold)" },
   };
 
   return (
     <>
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold"
+        className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold transition-all duration-300"
       >
         {/* SYMBOL */}
         <TextField
@@ -192,6 +190,7 @@ export default function SignalForm({
             color: "var(--omega-green)",
             fontWeight: 600,
             "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
+            transition: "0.25s",
           }}
           fullWidth
         >
