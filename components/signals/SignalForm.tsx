@@ -8,6 +8,8 @@ import {
   InputLabel,
   Select,
   TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { updateSignal } from "@/app/signals/actions/updateSignal";
 
@@ -26,46 +28,62 @@ export default function SignalForm({
   onSubmit,
   onSuccess,
 }: SignalFormProps) {
-  const [form, setForm] = useState(
-    initialData || {
-      symbol: "",
-      strategy: "",
-      entry_price: "",
-      tp1: "",
-      tp2: "",
-      sl: "",
-      status: "active",
-      type: "stock",
-      halaal: true,
-    }
-  );
+  const emptyForm = {
+    symbol: "",
+    strategy: "",
+    entry_price: "",
+    tp1: "",
+    tp2: "",
+    sl: "",
+    status: "active",
+    type: "stock",
+    halaal: true,
+  };
 
+  const [form, setForm] = useState(initialData || emptyForm);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error",
+  });
+
+  const showSnackbar = (msg: string, severity: "success" | "error") => {
+    setSnackbar({ open: true, message: msg, severity });
+  };
 
   async function handleSubmit(e: any) {
     e.preventDefault();
     setLoading(true);
-    setMessage("");
 
-    if (onSubmit) {
-      await onSubmit(form);
-      onSuccess?.();
-      setLoading(false);
-      return;
-    }
+    try {
+      if (onSubmit) {
+        await onSubmit(form);
+        onSuccess?.();
+        showSnackbar("Signal saved!", "success");
+        setLoading(false);
+        return;
+      }
 
-    if (mode === "edit") {
-      await updateSignal(form.id, form);
-      setMessage("Updated successfully.");
-    } else {
-      const res = await fetch("/api/signals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      if (mode === "edit") {
+        await updateSignal(form.id, form);
+        showSnackbar("Signal updated successfully", "success");
+      } else {
+        const res = await fetch("/api/signals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
 
-      setMessage(res.ok ? "Added successfully." : "Failed.");
+        if (!res.ok) throw new Error("Failed to create signal");
+        showSnackbar("Signal added successfully", "success");
+        setForm(emptyForm);
+      }
+    } catch (err) {
+      console.error(err);
+      showSnackbar("Something went wrong", "error");
     }
 
     setLoading(false);
@@ -73,123 +91,137 @@ export default function SignalForm({
 
   const filledStyles = {
     "& .MuiFilledInput-root": {
-      backgroundColor: "rgba(255,255,255,0.08)",
+      backgroundColor: "rgba(255,255,255,0.1)",
       color: "var(--omega-gold)",
     },
-    "& .MuiFilledInput-input": {
-      color: "var(--omega-gold)",
-    },
-    "& .MuiInputLabel-root": {
-      color: "var(--omega-gold)",
-    },
+    "& .MuiFilledInput-input": { color: "var(--omega-gold)" },
+    "& .MuiInputLabel-root": { color: "var(--omega-gold)" },
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold"
-    >
-      {/* SYMBOL */}
-      <TextField
-        label="Symbol"
-        variant="filled"
-        fullWidth
-        required
-        sx={filledStyles}
-        value={form.symbol}
-        onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-      />
+    <>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold"
+      >
+        {/* SYMBOL */}
+        <TextField
+          label="Symbol"
+          variant="filled"
+          fullWidth
+          required
+          sx={filledStyles}
+          value={form.symbol}
+          onChange={(e) => setForm({ ...form, symbol: e.target.value })}
+        />
 
-      {/* STRATEGY */}
-      <TextField
-        label="Strategy"
-        variant="filled"
-        fullWidth
-        sx={filledStyles}
-        value={form.strategy}
-        onChange={(e) => setForm({ ...form, strategy: e.target.value })}
-      />
+        {/* STRATEGY */}
+        <TextField
+          label="Strategy"
+          variant="filled"
+          fullWidth
+          sx={filledStyles}
+          value={form.strategy}
+          onChange={(e) => setForm({ ...form, strategy: e.target.value })}
+        />
 
-      {/* ENTRY PRICE */}
-      <TextField
-        label="Entry Price"
-        variant="filled"
-        fullWidth
-        required
-        sx={filledStyles}
-        value={form.entry_price}
-        onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
-      />
+        {/* ENTRY PRICE */}
+        <TextField
+          label="Entry Price"
+          variant="filled"
+          fullWidth
+          required
+          sx={filledStyles}
+          value={form.entry_price}
+          onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
+        />
 
-      {/* TP1 TP2 SL */}
-      <div className="grid grid-cols-3 gap-2">
-        {["tp1", "tp2", "sl"].map((key) => (
-          <TextField
-            key={key}
-            label={key.toUpperCase()}
-            variant="filled"
-            sx={filledStyles}
-            value={form[key]}
-            onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-          />
-        ))}
-      </div>
+        {/* TP1 TP2 SL */}
+        <div className="grid grid-cols-3 gap-2">
+          {["tp1", "tp2", "sl"].map((key) => (
+            <TextField
+              key={key}
+              label={key.toUpperCase()}
+              variant="filled"
+              sx={filledStyles}
+              value={form[key]}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+            />
+          ))}
+        </div>
 
-      {/* TYPE (Select v2) */}
-      <FormControl fullWidth variant="filled" sx={filledStyles}>
-        <InputLabel>Type</InputLabel>
-        <Select
-          value={form.type}
-          onChange={(e) => setForm({ ...form, type: e.target.value })}
-          sx={{
-            color: "var(--omega-gold)",
-            "& .MuiSvgIcon-root": {
+        {/* TYPE */}
+        <FormControl fullWidth variant="filled" sx={filledStyles}>
+          <InputLabel>Type</InputLabel>
+          <Select
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            sx={{
               color: "var(--omega-gold)",
-            },
-          }}
-          MenuProps={{
-            PaperProps: {
-              sx: {
-                backgroundColor: "var(--omega-green)",
-                border: "1px solid var(--omega-dark-gold)",
-                color: "var(--omega-gold)",
+              "& .MuiSvgIcon-root": { color: "var(--omega-gold)" },
+            }}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  backgroundColor: "var(--omega-green)",
+                  border: "1px solid var(--omega-dark-gold)",
+                  color: "var(--omega-gold)",
+                },
               },
-            },
+            }}
+          >
+            <MenuItem value="stock" sx={{ color: "var(--omega-gold)" }}>
+              Stock
+            </MenuItem>
+            <MenuItem value="crypto" sx={{ color: "var(--omega-gold)" }}>
+              Crypto
+            </MenuItem>
+            <MenuItem value="forex" sx={{ color: "var(--omega-gold)" }}>
+              Forex
+            </MenuItem>
+          </Select>
+        </FormControl>
+
+        {/* SUBMIT */}
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={loading}
+          sx={{
+            backgroundColor: "var(--omega-gold)",
+            color: "var(--omega-green)",
+            fontWeight: 600,
+            "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
+          }}
+          fullWidth
+        >
+          {loading
+            ? "Saving..."
+            : submitLabel ?? (mode === "edit" ? "Save Changes" : "Add Signal")}
+        </Button>
+      </form>
+
+      {/* SNACKBAR */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={2500}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          sx={{
+            background:
+              snackbar.severity === "success" ? "var(--omega-gold)" : "#d32f2f",
+            color:
+              snackbar.severity === "success" ? "var(--omega-green)" : "white",
+            fontWeight: 600,
+            boxShadow: "0 0 10px rgba(0,0,0,0.3)",
           }}
         >
-          <MenuItem value="stock" sx={{ color: "var(--omega-gold)" }}>
-            Stock
-          </MenuItem>
-          <MenuItem value="crypto" sx={{ color: "var(--omega-gold)" }}>
-            Crypto
-          </MenuItem>
-          <MenuItem value="forex" sx={{ color: "var(--omega-gold)" }}>
-            Forex
-          </MenuItem>
-        </Select>
-      </FormControl>
-
-      {/* SUBMIT */}
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={loading}
-        sx={{
-          backgroundColor: "var(--omega-gold)",
-          color: "var(--omega-green)",
-          fontWeight: 600,
-          "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
-        }}
-        fullWidth
-      >
-        {loading
-          ? "Saving..."
-          : submitLabel ?? (mode === "edit" ? "Save Changes" : "Add Signal")}
-      </Button>
-
-      {message && (
-        <p className="text-sm text-foreground opacity-90">{message}</p>
-      )}
-    </form>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
