@@ -94,10 +94,9 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
       await deleteSignal(signal.id);
 
       showSnack("Signal deleted.");
+      router.replace("/signals", { scroll: false });
 
-      setTimeout(() => {
-        router.replace("/signals", { scroll: false });
-      }, 300);
+      return;
     } catch {
       showSnack("Failed to delete signal.", "error");
     }
