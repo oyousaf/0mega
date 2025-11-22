@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { evaluateAllSignals } from "@/lib/tradingEngine";
+import { runEngineAction } from "@/app/signals/actions/runEngine";
 import SignalCard from "./SignalCard";
 import DeleteModal from "./DeleteModal";
 import { deleteSignal } from "@/app/signals/actions/deleteSignal";
@@ -17,7 +17,7 @@ export default function SignalClient({
 }) {
   type ToastType = "success" | "error" | "info" | "warning";
 
-  const [signals, setSignals] = useState<any[]>([]);
+  const [signals, setSignals] = useState<any[]>(initialSignals || []);
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
@@ -30,36 +30,55 @@ export default function SignalClient({
   const prevStatuses = useRef<Record<number, string>>({});
   const router = useRouter();
 
+  /**
+   * Main refresh cycle
+   */
   async function refresh() {
-    const evaluated = await evaluateAllSignals(initialSignals);
+    try {
+      // Call server action
+      const updated = await runEngineAction();
 
-    evaluated.forEach((sig) => {
-      const prev = prevStatuses.current[sig.id];
+      // Detect status changes → toast alerts
+      updated.forEach((sig: any) => {
+        const prev = prevStatuses.current[sig.id];
 
-      if (prev && prev !== sig.status) {
-        setToast({
-          open: true,
-          message: `${sig.symbol}: ${sig.status}`,
-          type: sig.status.toLowerCase().includes("tp")
-            ? "success"
-            : sig.status.toLowerCase().includes("sl")
-            ? "error"
-            : "info",
-        });
-      }
+        if (prev && prev !== sig.status) {
+          setToast({
+            open: true,
+            message: `${sig.symbol}: ${sig.status}`,
+            type: sig.status.includes("TP")
+              ? "success"
+              : sig.status.includes("SL")
+              ? "error"
+              : sig.status === "EXPIRED"
+              ? "warning"
+              : "info",
+          });
+        }
 
-      prevStatuses.current[sig.id] = sig.status;
-    });
+        prevStatuses.current[sig.id] = sig.status;
+      });
 
-    setSignals(evaluated);
+      setSignals(updated);
+
+      setSignals(updated);
+    } catch (err) {
+      console.error("Engine error:", err);
+    }
   }
 
+  /**
+   * Start interval
+   */
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 15000);
     return () => clearInterval(id);
   }, []);
 
+  /**
+   * Delete handler
+   */
   async function confirmDelete() {
     if (!deleteId) return;
 
@@ -79,7 +98,7 @@ export default function SignalClient({
 
   return (
     <main className="max-w-7xl mx-auto w-full p-6 space-y-6">
-      {/* Header + Toolbar */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
@@ -106,6 +125,7 @@ export default function SignalClient({
         </div>
       </div>
 
+      {/* Signal Cards */}
       <AnimatePresence mode="popLayout">
         {signals.length === 0 ? (
           <motion.p
@@ -117,7 +137,7 @@ export default function SignalClient({
             No signals found.
           </motion.p>
         ) : (
-          signals.map((signal) => (
+          signals.map((signal: any) => (
             <motion.div
               key={signal.id}
               layout
@@ -160,6 +180,8 @@ export default function SignalClient({
                 ? "#56AE57"
                 : toast.type === "error"
                 ? "#C23B22"
+                : toast.type === "warning"
+                ? "#D99A00"
                 : "#789FCC",
             color: "#fff",
           }}
