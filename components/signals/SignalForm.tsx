@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   MenuItem,
@@ -40,10 +40,18 @@ export default function SignalForm({
     halaal: true,
   };
 
-  const [form, setForm] = useState(initialData || emptyForm);
+  // Ensure safe defaults for edit mode
+  const safeInitial = initialData
+    ? {
+        ...emptyForm,
+        ...initialData,
+        notes: initialData.notes ?? "",
+      }
+    : emptyForm;
+
+  const [form, setForm] = useState(safeInitial);
   const [loading, setLoading] = useState(false);
 
-  // Snackbar state
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -53,6 +61,17 @@ export default function SignalForm({
   const showSnackbar = (message: string, severity: "success" | "error") => {
     setSnackbar({ open: true, message, severity });
   };
+
+  // When initialData changes
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        ...emptyForm,
+        ...initialData,
+        notes: initialData.notes ?? "",
+      });
+    }
+  }, [initialData]);
 
   async function handleSubmit(e: any) {
     e.preventDefault();
@@ -147,7 +166,7 @@ export default function SignalForm({
               label={item.label}
               variant="filled"
               sx={filledStyles}
-              value={(form as any)[item.key]}
+              value={(form as any)[item.key] ?? ""}
               onChange={(e) =>
                 setForm({
                   ...form,
@@ -166,7 +185,7 @@ export default function SignalForm({
           multiline
           rows={3}
           sx={filledStyles}
-          value={form.notes}
+          value={form.notes ?? ""}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
@@ -196,7 +215,7 @@ export default function SignalForm({
           </Select>
         </FormControl>
 
-        {/* SUBMIT BTN */}
+        {/* SUBMIT */}
         <Button
           type="submit"
           fullWidth
