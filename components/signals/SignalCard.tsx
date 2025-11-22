@@ -1,210 +1,151 @@
 "use client";
 
+import { motion } from "framer-motion";
 import {
   Card,
   CardContent,
   Typography,
-  Box,
-  Stack,
   Chip,
-  IconButton,
+  Button,
+  Box,
 } from "@mui/material";
-import { motion, AnimatePresence } from "framer-motion";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 
 export default function SignalCard({ signal, onEdit, onDelete }: any) {
-  const {
-    id,
-    symbol,
-    strategy,
-    entry_price,
-    tp1,
-    tp2,
-    sl,
-    status,
-    type,
-    halaal,
-    current_price,
-    created_at,
-  } = signal;
+  const updated = signal.updated_at ? new Date(signal.updated_at) : null;
 
-  const s = status.toLowerCase();
+  const now = new Date();
+  let lastUpdated = "—";
 
-  const statusColor = s.includes("tp")
+  if (updated) {
+    const diffMin = Math.floor((now.getTime() - updated.getTime()) / 60000);
+    lastUpdated = diffMin < 1 ? "just now" : `${diffMin} min ago`;
+  }
+
+  const STATUS = signal.status?.toUpperCase().replace("_", " ") || "ACTIVE";
+
+  const statusColor = STATUS.includes("TP2")
+    ? "#37C86E"
+    : STATUS.includes("TP1")
     ? "#56AE57"
-    : s.includes("sl")
+    : STATUS.includes("SL")
     ? "#C23B22"
-    : s.includes("pending")
-    ? "#8e8e8e"
+    : STATUS.includes("EXP")
+    ? "#A77F35"
     : "#789FCC";
-
-  const glow = s.includes("tp")
-    ? "0 0 10px rgba(212,175,55,0.45)"
-    : s.includes("sl")
-    ? "0 0 12px rgba(194,59,34,0.4)"
-    : "0 0 12px rgba(120,159,204,0.25)";
-
-  const timeAgo = (() => {
-    const ms = Date.now() - new Date(created_at).getTime();
-    const mins = Math.floor(ms / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  })();
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      layout
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.22 }}
     >
       <Card
         sx={{
-          position: "relative",
-          overflow: "visible",
           backgroundColor: "var(--omega-green)",
-          color: "var(--omega-gold)",
           border: "1px solid var(--omega-dark-gold)",
+          color: "var(--omega-gold)",
           borderRadius: "0.9rem",
-          boxShadow: glow,
-          transition: "transform 0.25s ease, box-shadow 0.25s ease",
+          cursor: "pointer",
           "&:hover": {
-            transform: "translateY(-4px)",
-            boxShadow: "0 0 25px rgba(212,175,55,0.35)",
+            boxShadow: "0 0 20px rgba(212,175,55,0.25)",
+            transform: "translateY(-3px)",
+            transition: "0.25s",
           },
         }}
       >
-        {/* ==== FLOATING ACTION ICONS ==== */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: 8,
-            right: 8,
-            display: "flex",
-            gap: 1,
-            zIndex: 20,
-          }}
-        >
-          <IconButton
-            onClick={() => onEdit(id)}
-            sx={{
-              backgroundColor: "var(--omega-gold)",
-              color: "var(--omega-green)",
-              "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
-              width: 32,
-              height: 32,
-            }}
-          >
-            <EditIcon sx={{ fontSize: 17 }} />
-          </IconButton>
-
-          <IconButton
-            onClick={() => onDelete(id)}
-            sx={{
-              backgroundColor: "#C23B22",
-              color: "#fff",
-              "&:hover": { backgroundColor: "#952516" },
-              width: 32,
-              height: 32,
-            }}
-          >
-            <DeleteIcon sx={{ fontSize: 17 }} />
-          </IconButton>
-        </Box>
-
         <CardContent sx={{ p: 3 }}>
-          {/* ==== HEADER ROW ==== */}
+          {/* Header */}
           <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            mb={1.5}
-            pr={10}
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
           >
-            <Typography variant="h6" fontWeight="bold">
-              {symbol}
+            <Typography variant="h6" fontWeight="700" color="var(--omega-gold)">
+              {signal.symbol}
             </Typography>
 
-            <Stack direction="row" spacing={1} alignItems="center">
-              {halaal && (
-                <Chip
-                  label="☪"
-                  size="small"
-                  sx={{
-                    backgroundColor: "var(--omega-gold)",
-                    color: "var(--omega-green)",
-                    fontWeight: 700,
-                  }}
-                />
-              )}
-
-              <Chip
-                label={status.toUpperCase()}
-                size="medium"
-                sx={{
-                  backgroundColor: statusColor,
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 25,
-                }}
-              />
-            </Stack>
+            <Chip
+              label={STATUS}
+              sx={{
+                backgroundColor: statusColor,
+                color: "#fff",
+                fontWeight: 700,
+              }}
+            />
           </Box>
 
-          {/* ==== TIME ==== */}
-          <Typography
-            variant="caption"
+          {/* Info Grid */}
+          <Box
             sx={{
-              opacity: 0.7,
-              mb: 1,
-              display: "block",
-              color: "var(--foreground)",
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 1.2,
+              color: "var(--omega-gold)",
+              opacity: 0.9,
+              fontSize: "0.875rem",
             }}
           >
-            {timeAgo}
+            <Typography>
+              <strong>Entry:</strong> {signal.entry_price}
+            </Typography>
+
+            <Typography>
+              <strong>TP1:</strong> {signal.tp1}
+            </Typography>
+
+            <Typography>
+              <strong>TP2:</strong> {signal.tp2}
+            </Typography>
+
+            <Typography>
+              <strong>SL:</strong> {signal.sl}
+            </Typography>
+          </Box>
+
+          {/* Footer */}
+          <Typography
+            variant="caption"
+            sx={{ display: "block", opacity: 0.6, mt: 2 }}
+          >
+            Last updated: {lastUpdated}
           </Typography>
 
-          {/* ==== DETAILS ==== */}
-          <Typography variant="body2" sx={{ color: "var(--foreground)" }}>
-            Current:{" "}
-            {current_price ? (
-              <AnimatePresence mode="wait">
-                <motion.span
-                  key={current_price}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.4 }}
-                  style={{ color: "var(--omega-gold)" }}
-                >
-                  {current_price}
-                </motion.span>
-              </AnimatePresence>
-            ) : (
-              <span style={{ color: "#8e8e8e" }}>—</span>
-            )}
-          </Typography>
+          {/* Buttons */}
+          <Box sx={{ mt: 3, display: "flex", gap: 2 }}>
+            <Button
+              variant="contained"
+              onClick={onEdit}
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 700,
+                "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
+              }}
+            >
+              Edit
+            </Button>
 
-          <Typography variant="body2" sx={{ color: "var(--foreground)" }}>
-            Type: <span style={{ color: "var(--omega-gold)" }}>{type?.toUpperCase()}</span>
-          </Typography>
-
-          <Typography variant="body2" sx={{ color: "var(--foreground)" }}>
-            Strategy: <span style={{ color: "var(--omega-gold)" }}>{strategy}</span>
-          </Typography>
-
-          <Typography variant="body2" sx={{ color: "var(--foreground)" }}>
-            Entry: <span style={{ color: "var(--omega-gold)" }}>{entry_price}</span>
-          </Typography>
-
-          <Typography variant="body2" sx={{ color: "var(--foreground)" }}>
-            TP1: <span style={{ color: "var(--omega-gold)" }}>{tp1}</span> •  
-            TP2: <span style={{ color: "var(--omega-gold)" }}>{tp2}</span> •  
-            SL: <span style={{ color: "var(--omega-gold)" }}>{sl}</span>
-          </Typography>
+            <Button
+              variant="outlined"
+              onClick={onDelete}
+              sx={{
+                borderColor: "#C23B22",
+                color: "#C23B22",
+                fontWeight: 700,
+                "&:hover": {
+                  backgroundColor: "rgba(194,59,34,0.2)",
+                  borderColor: "#952516",
+                },
+              }}
+            >
+              Delete
+            </Button>
+          </Box>
         </CardContent>
       </Card>
     </motion.div>

@@ -32,54 +32,52 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
     severity: "success" as "success" | "error",
   });
 
-  function showSnack(
-    message: string,
-    severity: "success" | "error" = "success"
-  ) {
-    setSnack({ open: true, message, severity });
+  function showSnack(msg: string, sev: "success" | "error" = "success") {
+    setSnack({ open: true, message: msg, severity: sev });
   }
 
   // ─────────────────────────────
-  // DATE FORMATTING
+  // DATE HANDLING
   // ─────────────────────────────
-  const createdAt = new Date(signal.created_at);
-  const updatedAt = signal.updated_at ? new Date(signal.updated_at) : null;
+  const created = new Date(signal.created_at);
+  const updated = signal.updated_at ? new Date(signal.updated_at) : null;
 
-  let updatedDisplay = "—";
+  function fmtTime(date: Date | null) {
+    if (!date) return "—";
 
-  if (updatedAt) {
-    const now = new Date();
-    const diffMs = now.getTime() - updatedAt.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
+    const diff = Date.now() - date.getTime();
+    const mins = Math.floor(diff / 60000);
 
-    if (diffSec < 60) {
-      updatedDisplay = "just now";
-    } else if (diffMin < 60) {
-      updatedDisplay = `${diffMin} min ago`;
-    } else {
-      updatedDisplay = `on ${updatedAt.toLocaleDateString()} at ${updatedAt.toLocaleTimeString()}`;
-    }
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins} min ago`;
+
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+
+    return date.toLocaleString();
   }
 
   // ─────────────────────────────
-  // STATUS CHIP COLOUR
+  // STATUS STYLE
   // ─────────────────────────────
-  const statusLower = signal.status.toLowerCase();
-  const statusColor = statusLower.includes("tp")
+  const STATUS = signal.status?.toUpperCase() || "ACTIVE";
+
+  const statusColor = STATUS.includes("TP2")
+    ? "#37C86E"
+    : STATUS.includes("TP1")
     ? "#56AE57"
-    : statusLower.includes("sl")
+    : STATUS.includes("SL")
     ? "#C23B22"
-    : statusLower.includes("pending")
-    ? "#8e8e8e"
+    : STATUS.includes("EXP")
+    ? "#A77F35"
     : "#789FCC";
 
   // ─────────────────────────────
-  // UPDATE HANDLER
+  // UPDATE SIGNAL
   // ─────────────────────────────
-  async function handleUpdate(formData: Partial<Signal>) {
+  async function handleUpdate(data: Partial<Signal>) {
     try {
-      await updateSignal(signal.id, formData);
+      await updateSignal(signal.id, data);
       showSnack("Signal updated successfully.");
     } catch {
       showSnack("Failed to update signal.", "error");
@@ -87,32 +85,29 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
   }
 
   // ─────────────────────────────
-  // DELETE HANDLER
+  // DELETE SIGNAL
   // ─────────────────────────────
   async function handleDelete() {
     try {
       await deleteSignal(signal.id);
-
+      router.replace("/signals");
       showSnack("Signal deleted.");
-      router.replace("/signals", { scroll: false });
-
-      return;
     } catch {
       showSnack("Failed to delete signal.", "error");
     }
   }
 
   // ─────────────────────────────
-  // RENDER
+  // UI
   // ─────────────────────────────
   return (
     <motion.main
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="max-w-5xl mx-auto w-full p-6 space-y-10"
+      className="w-full space-y-10 p-6"
     >
       {/* Breadcrumbs */}
-      <div className="text-sm text-foreground opacity-70">
+      <div className="text-sm text-foreground/70">
         <Link href="/signals" className="hover:underline">
           Signals
         </Link>{" "}
@@ -132,6 +127,7 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
               sx={{
                 borderColor: "var(--omega-gold)",
                 color: "var(--omega-gold)",
+                fontWeight: 600,
                 "&:hover": { borderColor: "var(--omega-dark-gold)" },
               }}
             >
@@ -150,21 +146,27 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
       </div>
 
       {/* Metadata */}
-      <Box className="bg-omega-green border border-omega-dark-gold rounded-lg p-4 space-y-3 shadow-md">
-        <div className="flex items-center gap-3">
+      <Box
+        className="rounded-xl shadow-md"
+        sx={{
+          backgroundColor: "var(--omega-green)",
+          border: "1px solid var(--omega-dark-gold)",
+          p: 4,
+        }}
+      >
+        <div className="flex items-center gap-3 mb-3">
           <Chip
-            label={signal.status.toUpperCase()}
+            label={STATUS.replace("_", " ")}
             sx={{
-              background: statusColor,
+              backgroundColor: statusColor,
               color: "#fff",
               fontWeight: 700,
-              px: 1,
             }}
           />
 
           {signal.halaal && (
             <Chip
-              label="Halaal ✓"
+              label="HALAAL"
               sx={{
                 backgroundColor: "var(--omega-gold)",
                 color: "var(--omega-green)",
@@ -174,28 +176,30 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
           )}
         </div>
 
-        <Divider sx={{ borderColor: "var(--omega-dark-gold)" }} />
+        <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 3 }} />
 
-        <p className="text-foreground opacity-80 text-sm">
-          <strong>Created:</strong> {createdAt.toLocaleString()}
+        <p className="text-sm text-foreground/80">
+          <strong>Created:</strong> {created.toLocaleString()}
         </p>
 
-        <p className="text-foreground opacity-80 text-sm">
-          <strong>Updated:</strong> {updatedDisplay}
+        <p className="text-sm text-foreground/80">
+          <strong>Updated:</strong> {fmtTime(updated)}
         </p>
 
-        <p className="text-foreground opacity-80 text-sm">
+        <p className="text-sm text-foreground/80">
           <strong>Type:</strong> {signal.type?.toUpperCase()}
         </p>
       </Box>
 
-      {/* Form */}
-      <SignalForm
-        mode="edit"
-        initialData={signal}
-        submitLabel="Save Changes"
-        onSubmit={handleUpdate}
-      />
+      {/* Edit Form — now spaced beautifully */}
+      <div className="pt-4">
+        <SignalForm
+          mode="edit"
+          initialData={signal}
+          submitLabel="Save Changes"
+          onSubmit={handleUpdate}
+        />
+      </div>
 
       {/* Delete Modal */}
       <Dialog
@@ -210,13 +214,11 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
         }}
       >
         <DialogTitle>Delete Signal?</DialogTitle>
-        <DialogContent sx={{ opacity: 0.9 }}>
-          This action cannot be undone.
-        </DialogContent>
+        <DialogContent>This action cannot be undone.</DialogContent>
         <DialogActions>
           <Button
-            onClick={() => setOpenDelete(false)}
             sx={{ color: "var(--omega-gold)" }}
+            onClick={() => setOpenDelete(false)}
           >
             Cancel
           </Button>

@@ -34,9 +34,9 @@ export default async function EditSignalPage({
   const signal = rows[0];
 
   return (
-    <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-10">
       {/* Left: Edit Form */}
-      <div className="lg:col-span-2">
+      <div>
         <EditSignalClient signal={signal} />
       </div>
 
