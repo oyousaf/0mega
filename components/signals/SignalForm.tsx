@@ -34,6 +34,7 @@ export default function SignalForm({
     tp1: "",
     tp2: "",
     sl: "",
+    notes: "",
     status: "active",
     type: "stock",
     halaal: true,
@@ -49,8 +50,8 @@ export default function SignalForm({
     severity: "success" as "success" | "error",
   });
 
-  const showSnackbar = (msg: string, severity: "success" | "error") => {
-    setSnackbar({ open: true, message: msg, severity });
+  const showSnackbar = (message: string, severity: "success" | "error") => {
+    setSnackbar({ open: true, message, severity });
   };
 
   async function handleSubmit(e: any) {
@@ -58,7 +59,6 @@ export default function SignalForm({
     setLoading(true);
 
     try {
-      // EDIT MODE → Parent handles everything (and parent shows toast)
       if (onSubmit) {
         await onSubmit(form);
         onSuccess?.();
@@ -66,14 +66,14 @@ export default function SignalForm({
         return;
       }
 
-      // ADD MODE → Form handles POST & toast
+      // ADD MODE
       const res = await fetch("/api/signals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
 
-      if (!res.ok) throw new Error("Failed to create signal");
+      if (!res.ok) throw new Error("Failed to add signal");
 
       showSnackbar("Signal added successfully", "success");
       setForm(emptyForm);
@@ -85,7 +85,6 @@ export default function SignalForm({
     setLoading(false);
   }
 
-  // Shared input styling
   const filledStyles = {
     "& .MuiFilledInput-root": {
       backgroundColor: "rgba(255,255,255,0.1)",
@@ -93,7 +92,9 @@ export default function SignalForm({
     },
     "& .MuiFilledInput-input": { color: "var(--omega-gold)" },
     "& .MuiInputLabel-root": { color: "var(--omega-gold)" },
-    "& .Mui-focused .MuiInputLabel-root": { color: "var(--omega-dark-gold)" },
+    "& .Mui-focused .MuiInputLabel-root": {
+      color: "var(--omega-dark-gold)",
+    },
   };
 
   return (
@@ -134,19 +135,40 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
         />
 
-        {/* TP1 TP2 SL */}
+        {/* TP1, TP2, SL */}
         <div className="grid grid-cols-3 gap-2">
-          {["tp1", "tp2", "sl"].map((key) => (
+          {[
+            { key: "tp1", label: "TP1" },
+            { key: "tp2", label: "TP2" },
+            { key: "sl", label: "SL" },
+          ].map((item) => (
             <TextField
-              key={key}
-              label={key.toUpperCase()}
+              key={item.key}
+              label={item.label}
               variant="filled"
               sx={filledStyles}
-              value={form[key]}
-              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+              value={(form as any)[item.key]}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  [item.key]: e.target.value,
+                })
+              }
             />
           ))}
         </div>
+
+        {/* NOTES */}
+        <TextField
+          label="Notes"
+          variant="filled"
+          fullWidth
+          multiline
+          rows={3}
+          sx={filledStyles}
+          value={form.notes}
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+        />
 
         {/* TYPE */}
         <FormControl fullWidth variant="filled" sx={filledStyles}>
@@ -168,31 +190,27 @@ export default function SignalForm({
               },
             }}
           >
-            <MenuItem value="stock" sx={{ color: "var(--omega-gold)" }}>
-              Stock
-            </MenuItem>
-            <MenuItem value="crypto" sx={{ color: "var(--omega-gold)" }}>
-              Crypto
-            </MenuItem>
-            <MenuItem value="forex" sx={{ color: "var(--omega-gold)" }}>
-              Forex
-            </MenuItem>
+            <MenuItem value="stock">Stock</MenuItem>
+            <MenuItem value="crypto">Crypto</MenuItem>
+            <MenuItem value="forex">Forex</MenuItem>
           </Select>
         </FormControl>
 
-        {/* SUBMIT */}
+        {/* SUBMIT BTN */}
         <Button
           type="submit"
-          variant="contained"
+          fullWidth
           disabled={loading}
+          variant="contained"
           sx={{
             backgroundColor: "var(--omega-gold)",
             color: "var(--omega-green)",
             fontWeight: 600,
-            "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
+            "&:hover": {
+              backgroundColor: "var(--omega-dark-gold)",
+            },
             transition: "0.25s",
           }}
-          fullWidth
         >
           {loading
             ? "Saving..."
@@ -204,8 +222,11 @@ export default function SignalForm({
       <Snackbar
         open={snackbar.open}
         autoHideDuration={2500}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           severity={snackbar.severity}
@@ -213,9 +234,9 @@ export default function SignalForm({
             background:
               snackbar.severity === "success" ? "var(--omega-gold)" : "#d32f2f",
             color:
-              snackbar.severity === "success" ? "var(--omega-green)" : "white",
-            fontWeight: 600,
+              snackbar.severity === "success" ? "var(--omega-green)" : "#fff",
             boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+            fontWeight: 600,
           }}
         >
           {snackbar.message}

@@ -55,7 +55,7 @@ export default function NewSignalPage() {
       {/* FORM */}
       <SignalForm
         mode="add"
-        submitLabel="Save Signal"
+        submitLabel="Add Signal"
         onSuccess={() => router.push("/signals")}
       />
     </motion.main>
