@@ -1,21 +1,22 @@
 import { pool } from "@/lib/neon";
-import { fetchMockPrice } from "@/lib/prices";
+import { getPrice } from "@/providers";
 
-/** How much price must change before writing to DB */
+/** Minimum change before writing to DB */
 const PRICE_THRESHOLD = 0.05;
 
-/** Convert engine enum → UI readable */
+/** Convert ENGINE_STATUS → readable UI status */
 function formatStatus(status: string) {
   return status.replace(/_/g, " ");
 }
 
-/** Determine new status */
+/** Evaluate new status based on TP/SL/Entry logic */
 export function evaluateState(signal: any, price: number) {
   const entry = Number(signal.entry_price);
   const tp1 = Number(signal.tp1);
   const tp2 = Number(signal.tp2);
   const sl = Number(signal.sl);
 
+  // Invalid data → skip evaluation
   if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return "INVALID";
 
   if (price >= tp2) return "TP2_HIT";
@@ -25,14 +26,14 @@ export function evaluateState(signal: any, price: number) {
   return "ACTIVE";
 }
 
-/** Expire after 7 days */
+/** Auto expire older than 7 days */
 export function isExpired(signal: any) {
   const created = new Date(signal.created_at);
   const now = new Date();
   return (now.getTime() - created.getTime()) / 86400000 >= 7;
 }
 
-/** Update DB */
+/** Update DB safely */
 async function updateSignalRow(
   id: number,
   newStatus: string,
@@ -41,16 +42,16 @@ async function updateSignalRow(
   await pool.query(
     `
     UPDATE signals
-    SET status=$1,
-        current_price=$2,
-        updated_at=NOW()
-    WHERE id=$3
+    SET status = $1,
+        current_price = $2,
+        updated_at = NOW()
+    WHERE id = $3
     `,
     [formatStatus(newStatus), newPrice, id]
   );
 }
 
-/** Log major events */
+/** Log meaningful transitions into signal_history */
 async function logEvent(signalId: number, event: string, price: number) {
   try {
     await pool.query(
@@ -58,44 +59,48 @@ async function logEvent(signalId: number, event: string, price: number) {
       INSERT INTO signal_history (signal_id, event, price, timestamp)
       VALUES ($1, $2, $3, NOW())
       `,
-      [signalId, event, price]
+      [signalId, event.toUpperCase(), price]
     );
   } catch (err) {
     console.error("Failed to log event:", err);
   }
 }
 
-/** Main engine */
+/**
+ * MAIN ENGINE
+ * Called from runEngineAction in Active Signals.
+ */
 export async function runStatusEngine(signals: any[]) {
   for (const signal of signals) {
-    const oldStatus = signal.status;
+    const oldStatus = signal.status?.toUpperCase() || "ACTIVE";
     const oldPrice = Number(signal.current_price ?? 0);
 
-    const price = await fetchMockPrice(signal.symbol);
-    let newStatus = evaluateState(signal, price);
+    // Fetch new price using providers
+    const currentPrice = await getPrice(signal.symbol, signal.type);
 
-    // expiry check
-    if (isExpired(signal)) newStatus = "EXPIRED";
+    // Determine updated state
+    let engineStatus = evaluateState(signal, currentPrice);
 
-    const pretty = formatStatus(newStatus);
+    // Expiry check
+    if (isExpired(signal)) engineStatus = "EXPIRED";
 
-    // ------------------------------------
-    // CHANGE DETECTION
-    // ------------------------------------
+    // Format for DB/UI
+    const prettyStatus = formatStatus(engineStatus);
 
-    const statusChanged = pretty !== oldStatus;
-    const priceChanged =
-      Math.abs(price - oldPrice) >= PRICE_THRESHOLD;
+    // Compare to avoid unnecessary DB writes
+    const statusChanged =
+      prettyStatus.toUpperCase() !== oldStatus.toUpperCase();
+    const priceChanged = Math.abs(currentPrice - oldPrice) >= PRICE_THRESHOLD;
 
-    // nothing changed → skip write
+    // NOTHING CHANGED → SKIP
     if (!statusChanged && !priceChanged) continue;
 
-    // write to DB
-    await updateSignalRow(signal.id, newStatus, price);
+    // Write updated row
+    await updateSignalRow(signal.id, engineStatus, currentPrice);
 
-    // only log meaningful status transitions
+    // Log only meaningful status transitions
     if (statusChanged) {
-      await logEvent(signal.id, pretty.toLowerCase(), price);
+      await logEvent(signal.id, engineStatus, currentPrice);
     }
   }
 }
