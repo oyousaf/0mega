@@ -1,5 +1,6 @@
 import { pool } from "@/lib/neon";
 import EditSignalClient from "./EditSignalClient";
+import SignalHistorySidebar from "@/components/signals/SignalHistorySidebar";
 
 export default async function EditSignalPage({
   params,
@@ -8,13 +9,41 @@ export default async function EditSignalPage({
 }) {
   const { id } = await params;
 
+  const numericId = Number(id);
+
+  if (!numericId || isNaN(numericId)) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 text-center text-red-500">
+        Invalid signal ID.
+      </div>
+    );
+  }
+
   const { rows } = await pool.query(`SELECT * FROM signals WHERE id = $1`, [
-    id,
+    numericId,
   ]);
 
   if (!rows.length) {
-    return null;
+    return (
+      <div className="max-w-7xl mx-auto p-6 text-center text-red-500">
+        Signal not found.
+      </div>
+    );
   }
 
-  return <EditSignalClient signal={rows[0]} />;
+  const signal = rows[0];
+
+  return (
+    <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Left: Edit Form */}
+      <div className="lg:col-span-2">
+        <EditSignalClient signal={signal} />
+      </div>
+
+      {/* Right: History Sidebar */}
+      <div>
+        <SignalHistorySidebar signalId={signal.id} />
+      </div>
+    </div>
+  );
 }
