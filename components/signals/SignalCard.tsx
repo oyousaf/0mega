@@ -9,17 +9,30 @@ import {
   Button,
   Box,
 } from "@mui/material";
+import { useRef } from "react";
+
+// -------------------------------
+// Time formatter (2025 dashboard standard)
+// -------------------------------
+function timeAgo(date: Date | null) {
+  if (!date) return "—";
+
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min${mins > 1 ? "s" : ""} ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+
+  return date.toLocaleString();
+}
 
 export default function SignalCard({ signal, onEdit, onDelete }: any) {
   const updated = signal.updated_at ? new Date(signal.updated_at) : null;
 
-  const now = new Date();
-  let lastUpdated = "—";
-
-  if (updated) {
-    const diffMin = Math.floor((now.getTime() - updated.getTime()) / 60000);
-    lastUpdated = diffMin < 1 ? "just now" : `${diffMin} min ago`;
-  }
+  const lastUpdated = timeAgo(updated);
 
   const STATUS = signal.status?.toUpperCase().replace("_", " ") || "ACTIVE";
 
@@ -35,6 +48,17 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
 
   const currentPrice = signal.current_price ?? null;
 
+  // Track previous price to show ↑ or ↓
+  const prevPriceRef = useRef<number | null>(currentPrice);
+  const prevPrice = prevPriceRef.current;
+  prevPriceRef.current = currentPrice;
+
+  let priceColor = "var(--omega-gold)";
+  if (prevPrice != null && currentPrice != null) {
+    if (currentPrice > prevPrice) priceColor = "#4CAF50";
+    if (currentPrice < prevPrice) priceColor = "#E53935";
+  }
+
   return (
     <motion.div
       layout
@@ -48,7 +72,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
           backgroundColor: "var(--omega-green)",
           border: "1px solid var(--omega-dark-gold)",
           color: "var(--omega-gold)",
-          borderRadius: "0.9rem",
+          borderRadius: "1rem",
           cursor: "pointer",
           "&:hover": {
             boxShadow: "0 0 20px rgba(212,175,55,0.25)",
@@ -58,7 +82,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
         }}
       >
         <CardContent sx={{ p: 3 }}>
-          {/* Header Row */}
+          {/* Header */}
           <Box
             sx={{
               display: "flex",
@@ -76,22 +100,25 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
                 {signal.symbol}
               </Typography>
 
-              {/* Current Price - prominent */}
+              {/* Current Price */}
               <motion.span
-                key={currentPrice} // triggers fade animation
+                key={currentPrice}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.35 }}
                 style={{
                   display: "block",
-                  fontSize: "1.25rem",
+                  fontSize: "1.35rem",
                   fontWeight: "700",
-                  color: "var(--omega-gold)",
-                  textShadow: "0 0 6px rgba(212,175,55,0.45)",
-                  marginTop: "2px",
+                  color: priceColor,
+                  marginTop: "3px",
+                  textShadow:
+                    priceColor === "var(--omega-gold)"
+                      ? "0 0 6px rgba(212,175,55,0.45)"
+                      : "none",
                 }}
               >
-                {currentPrice ? currentPrice : "—"}
+                {currentPrice ?? "—"}
               </motion.span>
             </Box>
 
@@ -101,11 +128,12 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
                 backgroundColor: statusColor,
                 color: "#fff",
                 fontWeight: 700,
+                fontSize: "0.8rem",
               }}
             />
           </Box>
 
-          {/* Info Grid */}
+          {/* Grid Info */}
           <Box
             sx={{
               display: "grid",
