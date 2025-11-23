@@ -91,7 +91,6 @@ export default function SignalForm({
         return;
       }
 
-      // Add mode
       const res = await fetch("/api/signals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,15 +109,45 @@ export default function SignalForm({
     setLoading(false);
   }
 
+  // Omega styles
   const inputStyles = {
     "& .MuiFilledInput-root": {
-      backgroundColor: "rgba(255,255,255,0.1)",
+      backgroundColor: "var(--omega-green)",
+      borderRadius: "12px",
+      fontWeight: 600,
+      color: "var(--omega-gold)",
+      border: "1px solid var(--omega-gold)",
+      "&:before, &:after": { display: "none" },
+
+      "&:hover": {
+        borderColor: "var(--omega-dark-gold)",
+      },
+      "&.Mui-focused": {
+        borderColor: "var(--omega-dark-gold)",
+      },
+    },
+
+    "& .MuiFilledInput-input": {
       color: "var(--omega-gold)",
     },
-    "& .MuiFilledInput-input": { color: "var(--omega-gold)" },
-    "& .MuiInputLabel-root": { color: "var(--omega-gold)" },
+
+    "& .MuiInputLabel-root": {
+      color: "var(--omega-gold)",
+      fontWeight: 600,
+    },
     "& .Mui-focused .MuiInputLabel-root": {
-      color: "var(--omega-dark-gold)",
+      color: "var(--omega-gold)",
+    },
+  };
+
+  const selectMenuItem = {
+    color: "var(--omega-gold)",
+    fontWeight: 600,
+    "&.Mui-selected": {
+      backgroundColor: "rgba(255, 215, 0, 0.18)",
+    },
+    "&:hover": {
+      backgroundColor: "rgba(255, 215, 0, 0.1)",
     },
   };
 
@@ -160,7 +189,7 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
         />
 
-        {/* TP1/TP2/SL */}
+        {/* TP1 / TP2 / SL */}
         <div className="grid grid-cols-3 gap-2">
           {[
             { key: "tp1", label: "TP1" },
@@ -196,10 +225,24 @@ export default function SignalForm({
           <Select
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value })}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  backgroundColor: "var(--omega-green)",
+                  border: "1px solid var(--omega-dark-gold)",
+                },
+              },
+            }}
           >
-            <MenuItem value="stock">Stock</MenuItem>
-            <MenuItem value="crypto">Crypto</MenuItem>
-            <MenuItem value="forex">Forex</MenuItem>
+            <MenuItem value="stock" sx={selectMenuItem}>
+              Stock
+            </MenuItem>
+            <MenuItem value="crypto" sx={selectMenuItem}>
+              Crypto
+            </MenuItem>
+            <MenuItem value="forex" sx={selectMenuItem}>
+              Forex
+            </MenuItem>
           </Select>
         </FormControl>
 
@@ -210,15 +253,20 @@ export default function SignalForm({
               checked={form.halaal}
               onChange={(e) => setForm({ ...form, halaal: e.target.checked })}
               sx={{
-                "& .MuiSwitch-thumb": { backgroundColor: "var(--omega-gold)" },
+                "& .MuiSwitch-thumb": {
+                  backgroundColor: "var(--omega-gold)",
+                },
                 "& .Mui-checked .MuiSwitch-thumb": {
                   backgroundColor: "var(--omega-dark-gold)",
+                },
+                "& .MuiSwitch-track": {
+                  backgroundColor: "rgba(255, 215, 0, 0.4)",
                 },
               }}
             />
           }
           label="Halaal"
-          sx={{ color: "var(--omega-gold)" }}
+          sx={{ color: "var(--omega-gold)", fontWeight: 600 }}
         />
 
         {/* SUBMIT */}
@@ -230,7 +278,9 @@ export default function SignalForm({
           sx={{
             backgroundColor: "var(--omega-gold)",
             color: "var(--omega-green)",
-            fontWeight: 600,
+            fontWeight: 700,
+            py: 1.2,
+            borderRadius: "12px",
             "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
           }}
         >
