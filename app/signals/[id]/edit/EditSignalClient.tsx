@@ -228,7 +228,7 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
         </p>
       </Box>
 
-      {/* Edit Form — now spaced beautifully */}
+      {/* Edit Form */}
       <div className="pt-4">
         <SignalForm
           mode="edit"
