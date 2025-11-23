@@ -10,13 +10,17 @@ import {
   TextField,
   Snackbar,
   Alert,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
+
+import { Signal } from "@/app/types/signal";
 
 type SignalFormProps = {
   mode: "add" | "edit";
-  initialData?: any;
+  initialData?: Partial<Signal>;
   submitLabel?: string;
-  onSubmit?: (data: any) => Promise<void>;
+  onSubmit?: (data: Partial<Signal>) => Promise<void>;
   onSuccess?: () => void;
 };
 
@@ -27,6 +31,7 @@ export default function SignalForm({
   onSubmit,
   onSuccess,
 }: SignalFormProps) {
+  // template
   const emptyForm = {
     symbol: "",
     strategy: "",
@@ -35,21 +40,16 @@ export default function SignalForm({
     tp2: "",
     sl: "",
     notes: "",
-    status: "active",
     type: "stock",
     halaal: true,
   };
 
-  // Ensure safe defaults for edit mode
-  const safeInitial = initialData
-    ? {
-        ...emptyForm,
-        ...initialData,
-        notes: initialData.notes ?? "",
-      }
-    : emptyForm;
+  // safe initial load
+  const [form, setForm] = useState<any>({
+    ...emptyForm,
+    ...initialData,
+  });
 
-  const [form, setForm] = useState(safeInitial);
   const [loading, setLoading] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
@@ -62,34 +62,52 @@ export default function SignalForm({
     setSnackbar({ open: true, message, severity });
   };
 
-  // When initialData changes
+  // update when editing another item
   useEffect(() => {
     if (initialData) {
       setForm({
         ...emptyForm,
         ...initialData,
-        notes: initialData.notes ?? "",
       });
     }
   }, [initialData]);
+
+  const num = (v: any) => {
+    if (v === "" || v === null || v === undefined) return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  };
 
   async function handleSubmit(e: any) {
     e.preventDefault();
     setLoading(true);
 
+    // CLEAN PAYLOAD FOR DB
+    const clean: Partial<Signal> = {
+      symbol: form.symbol.trim(),
+      strategy: form.strategy?.trim() || null,
+      entry_price: num(form.entry_price),
+      tp1: num(form.tp1),
+      tp2: num(form.tp2),
+      sl: num(form.sl),
+      notes: form.notes?.trim() || null,
+      type: form.type,
+      halaal: Boolean(form.halaal),
+    };
+
     try {
       if (onSubmit) {
-        await onSubmit(form);
+        await onSubmit(clean);
         onSuccess?.();
         setLoading(false);
         return;
       }
 
-      // ADD MODE
+      // Add Mode → POST API
       const res = await fetch("/api/signals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(clean),
       });
 
       if (!res.ok) throw new Error("Failed to add signal");
@@ -104,7 +122,7 @@ export default function SignalForm({
     setLoading(false);
   }
 
-  const filledStyles = {
+  const inputStyles = {
     "& .MuiFilledInput-root": {
       backgroundColor: "rgba(255,255,255,0.1)",
       color: "var(--omega-gold)",
@@ -128,7 +146,7 @@ export default function SignalForm({
           variant="filled"
           fullWidth
           required
-          sx={filledStyles}
+          sx={inputStyles}
           value={form.symbol}
           onChange={(e) => setForm({ ...form, symbol: e.target.value })}
         />
@@ -138,8 +156,8 @@ export default function SignalForm({
           label="Strategy"
           variant="filled"
           fullWidth
-          sx={filledStyles}
-          value={form.strategy}
+          sx={inputStyles}
+          value={form.strategy || ""}
           onChange={(e) => setForm({ ...form, strategy: e.target.value })}
         />
 
@@ -149,12 +167,12 @@ export default function SignalForm({
           variant="filled"
           fullWidth
           required
-          sx={filledStyles}
+          sx={inputStyles}
           value={form.entry_price}
           onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
         />
 
-        {/* TP1, TP2, SL */}
+        {/* TP1/TP2/SL */}
         <div className="grid grid-cols-3 gap-2">
           {[
             { key: "tp1", label: "TP1" },
@@ -165,14 +183,9 @@ export default function SignalForm({
               key={item.key}
               label={item.label}
               variant="filled"
-              sx={filledStyles}
-              value={(form as any)[item.key] ?? ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  [item.key]: e.target.value,
-                })
-              }
+              sx={inputStyles}
+              value={form[item.key] || ""}
+              onChange={(e) => setForm({ ...form, [item.key]: e.target.value })}
             />
           ))}
         </div>
@@ -184,36 +197,43 @@ export default function SignalForm({
           fullWidth
           multiline
           rows={3}
-          sx={filledStyles}
-          value={form.notes ?? ""}
+          sx={inputStyles}
+          value={form.notes || ""}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
         {/* TYPE */}
-        <FormControl fullWidth variant="filled" sx={filledStyles}>
+        <FormControl fullWidth variant="filled" sx={inputStyles}>
           <InputLabel>Type</InputLabel>
           <Select
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value })}
-            sx={{
-              color: "var(--omega-gold)",
-              "& .MuiSvgIcon-root": { color: "var(--omega-gold)" },
-            }}
-            MenuProps={{
-              PaperProps: {
-                sx: {
-                  backgroundColor: "var(--omega-green)",
-                  border: "1px solid var(--omega-dark-gold)",
-                  color: "var(--omega-gold)",
-                },
-              },
-            }}
           >
             <MenuItem value="stock">Stock</MenuItem>
             <MenuItem value="crypto">Crypto</MenuItem>
             <MenuItem value="forex">Forex</MenuItem>
           </Select>
         </FormControl>
+
+        {/* HALAAL */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={form.halaal}
+              onChange={(e) => setForm({ ...form, halaal: e.target.checked })}
+              sx={{
+                "& .MuiSwitch-thumb": { backgroundColor: "var(--omega-gold)" },
+                "& .Mui-checked": {
+                  "& .MuiSwitch-thumb": {
+                    backgroundColor: "var(--omega-dark-gold)",
+                  },
+                },
+              }}
+            />
+          }
+          label="Halaal"
+          sx={{ color: "var(--omega-gold)", mt: 1 }}
+        />
 
         {/* SUBMIT */}
         <Button
@@ -225,10 +245,7 @@ export default function SignalForm({
             backgroundColor: "var(--omega-gold)",
             color: "var(--omega-green)",
             fontWeight: 600,
-            "&:hover": {
-              backgroundColor: "var(--omega-dark-gold)",
-            },
-            transition: "0.25s",
+            "&:hover": { backgroundColor: "var(--omega-dark-gold)" },
           }}
         >
           {loading
@@ -241,11 +258,8 @@ export default function SignalForm({
       <Snackbar
         open={snackbar.open}
         autoHideDuration={2500}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
-        }}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           severity={snackbar.severity}
@@ -254,7 +268,6 @@ export default function SignalForm({
               snackbar.severity === "success" ? "var(--omega-gold)" : "#d32f2f",
             color:
               snackbar.severity === "success" ? "var(--omega-green)" : "#fff",
-            boxShadow: "0 0 10px rgba(0,0,0,0.3)",
             fontWeight: 600,
           }}
         >

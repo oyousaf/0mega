@@ -4,7 +4,7 @@ export interface Signal {
   symbol: string;
   strategy: string | null;
 
-  entry_price: number;
+  entry_price: number | null;
   tp1: number | null;
   tp2: number | null;
   sl: number | null;
@@ -22,7 +22,7 @@ export interface Signal {
     | "SL HIT"
     | "EXPIRED"
     | "INVALID"
-    | string; 
+    | string;
 
   current_price: number | null;
 
