@@ -26,21 +26,10 @@ export default function SignalHistorySidebar({
 
   useEffect(() => {
     refreshHistory();
+
     const id = setInterval(refreshHistory, 60000);
     return () => clearInterval(id);
   }, [signalId]);
-
-  // Status dot
-  function getDotColor(event: string) {
-    const ev = event.toUpperCase();
-
-    if (ev.includes("TP2")) return "#37C86E";
-    if (ev.includes("TP1")) return "#56AE57";
-    if (ev.includes("SL")) return "#C23B22";
-    if (ev.includes("EXP")) return "#A77F35";
-
-    return "#789FCC";
-  }
 
   return (
     <aside
@@ -66,49 +55,29 @@ export default function SignalHistorySidebar({
       )}
 
       <div className="space-y-3">
-        {events.map((ev) => {
-          const color = getDotColor(ev.event);
+        {events.map((ev) => (
+          <div
+            key={ev.id}
+            className="
+              p-3 
+              rounded-lg 
+              bg-omega-green/20 
+              border border-omega-dark-gold/30
+            "
+          >
+            <p className="font-semibold text-omega-gold uppercase tracking-wider">
+              {ev.event}
+            </p>
 
-          return (
-            <div
-              key={ev.id}
-              className="
-                p-3 
-                rounded-lg 
-                bg-omega-green/20 
-                border border-omega-dark-gold/30
-              "
-            >
-              <div className="flex items-center gap-2">
-                {/* Status Dot */}
-                <span
-                  style={{
-                    width: "7px",
-                    height: "7px",
-                    borderRadius: "50%",
-                    backgroundColor: color,
-                    boxShadow: `0 0 6px ${color}AA`,
-                    display: "inline-block",
-                  }}
-                ></span>
+            {ev.price && (
+              <p className="text-sm text-omega-gold/80">Price: {ev.price}</p>
+            )}
 
-                <p className="font-semibold text-omega-gold uppercase tracking-wider">
-                  {ev.event}
-                </p>
-              </div>
-
-              {ev.price && (
-                <p className="text-sm text-omega-gold/80 ml-[14px]">
-                  Price: {ev.price}
-                </p>
-              )}
-
-              <p className="text-xs text-omega-gold/60 mt-1 ml-[14px]">
-                {formatTimestamp(ev.timestamp)}
-              </p>
-            </div>
-          );
-        })}
+            <p className="text-xs text-omega-gold/60 mt-1">
+              {formatTimestamp(ev.timestamp)}
+            </p>
+          </div>
+        ))}
       </div>
     </aside>
   );
