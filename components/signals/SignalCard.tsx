@@ -9,32 +9,9 @@ import {
   Button,
   Box,
 } from "@mui/material";
-import { useRef } from "react";
-
-// -------------------------------
-// Time formatter (2025 dashboard standard)
-// -------------------------------
-function timeAgo(date: Date | null) {
-  if (!date) return "—";
-
-  const diff = Date.now() - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  const hrs = Math.floor(mins / 60);
-  const days = Math.floor(hrs / 24);
-
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min${mins > 1 ? "s" : ""} ago`;
-  if (hrs < 24) return `${hrs}h ago`;
-
-  return date.toLocaleString();
-}
 
 export default function SignalCard({ signal, onEdit, onDelete }: any) {
-  const updated = signal.updated_at ? new Date(signal.updated_at) : null;
-
-  const lastUpdated = timeAgo(updated);
-
-  const STATUS = signal.status?.toUpperCase().replace("_", " ") || "ACTIVE";
+  const STATUS = signal.status?.toUpperCase() || "ACTIVE";
 
   const statusColor = STATUS.includes("TP2")
     ? "#37C86E"
@@ -45,19 +22,6 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
     : STATUS.includes("EXP")
     ? "#A77F35"
     : "#789FCC";
-
-  const currentPrice = signal.current_price ?? null;
-
-  // Track previous price to show ↑ or ↓
-  const prevPriceRef = useRef<number | null>(currentPrice);
-  const prevPrice = prevPriceRef.current;
-  prevPriceRef.current = currentPrice;
-
-  let priceColor = "var(--omega-gold)";
-  if (prevPrice != null && currentPrice != null) {
-    if (currentPrice > prevPrice) priceColor = "#4CAF50";
-    if (currentPrice < prevPrice) priceColor = "#E53935";
-  }
 
   return (
     <motion.div
@@ -72,7 +36,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
           backgroundColor: "var(--omega-green)",
           border: "1px solid var(--omega-dark-gold)",
           color: "var(--omega-gold)",
-          borderRadius: "1rem",
+          borderRadius: "0.9rem",
           cursor: "pointer",
           "&:hover": {
             boxShadow: "0 0 20px rgba(212,175,55,0.25)",
@@ -82,7 +46,6 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
         }}
       >
         <CardContent sx={{ p: 3 }}>
-          {/* Header */}
           <Box
             sx={{
               display: "flex",
@@ -91,49 +54,95 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
               mb: 2,
             }}
           >
-            <Box>
-              <Typography
-                variant="h6"
-                fontWeight="700"
-                color="var(--omega-gold)"
-              >
-                {signal.symbol}
-              </Typography>
+            {/* LEFT SIDE: Symbol + Dot + Strategy */}
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: "var(--omega-gold)",
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
+              {/* SYMBOL */}
+              {signal.symbol?.toUpperCase()}
 
-              {/* Current Price */}
+              {/* GLOW-PULSE STATUS DOT */}
               <motion.span
-                key={currentPrice}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.35 }}
+                key={signal.status}
+                initial={{ boxShadow: `0 0 0px ${statusColor}`, opacity: 1 }}
+                animate={{
+                  boxShadow: [
+                    `0 0 0px ${statusColor}`,
+                    `0 0 10px ${statusColor}AA`,
+                    `0 0 0px ${statusColor}`,
+                  ],
+                  opacity: [1, 0.8, 1],
+                }}
+                transition={{
+                  duration: 1.2,
+                  repeat: 2,
+                  ease: "easeInOut",
+                }}
                 style={{
-                  display: "block",
-                  fontSize: "1.35rem",
-                  fontWeight: "700",
-                  color: priceColor,
-                  marginTop: "3px",
-                  textShadow:
-                    priceColor === "var(--omega-gold)"
-                      ? "0 0 6px rgba(212,175,55,0.45)"
-                      : "none",
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  backgroundColor: statusColor,
+                  display: "inline-block",
+                  margin: "0 4px",
+                }}
+              ></motion.span>
+
+              {/* STRATEGY — reverted to previous look */}
+              <span
+                style={{
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
+                  opacity: 0.9,
+                  color: "var(--omega-gold)",
+                  textTransform: "uppercase",
                 }}
               >
-                {currentPrice ?? "—"}
-              </motion.span>
-            </Box>
+                {signal.strategy || ""}
+              </span>
+            </Typography>
 
+            {/* STATUS CHIP */}
             <Chip
               label={STATUS}
               sx={{
                 backgroundColor: statusColor,
                 color: "#fff",
                 fontWeight: 700,
-                fontSize: "0.8rem",
               }}
             />
           </Box>
 
-          {/* Grid Info */}
+          {/* =======================================================
+              CURRENT PRICE
+              ======================================================= */}
+          <motion.span
+            key={signal.current_price}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.35 }}
+            style={{
+              display: "block",
+              fontSize: "1.25rem",
+              fontWeight: "700",
+              color: "var(--omega-gold)",
+              textShadow: "0 0 6px rgba(212,175,55,0.45)",
+              marginBottom: "12px",
+            }}
+          >
+            {signal.current_price ?? "—"}
+          </motion.span>
+
+          {/* =======================================================
+              GRID OF ENTRY / TP1 / TP2 / SL
+              ======================================================= */}
           <Box
             sx={{
               display: "grid",
@@ -161,15 +170,19 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
             </Typography>
           </Box>
 
-          {/* Footer */}
+          {/* =======================================================
+              LAST UPDATED
+              ======================================================= */}
           <Typography
             variant="caption"
             sx={{ display: "block", opacity: 0.6, mt: 2 }}
           >
-            Last updated: {lastUpdated}
+            Last updated: {signal.lastUpdatedFormatted}
           </Typography>
 
-          {/* Buttons */}
+          {/* =======================================================
+              ACTION BUTTONS
+              ======================================================= */}
           <Box sx={{ mt: 3, display: "flex", gap: 2 }}>
             <Button
               variant="contained"
