@@ -1,15 +1,16 @@
 export interface Signal {
   id: number;
 
+  // Core fields
   symbol: string;
-  strategy: string | null;
+  strategy: string;
 
   entry_price: number | null;
   tp1: number | null;
   tp2: number | null;
   sl: number | null;
 
-  notes: string | null;
+  notes: string;
 
   type: "stock" | "crypto" | "forex";
 
