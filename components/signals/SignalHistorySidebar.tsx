@@ -5,7 +5,7 @@ import { getSignalHistory } from "@/app/signals/actions/getSignalHistory";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
 import { formatStatus } from "@/app/utils/formatStatus";
 
-// Chip colours
+// Status → colour mapping
 const statusColor = (status: string) => {
   if (status.includes("TP2")) return "#37C86E";
   if (status.includes("TP1")) return "#56AE57";
@@ -54,30 +54,30 @@ export default function SignalHistorySidebar({
 
       <div className="space-y-3">
         {events.map((ev) => {
-          const formatted = formatStatus(ev.event);
-          const color = statusColor(formatted);
+          const formattedStatus = formatStatus(ev.event);
+          const color = statusColor(formattedStatus);
 
           return (
             <div
               key={ev.id}
               className="p-3 rounded-lg bg-omega-green/20 border border-omega-dark-gold/30"
             >
-              {/* Status Chip */}
+              {/* STATUS PILL */}
               <span
                 className="inline-block text-xs font-bold px-2 py-1 rounded-md text-white"
                 style={{ backgroundColor: color }}
               >
-                {formatted}
+                {formattedStatus}
               </span>
 
-              {/* Price */}
+              {/* PRICE */}
               {ev.price && (
                 <p className="text-sm text-omega-gold/80 mt-1">
                   Price: {ev.price}
                 </p>
               )}
 
-              {/* Timestamp */}
+              {/* TIMESTAMP */}
               <p className="text-xs text-omega-gold/60 mt-1">
                 {formatTimestamp(ev.timestamp)}
               </p>

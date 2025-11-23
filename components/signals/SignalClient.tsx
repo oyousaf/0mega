@@ -10,15 +10,22 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import { useRouter } from "next/navigation";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
+import { Signal } from "@/app/types/signal";
+
+// Global status formatting
+function formatStatusLabel(s: string | null | undefined): string {
+  if (!s) return "ACTIVE";
+  return s.replace(/_/g, " ").toUpperCase();
+}
 
 export default function SignalClient({
   initialSignals,
 }: {
-  initialSignals: any[];
+  initialSignals: Signal[];
 }) {
   type ToastType = "success" | "error" | "info" | "warning";
 
-  const [signals, setSignals] = useState<any[]>(initialSignals || []);
+  const [signals, setSignals] = useState<Signal[]>(initialSignals || []);
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
@@ -28,36 +35,39 @@ export default function SignalClient({
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // store last known statuses for animation + toast triggers
   const prevStatuses = useRef<Record<number, string>>({});
 
   const router = useRouter();
 
-  // ───────────────────────────────────────────
+  // ------------------------------------------------------
   // ENGINE REFRESH
-  // ───────────────────────────────────────────
+  // ------------------------------------------------------
   async function refresh() {
     try {
       const updated = await runEngineAction();
 
-      updated.forEach((sig: any) => {
+      updated.forEach((sig: Signal) => {
         const prev = prevStatuses.current[sig.id];
+        const formattedStatus = formatStatusLabel(sig.status);
 
-        // STATUS CHANGE → toast notification
-        if (prev && prev !== sig.status) {
+        // Status change toast
+        if (prev && prev !== formattedStatus) {
           setToast({
             open: true,
-            message: `${sig.symbol}: ${sig.status}`,
-            type: sig.status.includes("TP")
+            message: `${sig.symbol}: ${formattedStatus}`,
+            type: formattedStatus.includes("TP")
               ? "success"
-              : sig.status.includes("SL")
+              : formattedStatus.includes("SL")
               ? "error"
-              : sig.status.includes("EXP")
+              : formattedStatus.includes("EXP")
               ? "warning"
               : "info",
           });
         }
 
-        prevStatuses.current[sig.id] = sig.status;
+        // update memory
+        prevStatuses.current[sig.id] = formattedStatus;
       });
 
       setSignals(updated);
@@ -66,18 +76,18 @@ export default function SignalClient({
     }
   }
 
-  // ───────────────────────────────────────────
+  // ------------------------------------------------------
   // INTERVAL
-  // ───────────────────────────────────────────
+  // ------------------------------------------------------
   useEffect(() => {
-    refresh();
+    refresh(); // initial
     const id = setInterval(refresh, 15000);
     return () => clearInterval(id);
   }, []);
 
-  // ───────────────────────────────────────────
+  // ------------------------------------------------------
   // DELETE SIGNAL
-  // ───────────────────────────────────────────
+  // ------------------------------------------------------
   async function confirmDelete() {
     if (!deleteId) return;
 
@@ -95,6 +105,9 @@ export default function SignalClient({
     });
   }
 
+  // ------------------------------------------------------
+  // UI
+  // ------------------------------------------------------
   return (
     <main className="max-w-7xl mx-auto w-full p-6 space-y-6">
       {/* HEADER */}
@@ -136,7 +149,7 @@ export default function SignalClient({
             No signals found.
           </motion.p>
         ) : (
-          signals.map((signal: any) => (
+          signals.map((signal: Signal) => (
             <motion.div
               key={signal.id}
               layout
@@ -148,6 +161,7 @@ export default function SignalClient({
               <SignalCard
                 signal={{
                   ...signal,
+                  status: formatStatusLabel(signal.status),
                   lastUpdatedFormatted: formatTimestamp(signal.updated_at),
                 }}
                 onEdit={() => router.push(`/signals/${signal.id}/edit`)}
