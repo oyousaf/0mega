@@ -11,22 +11,21 @@ import {
 } from "@mui/material";
 import { Signal } from "@/app/types/signal";
 
-interface Props {
-  signal: Signal & { lastUpdatedFormatted?: string };
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
 // Global status formatting
 function formatStatusLabel(s: string | null | undefined): string {
   if (!s) return "ACTIVE";
   return s.replace(/_/g, " ").toUpperCase();
 }
 
+interface Props {
+  signal: Signal & { lastUpdatedFormatted?: string };
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
 export default function SignalCard({ signal, onEdit, onDelete }: Props) {
   const STATUS = formatStatusLabel(signal.status);
 
-  // color logic unchanged
   const statusColor = STATUS.includes("TP2")
     ? "#37C86E"
     : STATUS.includes("TP1")
@@ -60,7 +59,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
         }}
       >
         <CardContent sx={{ p: 3 }}>
-          {/* HEADER ROW */}
+          {/* Header: Symbol + pulsing dot + strategy */}
           <Box
             sx={{
               display: "flex",
@@ -69,7 +68,6 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
               mb: 2,
             }}
           >
-            {/* SYMBOL + DOT + STRATEGY */}
             <Typography
               variant="h6"
               sx={{
@@ -80,10 +78,9 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
                 gap: "4px",
               }}
             >
-              {/* SYMBOL */}
               {signal.symbol?.toUpperCase()}
 
-              {/* PULSING DOT WHEN STATUS CHANGES */}
+              {/* Glow pulse on STATUS change */}
               <motion.span
                 key={STATUS}
                 initial={{ opacity: 1, boxShadow: `0 0 0px ${statusColor}` }}
@@ -153,7 +150,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
             {signal.current_price ?? "—"}
           </motion.span>
 
-          {/* PRICE GRID */}
+          {/* GRID */}
           <Box
             sx={{
               display: "grid",
@@ -186,7 +183,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
             Last updated: {signal.lastUpdatedFormatted}
           </Typography>
 
-          {/* ACTION BUTTONS */}
+          {/* BUTTONS */}
           <Box sx={{ mt: 3, display: "flex", gap: 2 }}>
             <Button
               variant="contained"

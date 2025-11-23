@@ -1,10 +1,16 @@
 import { pool } from "@/lib/neon";
 import { getPrice } from "@/providers";
-import { formatStatus } from "@/app/utils/formatStatus";
 
+/** Minimum change before writing to DB */
 const PRICE_THRESHOLD = 0.05;
 
-function evaluateState(signal: any, price: number) {
+/** Convert ENGINE_STATUS → readable UI status */
+function formatStatus(status: string) {
+  return status.replace(/_/g, " ");
+}
+
+/** Evaluate new status based on TP/SL logic */
+export function evaluateState(signal: any, price: number) {
   const entry = Number(signal.entry_price);
   const tp1 = Number(signal.tp1);
   const tp2 = Number(signal.tp2);
@@ -19,14 +25,17 @@ function evaluateState(signal: any, price: number) {
   return "ACTIVE";
 }
 
-function isExpired(signal: any) {
+/** Auto expire after 7 days */
+export function isExpired(signal: any) {
   const created = new Date(signal.created_at);
-  return (Date.now() - created.getTime()) / 86400000 >= 7;
+  const now = new Date();
+  return (now.getTime() - created.getTime()) / 86400000 >= 7;
 }
 
+/** Update DB */
 async function updateSignalRow(
   id: number,
-  prettyStatus: string,
+  newStatus: string,
   newPrice: number
 ) {
   await pool.query(
@@ -35,48 +44,54 @@ async function updateSignalRow(
     SET 
       status = $1,
       current_price = $2,
-      updated_at = NOW()
+      updated_at = CASE 
+        WHEN status != $1 THEN NOW()
+        ELSE updated_at
+      END
     WHERE id = $3
     `,
-    [prettyStatus, newPrice, id]
+    [formatStatus(newStatus), newPrice, id]
   );
 }
 
-async function logEvent(signalId: number, prettyStatus: string, price: number) {
+/** Log meaningful transitions */
+async function logEvent(signalId: number, event: string, price: number) {
   try {
     await pool.query(
       `
       INSERT INTO signal_history (signal_id, event, price, timestamp)
       VALUES ($1, $2, $3, NOW())
       `,
-      [signalId, prettyStatus, price]
+      [signalId, event.toUpperCase(), price]
     );
   } catch (err) {
     console.error("Failed to log event:", err);
   }
 }
 
+/** MAIN ENGINE */
 export async function runStatusEngine(signals: any[]) {
   for (const signal of signals) {
-    const oldStatus = formatStatus(signal.status);
+    const oldStatus = signal.status?.toUpperCase() || "ACTIVE";
     const oldPrice = Number(signal.current_price ?? 0);
 
     const currentPrice = await getPrice(signal.symbol, signal.type);
-    let newStatus = evaluateState(signal, currentPrice);
+    let engineStatus = evaluateState(signal, currentPrice);
 
-    if (isExpired(signal)) newStatus = "EXPIRED";
+    if (isExpired(signal)) engineStatus = "EXPIRED";
 
-    const prettyStatus = formatStatus(newStatus);
+    const prettyStatus = formatStatus(engineStatus);
 
-    const statusChanged = prettyStatus !== oldStatus;
+    const statusChanged =
+      prettyStatus.toUpperCase() !== oldStatus.toUpperCase();
     const priceChanged = Math.abs(currentPrice - oldPrice) >= PRICE_THRESHOLD;
 
     if (!statusChanged && !priceChanged) continue;
 
-    await updateSignalRow(signal.id, prettyStatus, currentPrice);
+    await updateSignalRow(signal.id, engineStatus, currentPrice);
 
     if (statusChanged) {
-      await logEvent(signal.id, prettyStatus, currentPrice);
+      await logEvent(signal.id, engineStatus, currentPrice);
     }
   }
 }

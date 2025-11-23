@@ -16,7 +16,7 @@ import {
 
 import { Signal } from "@/app/types/signal";
 
-type SignalFormProps = {
+type Props = {
   mode: "add" | "edit";
   initialData?: Partial<Signal>;
   submitLabel?: string;
@@ -30,9 +30,8 @@ export default function SignalForm({
   submitLabel,
   onSubmit,
   onSuccess,
-}: SignalFormProps) {
-  // template
-  const emptyForm = {
+}: Props) {
+  const empty = {
     symbol: "",
     strategy: "",
     entry_price: "",
@@ -44,12 +43,7 @@ export default function SignalForm({
     halaal: true,
   };
 
-  // safe initial load
-  const [form, setForm] = useState<any>({
-    ...emptyForm,
-    ...initialData,
-  });
-
+  const [form, setForm] = useState<any>({ ...empty, ...initialData });
   const [loading, setLoading] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
@@ -58,17 +52,12 @@ export default function SignalForm({
     severity: "success" as "success" | "error",
   });
 
-  const showSnackbar = (message: string, severity: "success" | "error") => {
-    setSnackbar({ open: true, message, severity });
-  };
+  const showSnackbar = (m: string, s: "success" | "error") =>
+    setSnackbar({ open: true, message: m, severity: s });
 
-  // update when editing another item
   useEffect(() => {
     if (initialData) {
-      setForm({
-        ...emptyForm,
-        ...initialData,
-      });
+      setForm({ ...empty, ...initialData });
     }
   }, [initialData]);
 
@@ -82,15 +71,14 @@ export default function SignalForm({
     e.preventDefault();
     setLoading(true);
 
-    // CLEAN PAYLOAD FOR DB
     const clean: Partial<Signal> = {
       symbol: form.symbol.trim(),
-      strategy: form.strategy?.trim() || null,
+      strategy: form.strategy?.trim() || "",
       entry_price: num(form.entry_price),
       tp1: num(form.tp1),
       tp2: num(form.tp2),
       sl: num(form.sl),
-      notes: form.notes?.trim() || null,
+      notes: form.notes?.trim() || "",
       type: form.type,
       halaal: Boolean(form.halaal),
     };
@@ -103,7 +91,7 @@ export default function SignalForm({
         return;
       }
 
-      // Add Mode → POST API
+      // Add mode
       const res = await fetch("/api/signals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,7 +101,7 @@ export default function SignalForm({
       if (!res.ok) throw new Error("Failed to add signal");
 
       showSnackbar("Signal added successfully", "success");
-      setForm(emptyForm);
+      setForm(empty);
     } catch (err) {
       console.error(err);
       showSnackbar("Something went wrong", "error");
@@ -138,7 +126,7 @@ export default function SignalForm({
     <>
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold transition-all duration-300"
+        className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold"
       >
         {/* SYMBOL */}
         <TextField
@@ -157,7 +145,7 @@ export default function SignalForm({
           variant="filled"
           fullWidth
           sx={inputStyles}
-          value={form.strategy || ""}
+          value={form.strategy}
           onChange={(e) => setForm({ ...form, strategy: e.target.value })}
         />
 
@@ -178,14 +166,14 @@ export default function SignalForm({
             { key: "tp1", label: "TP1" },
             { key: "tp2", label: "TP2" },
             { key: "sl", label: "SL" },
-          ].map((item) => (
+          ].map((i) => (
             <TextField
-              key={item.key}
-              label={item.label}
+              key={i.key}
+              label={i.label}
               variant="filled"
               sx={inputStyles}
-              value={form[item.key] || ""}
-              onChange={(e) => setForm({ ...form, [item.key]: e.target.value })}
+              value={form[i.key]}
+              onChange={(e) => setForm({ ...form, [i.key]: e.target.value })}
             />
           ))}
         </div>
@@ -198,7 +186,7 @@ export default function SignalForm({
           multiline
           rows={3}
           sx={inputStyles}
-          value={form.notes || ""}
+          value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
@@ -223,16 +211,14 @@ export default function SignalForm({
               onChange={(e) => setForm({ ...form, halaal: e.target.checked })}
               sx={{
                 "& .MuiSwitch-thumb": { backgroundColor: "var(--omega-gold)" },
-                "& .Mui-checked": {
-                  "& .MuiSwitch-thumb": {
-                    backgroundColor: "var(--omega-dark-gold)",
-                  },
+                "& .Mui-checked .MuiSwitch-thumb": {
+                  backgroundColor: "var(--omega-dark-gold)",
                 },
               }}
             />
           }
           label="Halaal"
-          sx={{ color: "var(--omega-gold)", mt: 1 }}
+          sx={{ color: "var(--omega-gold)" }}
         />
 
         {/* SUBMIT */}
@@ -259,7 +245,6 @@ export default function SignalForm({
         open={snackbar.open}
         autoHideDuration={2500}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           severity={snackbar.severity}

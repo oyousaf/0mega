@@ -5,20 +5,20 @@ import { pool } from "@/lib/neon";
 
 export async function runEngineAction() {
   try {
-    // 1. Fetch all signals once
+    // Fetch once
     const { rows: initial } = await pool.query(
       `SELECT * FROM signals ORDER BY created_at DESC`
     );
 
-    // 2. Run status engine (this mutates DB)
+    // Run status engine
     await runStatusEngine(initial);
 
-    // 3. Re-fetch the rows after engine updates
+    // Fetch again ONLY after engine operations
     const { rows: updated } = await pool.query(
       `SELECT * FROM signals ORDER BY created_at DESC`
     );
 
-    // 4. Normalise timestamps
+    // Normalize timestamps to readable ISO format
     return updated.map((row: any) => ({
       ...row,
       created_at:

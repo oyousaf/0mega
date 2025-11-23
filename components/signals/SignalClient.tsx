@@ -12,10 +12,18 @@ import { useRouter } from "next/navigation";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
 import { Signal } from "@/app/types/signal";
 
-// Global status formatting
+// Pretty status (DB stays canonical)
 function formatStatusLabel(s: string | null | undefined): string {
   if (!s) return "ACTIVE";
   return s.replace(/_/g, " ").toUpperCase();
+}
+
+// Simple shallow compare (avoids false state updates)
+function shallowCompare(a: any, b: any) {
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((k) => a[k] === b[k]);
 }
 
 export default function SignalClient({
@@ -30,44 +38,70 @@ export default function SignalClient({
     open: boolean;
     message: string;
     type: ToastType;
-  }>({ open: false, message: "", type: "info" });
+  }>({
+    open: false,
+    message: "",
+    type: "info",
+  });
 
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // store last known statuses for animation + toast triggers
-  const prevStatuses = useRef<Record<number, string>>({});
-
+  // Keep last-known status + price
+  const prevStatus = useRef<Record<number, string>>({});
+  const prevPrice = useRef<Record<number, number | null>>({});
   const router = useRouter();
 
-  // ------------------------------------------------------
-  // ENGINE REFRESH
-  // ------------------------------------------------------
+  /* -----------------------------------------------------
+     REFRESH ENGINE
+  ----------------------------------------------------- */
   async function refresh() {
     try {
-      const updated = await runEngineAction();
+      const updatedRaw = await runEngineAction();
+      if (!updatedRaw || updatedRaw.length === 0) return;
 
-      updated.forEach((sig: Signal) => {
-        const prev = prevStatuses.current[sig.id];
-        const formattedStatus = formatStatusLabel(sig.status);
+      // Normalise UI-facing fields before comparison
+      const updated = updatedRaw.map((s: any) => ({
+        ...s,
+        status: formatStatusLabel(s.status),
+        lastUpdatedFormatted: formatTimestamp(s.updated_at),
+      }));
 
-        // Status change toast
-        if (prev && prev !== formattedStatus) {
+      // Avoid rerender if identical
+      const same =
+        updated.length === signals.length &&
+        updated.every((u, i) => shallowCompare(u, signals[i]));
+
+      if (same) return;
+
+      // Toast logic
+      updated.forEach((sig) => {
+        const sId = sig.id;
+        const newStatus = sig.status;
+        const newPrice = sig.current_price ?? null;
+
+        const oldStatus = prevStatus.current[sId];
+        const oldPrice = prevPrice.current[sId];
+
+        const statusChanged = oldStatus && newStatus !== oldStatus;
+        const priceChanged = oldPrice !== null && newPrice !== oldPrice;
+
+        if (statusChanged) {
           setToast({
             open: true,
-            message: `${sig.symbol}: ${formattedStatus}`,
-            type: formattedStatus.includes("TP")
+            message: `${sig.symbol}: ${newStatus}`,
+            type: newStatus.includes("TP")
               ? "success"
-              : formattedStatus.includes("SL")
+              : newStatus.includes("SL")
               ? "error"
-              : formattedStatus.includes("EXP")
+              : newStatus.includes("EXP")
               ? "warning"
               : "info",
           });
         }
 
-        // update memory
-        prevStatuses.current[sig.id] = formattedStatus;
+        prevStatus.current[sId] = newStatus;
+        prevPrice.current[sId] = newPrice;
       });
 
       setSignals(updated);
@@ -76,18 +110,18 @@ export default function SignalClient({
     }
   }
 
-  // ------------------------------------------------------
-  // INTERVAL
-  // ------------------------------------------------------
+  /* -----------------------------------------------------
+     INTERVAL
+  ----------------------------------------------------- */
   useEffect(() => {
-    refresh(); // initial
+    refresh();
     const id = setInterval(refresh, 15000);
     return () => clearInterval(id);
   }, []);
 
-  // ------------------------------------------------------
-  // DELETE SIGNAL
-  // ------------------------------------------------------
+  /* -----------------------------------------------------
+     DELETE SIGNAL
+  ----------------------------------------------------- */
   async function confirmDelete() {
     if (!deleteId) return;
 
@@ -105,9 +139,9 @@ export default function SignalClient({
     });
   }
 
-  // ------------------------------------------------------
-  // UI
-  // ------------------------------------------------------
+  /* -----------------------------------------------------
+     UI
+  ----------------------------------------------------- */
   return (
     <main className="max-w-7xl mx-auto w-full p-6 space-y-6">
       {/* HEADER */}
@@ -149,7 +183,7 @@ export default function SignalClient({
             No signals found.
           </motion.p>
         ) : (
-          signals.map((signal: Signal) => (
+          signals.map((signal) => (
             <motion.div
               key={signal.id}
               layout
@@ -159,11 +193,7 @@ export default function SignalClient({
               transition={{ duration: 0.35 }}
             >
               <SignalCard
-                signal={{
-                  ...signal,
-                  status: formatStatusLabel(signal.status),
-                  lastUpdatedFormatted: formatTimestamp(signal.updated_at),
-                }}
+                signal={signal}
                 onEdit={() => router.push(`/signals/${signal.id}/edit`)}
                 onDelete={() => setDeleteId(signal.id)}
               />
@@ -189,7 +219,6 @@ export default function SignalClient({
       >
         <Alert
           severity={toast.type}
-          onClose={() => setToast({ ...toast, open: false })}
           sx={{
             backgroundColor:
               toast.type === "success"
