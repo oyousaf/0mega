@@ -33,6 +33,8 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
     ? "#A77F35"
     : "#789FCC";
 
+  const currentPrice = signal.current_price ?? null;
+
   return (
     <motion.div
       layout
@@ -56,7 +58,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
         }}
       >
         <CardContent sx={{ p: 3 }}>
-          {/* Header */}
+          {/* Header Row */}
           <Box
             sx={{
               display: "flex",
@@ -65,9 +67,33 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
               mb: 2,
             }}
           >
-            <Typography variant="h6" fontWeight="700" color="var(--omega-gold)">
-              {signal.symbol}
-            </Typography>
+            <Box>
+              <Typography
+                variant="h6"
+                fontWeight="700"
+                color="var(--omega-gold)"
+              >
+                {signal.symbol}
+              </Typography>
+
+              {/* Current Price - prominent */}
+              <motion.span
+                key={currentPrice} // triggers fade animation
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.35 }}
+                style={{
+                  display: "block",
+                  fontSize: "1.25rem",
+                  fontWeight: "700",
+                  color: "var(--omega-gold)",
+                  textShadow: "0 0 6px rgba(212,175,55,0.45)",
+                  marginTop: "2px",
+                }}
+              >
+                {currentPrice ? currentPrice : "—"}
+              </motion.span>
+            </Box>
 
             <Chip
               label={STATUS}
@@ -104,11 +130,6 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
 
             <Typography>
               <strong>SL:</strong> {signal.sl}
-            </Typography>
-
-            <Typography>
-              <strong>Current:</strong>{" "}
-              {signal.current_price ? signal.current_price : "—"}
             </Typography>
           </Box>
 
