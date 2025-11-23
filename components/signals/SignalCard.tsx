@@ -105,6 +105,11 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
             <Typography>
               <strong>SL:</strong> {signal.sl}
             </Typography>
+
+            <Typography>
+              <strong>Current:</strong>{" "}
+              {signal.current_price ? signal.current_price : "—"}
+            </Typography>
           </Box>
 
           {/* Footer */}

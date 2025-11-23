@@ -9,14 +9,13 @@ function formatStatus(status: string) {
   return status.replace(/_/g, " ");
 }
 
-/** Evaluate new status based on TP/SL/Entry logic */
+/** Evaluate new status based on TP/SL logic */
 export function evaluateState(signal: any, price: number) {
   const entry = Number(signal.entry_price);
   const tp1 = Number(signal.tp1);
   const tp2 = Number(signal.tp2);
   const sl = Number(signal.sl);
 
-  // Invalid data → skip evaluation
   if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return "INVALID";
 
   if (price >= tp2) return "TP2_HIT";
@@ -26,14 +25,14 @@ export function evaluateState(signal: any, price: number) {
   return "ACTIVE";
 }
 
-/** Auto expire older than 7 days */
+/** Auto expire after 7 days */
 export function isExpired(signal: any) {
   const created = new Date(signal.created_at);
   const now = new Date();
   return (now.getTime() - created.getTime()) / 86400000 >= 7;
 }
 
-/** Update DB safely */
+/** Update DB */
 async function updateSignalRow(
   id: number,
   newStatus: string,
@@ -42,16 +41,20 @@ async function updateSignalRow(
   await pool.query(
     `
     UPDATE signals
-    SET status = $1,
-        current_price = $2,
-        updated_at = NOW()
+    SET 
+      status = $1,
+      current_price = $2,
+      updated_at = CASE 
+        WHEN status != $1 THEN NOW()
+        ELSE updated_at
+      END
     WHERE id = $3
     `,
     [formatStatus(newStatus), newPrice, id]
   );
 }
 
-/** Log meaningful transitions into signal_history */
+/** Log meaningful transitions */
 async function logEvent(signalId: number, event: string, price: number) {
   try {
     await pool.query(
@@ -66,39 +69,27 @@ async function logEvent(signalId: number, event: string, price: number) {
   }
 }
 
-/**
- * MAIN ENGINE
- * Called from runEngineAction in Active Signals.
- */
+/** MAIN ENGINE */
 export async function runStatusEngine(signals: any[]) {
   for (const signal of signals) {
     const oldStatus = signal.status?.toUpperCase() || "ACTIVE";
     const oldPrice = Number(signal.current_price ?? 0);
 
-    // Fetch new price using providers
     const currentPrice = await getPrice(signal.symbol, signal.type);
-
-    // Determine updated state
     let engineStatus = evaluateState(signal, currentPrice);
 
-    // Expiry check
     if (isExpired(signal)) engineStatus = "EXPIRED";
 
-    // Format for DB/UI
     const prettyStatus = formatStatus(engineStatus);
 
-    // Compare to avoid unnecessary DB writes
     const statusChanged =
       prettyStatus.toUpperCase() !== oldStatus.toUpperCase();
     const priceChanged = Math.abs(currentPrice - oldPrice) >= PRICE_THRESHOLD;
 
-    // NOTHING CHANGED → SKIP
     if (!statusChanged && !priceChanged) continue;
 
-    // Write updated row
     await updateSignalRow(signal.id, engineStatus, currentPrice);
 
-    // Log only meaningful status transitions
     if (statusChanged) {
       await logEvent(signal.id, engineStatus, currentPrice);
     }
