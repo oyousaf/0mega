@@ -62,16 +62,16 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
                 color: "var(--omega-gold)",
                 display: "flex",
                 alignItems: "center",
-                gap: 1,
+                gap: "4px",
               }}
             >
               {/* SYMBOL */}
               {signal.symbol?.toUpperCase()}
 
-              {/* GLOW-PULSE STATUS DOT */}
+              {/* GLOW-PULSE DOT → only pulses when status changes */}
               <motion.span
                 key={signal.status}
-                initial={{ boxShadow: `0 0 0px ${statusColor}`, opacity: 1 }}
+                initial={{ opacity: 1, boxShadow: `0 0 0px ${statusColor}` }}
                 animate={{
                   boxShadow: [
                     `0 0 0px ${statusColor}`,
@@ -82,7 +82,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
                 }}
                 transition={{
                   duration: 1.2,
-                  repeat: 2,
+                  repeat: 1,
                   ease: "easeInOut",
                 }}
                 style={{
@@ -91,21 +91,21 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
                   borderRadius: "50%",
                   backgroundColor: statusColor,
                   display: "inline-block",
-                  margin: "0 4px",
+                  marginLeft: "6px",
                 }}
               ></motion.span>
 
-              {/* STRATEGY — reverted to previous look */}
+              {/* STRATEGY — previous styling restored */}
               <span
                 style={{
                   fontSize: "0.85rem",
                   fontWeight: 500,
                   opacity: 0.9,
+                  marginLeft: "2px",
                   color: "var(--omega-gold)",
-                  textTransform: "uppercase",
                 }}
               >
-                {signal.strategy || ""}
+                {signal.strategy ? signal.strategy.toUpperCase() : ""}
               </span>
             </Typography>
 
@@ -120,9 +120,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
             />
           </Box>
 
-          {/* =======================================================
-              CURRENT PRICE
-              ======================================================= */}
+          {/* CURRENT PRICE */}
           <motion.span
             key={signal.current_price}
             initial={{ opacity: 0 }}
@@ -140,9 +138,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
             {signal.current_price ?? "—"}
           </motion.span>
 
-          {/* =======================================================
-              GRID OF ENTRY / TP1 / TP2 / SL
-              ======================================================= */}
+          {/* GRID */}
           <Box
             sx={{
               display: "grid",
@@ -156,23 +152,18 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
             <Typography>
               <strong>Entry:</strong> {signal.entry_price}
             </Typography>
-
             <Typography>
               <strong>TP1:</strong> {signal.tp1}
             </Typography>
-
             <Typography>
               <strong>TP2:</strong> {signal.tp2}
             </Typography>
-
             <Typography>
               <strong>SL:</strong> {signal.sl}
             </Typography>
           </Box>
 
-          {/* =======================================================
-              LAST UPDATED
-              ======================================================= */}
+          {/* LAST UPDATED */}
           <Typography
             variant="caption"
             sx={{ display: "block", opacity: 0.6, mt: 2 }}
@@ -180,9 +171,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: any) {
             Last updated: {signal.lastUpdatedFormatted}
           </Typography>
 
-          {/* =======================================================
-              ACTION BUTTONS
-              ======================================================= */}
+          {/* BUTTONS */}
           <Box sx={{ mt: 3, display: "flex", gap: 2 }}>
             <Button
               variant="contained"
