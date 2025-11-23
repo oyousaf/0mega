@@ -9,7 +9,7 @@ export async function updateSignal(id: number, payload: any) {
     return { ok: false, error: "Invalid signal ID" };
   }
 
-  // Validate new incoming data
+  // Validate using Zod
   const validation = validateSignal(payload);
   if (!validation.valid) {
     return { ok: false, error: validation.error };
@@ -18,7 +18,6 @@ export async function updateSignal(id: number, payload: any) {
   const clean = validation.data!;
 
   try {
-    // Fetch existing row to compare changes
     const existingRes = await pool.query(
       `SELECT * FROM signals WHERE id = $1`,
       [id]
@@ -30,7 +29,7 @@ export async function updateSignal(id: number, payload: any) {
 
     const old = existingRes.rows[0];
 
-    // Build list of changed fields
+    // Editable columns
     const fields = [
       "symbol",
       "strategy",
@@ -41,42 +40,67 @@ export async function updateSignal(id: number, payload: any) {
       "notes",
       "type",
       "halaal",
-    ];
+      "status",
+    ] as const;
 
-    const changed: Record<string, any> = {};
+    type Field = (typeof fields)[number];
+    const changed: Partial<Record<Field, any>> = {};
 
     fields.forEach((key) => {
-      const oldVal = (old as Record<string, any>)[key];
-      const newVal = (clean as Record<string, any>)[key];
+      const oldVal = old[key as keyof typeof old];
+      const newVal = clean[key];
 
-      const formattedOld = oldVal === null ? null : oldVal;
-      const formattedNew = newVal === undefined ? null : newVal;
+      let formattedNew: any = newVal;
 
-      if (formattedOld !== formattedNew) {
+      // -------------------------------------------------------
+      // ✨ NORMALISE VALUES BEFORE COMPARISON / DB INSERT
+      // -------------------------------------------------------
+
+      // Empty string stays empty string
+      if (formattedNew === "") {
+        formattedNew = "";
+      }
+
+      // Optional numeric fields:
+      if (["tp1", "tp2", "sl"].includes(key)) {
+        if (formattedNew === "" || formattedNew === undefined) {
+          formattedNew = null;
+        }
+      }
+
+      if (key === "notes") {
+        if (formattedNew === undefined || formattedNew === null) {
+          formattedNew = "";
+        }
+      }
+
+      // Compare after formatting
+      if (oldVal !== formattedNew) {
         changed[key] = formattedNew;
       }
     });
 
-    // If nothing changed → DO NOT update updated_at
+    // No changes → don't update updated_at
     if (Object.keys(changed).length === 0) {
       return { ok: true, data: old, unchanged: true };
     }
 
+    // Build dynamic SQL
     const setClauses = Object.keys(changed)
-      .map((key, idx) => `${key}=$${idx + 1}`)
+      .map((key, i) => `${key} = $${i + 1}`)
       .join(", ");
 
     const values = Object.values(changed);
 
     const sql = `
       UPDATE signals
-      SET ${setClauses}, updated_at = NOW()
+      SET ${setClauses},
+          updated_at = NOW()
       WHERE id = $${values.length + 1}
       RETURNING *
     `;
 
     const updatedRes = await pool.query(sql, [...values, id]);
-
     const updatedRow = updatedRes.rows[0];
 
     revalidatePath("/signals");

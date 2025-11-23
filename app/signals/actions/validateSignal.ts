@@ -2,17 +2,22 @@ import { z } from "zod";
 
 export const signalSchema = z.object({
   symbol: z.string().min(1, "Symbol is required"),
-  strategy: z.string().optional(),
+  strategy: z
+    .string()
+    .nullable()
+    .transform((v) => v ?? ""),
   entry_price: z.number().positive("Entry price must be greater than 0"),
-  tp1: z.number().positive().optional(),
-  tp2: z.number().positive().optional(),
-  sl: z.number().positive().optional(),
-  notes: z.string().optional(),
+  tp1: z.number().positive().nullable().optional(),
+  tp2: z.number().positive().nullable().optional(),
+  sl: z.number().positive().nullable().optional(),
+  notes: z
+    .string()
+    .nullable()
+    .transform((v) => v ?? ""),
   status: z.string().optional(),
   type: z.enum(["stock", "crypto", "forex"]),
   halaal: z.boolean(),
 });
-
 
 export function validateSignal(payload: any) {
   const parsed = signalSchema.safeParse(payload);
