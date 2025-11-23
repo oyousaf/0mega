@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import { useRouter } from "next/navigation";
+import { formatTimestamp } from "@/app/utils/formatTimestamp";
 
 export default function SignalClient({
   initialSignals,
@@ -28,20 +29,20 @@ export default function SignalClient({
   const [deleting, setDeleting] = useState(false);
 
   const prevStatuses = useRef<Record<number, string>>({});
+
   const router = useRouter();
 
-  /**
-   * Main refresh cycle
-   */
+  // ───────────────────────────────────────────
+  // ENGINE REFRESH
+  // ───────────────────────────────────────────
   async function refresh() {
     try {
-      // Call server action
       const updated = await runEngineAction();
 
-      // Detect status changes → toast alerts
       updated.forEach((sig: any) => {
         const prev = prevStatuses.current[sig.id];
 
+        // STATUS CHANGE → toast notification
         if (prev && prev !== sig.status) {
           setToast({
             open: true,
@@ -50,7 +51,7 @@ export default function SignalClient({
               ? "success"
               : sig.status.includes("SL")
               ? "error"
-              : sig.status === "EXPIRED"
+              : sig.status.includes("EXP")
               ? "warning"
               : "info",
           });
@@ -60,25 +61,23 @@ export default function SignalClient({
       });
 
       setSignals(updated);
-
-      setSignals(updated);
     } catch (err) {
       console.error("Engine error:", err);
     }
   }
 
-  /**
-   * Start interval
-   */
+  // ───────────────────────────────────────────
+  // INTERVAL
+  // ───────────────────────────────────────────
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 15000);
     return () => clearInterval(id);
   }, []);
 
-  /**
-   * Delete handler
-   */
+  // ───────────────────────────────────────────
+  // DELETE SIGNAL
+  // ───────────────────────────────────────────
   async function confirmDelete() {
     if (!deleteId) return;
 
@@ -98,7 +97,7 @@ export default function SignalClient({
 
   return (
     <main className="max-w-7xl mx-auto w-full p-6 space-y-6">
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
@@ -125,7 +124,7 @@ export default function SignalClient({
         </div>
       </div>
 
-      {/* Signal Cards */}
+      {/* SIGNAL CARDS */}
       <AnimatePresence mode="popLayout">
         {signals.length === 0 ? (
           <motion.p
@@ -147,7 +146,10 @@ export default function SignalClient({
               transition={{ duration: 0.35 }}
             >
               <SignalCard
-                signal={signal}
+                signal={{
+                  ...signal,
+                  lastUpdatedFormatted: formatTimestamp(signal.updated_at),
+                }}
                 onEdit={() => router.push(`/signals/${signal.id}/edit`)}
                 onDelete={() => setDeleteId(signal.id)}
               />
@@ -156,7 +158,7 @@ export default function SignalClient({
         )}
       </AnimatePresence>
 
-      {/* Delete Modal */}
+      {/* DELETE MODAL */}
       <DeleteModal
         open={deleteId !== null}
         onClose={() => setDeleteId(null)}
@@ -164,7 +166,7 @@ export default function SignalClient({
         loading={deleting}
       />
 
-      {/* Toast */}
+      {/* TOAST */}
       <Snackbar
         open={toast.open}
         autoHideDuration={3500}

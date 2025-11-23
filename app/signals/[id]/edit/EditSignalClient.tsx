@@ -21,6 +21,7 @@ import SignalForm from "@/components/signals/SignalForm";
 import { deleteSignal } from "@/app/signals/actions/deleteSignal";
 import { updateSignal } from "@/app/signals/actions/updateSignal";
 import { Signal } from "@/app/types/signal";
+import { formatTimestamp } from "@/app/utils/formatTimestamp";
 
 export default function EditSignalClient({ signal }: { signal: Signal }) {
   const router = useRouter();
@@ -32,72 +33,19 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
     severity: "success" as "success" | "error",
   });
 
-  function showSnack(msg: string, sev: "success" | "error" = "success") {
-    setSnack({ open: true, message: msg, severity: sev });
+  function showSnack(
+    message: string,
+    severity: "success" | "error" = "success"
+  ) {
+    setSnack({ open: true, message, severity });
   }
 
-  // ─────────────────────────────
-  // DATE HANDLING
-  // ─────────────────────────────
+  // timestamps
   const created = new Date(signal.created_at);
   const updated = signal.updated_at ? new Date(signal.updated_at) : null;
 
-  function fmtTime(date: Date | null) {
-    if (!date) return "—";
-
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHrs = Math.floor(diffMin / 60);
-    const diffDays = Math.floor(diffHrs / 24);
-
-    // < 1 min
-    if (diffSec < 60) return "just now";
-
-    // < 1 hour
-    if (diffMin < 60) {
-      return diffMin === 1 ? "1 min ago" : `${diffMin} mins ago`;
-    }
-
-    // < 24 hours (show hours only)
-    if (diffHrs < 24) {
-      return diffHrs === 1 ? "1 hour ago" : `${diffHrs} hours ago`;
-    }
-
-    // Yesterday: more human than “1 day ago”
-    if (diffDays === 1) {
-      return `yesterday at ${date.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`;
-    }
-
-    // < 7 days
-    if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    }
-
-    // Older → UK short date (clean, readable)
-    return (
-      date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }) +
-      " at " +
-      date.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    );
-  }
-
-  // ─────────────────────────────
-  // STATUS STYLE
-  // ─────────────────────────────
-  const STATUS = signal.status?.toUpperCase() || "ACTIVE";
+  // STATUS
+  const STATUS = signal.status?.toUpperCase() ?? "ACTIVE";
 
   const statusColor = STATUS.includes("TP2")
     ? "#37C86E"
@@ -109,34 +57,33 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
     ? "#A77F35"
     : "#789FCC";
 
-  // ─────────────────────────────
-  // UPDATE SIGNAL
-  // ─────────────────────────────
+  // UPDATE HANDLER
   async function handleUpdate(data: Partial<Signal>) {
     try {
-      await updateSignal(signal.id, data);
-      showSnack("Signal updated successfully.");
+      const res = await updateSignal(signal.id, data);
+
+      if (!res.ok) {
+        showSnack(res.error || "Update failed", "error");
+        return;
+      }
+
+      showSnack("Signal updated successfully.", "success");
     } catch {
       showSnack("Failed to update signal.", "error");
     }
   }
 
-  // ─────────────────────────────
-  // DELETE SIGNAL
-  // ─────────────────────────────
+  // DELETE HANDLER
   async function handleDelete() {
     try {
       await deleteSignal(signal.id);
-      router.replace("/signals");
       showSnack("Signal deleted.");
+      router.replace("/signals");
     } catch {
       showSnack("Failed to delete signal.", "error");
     }
   }
 
-  // ─────────────────────────────
-  // UI
-  // ─────────────────────────────
   return (
     <motion.main
       initial={{ opacity: 0 }}
@@ -220,7 +167,7 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
         </p>
 
         <p className="text-sm text-foreground/80">
-          <strong>Updated:</strong> {fmtTime(updated)}
+          <strong>Updated:</strong> {updated ? formatTimestamp(updated) : "—"}
         </p>
 
         <p className="text-sm text-foreground/80">
@@ -228,7 +175,7 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
         </p>
       </Box>
 
-      {/* Edit Form */}
+      {/* FORM */}
       <div className="pt-4">
         <SignalForm
           mode="edit"

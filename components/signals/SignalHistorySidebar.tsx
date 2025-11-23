@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSignalHistory } from "@/app/signals/actions/getSignalHistory";
+import { formatTimestamp } from "@/app/utils/formatTimestamp";
 
 export default function SignalHistorySidebar({
   signalId,
@@ -13,7 +14,13 @@ export default function SignalHistorySidebar({
 
   async function refreshHistory() {
     const rows = await getSignalHistory(signalId);
-    setEvents(rows || []);
+
+    const ordered = (rows || []).sort(
+      (a: any, b: any) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    setEvents(ordered);
     setLoading(false);
   }
 
@@ -26,10 +33,17 @@ export default function SignalHistorySidebar({
 
   return (
     <aside
-      className="bg-omega-green/40 border border-omega-dark-gold rounded-xl p-5 shadow-lg 
-                     h-fit relative top-6 lg:top-12"
+      className="
+        bg-omega-green/40 
+        border border-omega-dark-gold 
+        rounded-xl 
+        p-5 
+        shadow-lg 
+        h-fit 
+        relative 
+        top-6 lg:top-12
+      "
     >
-      {/* HEADER */}
       <h2 className="text-xl font-semibold text-omega-gold mb-4 pb-2 border-b border-omega-dark-gold/40">
         Recent Activity
       </h2>
@@ -40,12 +54,16 @@ export default function SignalHistorySidebar({
         <p className="text-omega-gold/70">No recent activity.</p>
       )}
 
-      {/* EVENT LIST */}
       <div className="space-y-3">
         {events.map((ev) => (
           <div
             key={ev.id}
-            className="p-3 rounded-lg bg-omega-green/20 border border-omega-dark-gold/30"
+            className="
+              p-3 
+              rounded-lg 
+              bg-omega-green/20 
+              border border-omega-dark-gold/30
+            "
           >
             <p className="font-semibold text-omega-gold uppercase tracking-wider">
               {ev.event}
@@ -56,7 +74,7 @@ export default function SignalHistorySidebar({
             )}
 
             <p className="text-xs text-omega-gold/60 mt-1">
-              {new Date(ev.timestamp).toLocaleString()}
+              {formatTimestamp(ev.timestamp)}
             </p>
           </div>
         ))}
