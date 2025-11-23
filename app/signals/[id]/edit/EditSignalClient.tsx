@@ -45,16 +45,53 @@ export default function EditSignalClient({ signal }: { signal: Signal }) {
   function fmtTime(date: Date | null) {
     if (!date) return "—";
 
-    const diff = Date.now() - date.getTime();
-    const mins = Math.floor(diff / 60000);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
 
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins} min ago`;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHrs = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHrs / 24);
 
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
+    // < 1 min
+    if (diffSec < 60) return "just now";
 
-    return date.toLocaleString();
+    // < 1 hour
+    if (diffMin < 60) {
+      return diffMin === 1 ? "1 min ago" : `${diffMin} mins ago`;
+    }
+
+    // < 24 hours (show hours only)
+    if (diffHrs < 24) {
+      return diffHrs === 1 ? "1 hour ago" : `${diffHrs} hours ago`;
+    }
+
+    // Yesterday: more human than “1 day ago”
+    if (diffDays === 1) {
+      return `yesterday at ${date.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+    }
+
+    // < 7 days
+    if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    }
+
+    // Older → UK short date (clean, readable)
+    return (
+      date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }) +
+      " at " +
+      date.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    );
   }
 
   // ─────────────────────────────
