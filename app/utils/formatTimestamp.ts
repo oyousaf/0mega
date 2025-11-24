@@ -16,6 +16,9 @@ export function formatTimestamp(date: Date | string | null): string {
   // < 1 hour
   if (min < 60) return min === 1 ? "1 minute ago" : `${min} minutes ago`;
 
+  // 59-minute cap
+  if (min >= 60 && min < 120) return "1 hour ago";
+
   // < 24 hours
   if (hrs < 24) return hrs === 1 ? "1 hour ago" : `${hrs} hours ago`;
 
