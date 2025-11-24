@@ -17,7 +17,7 @@ export async function addSignal(payload: any) {
       `
       INSERT INTO signals 
       (symbol, strategy, entry_price, tp1, tp2, sl, notes, type, halaal, status, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ACTIVE', NOW(), NOW())
       RETURNING *;
       `,
       [
