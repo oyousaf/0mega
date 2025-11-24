@@ -12,7 +12,7 @@ export async function addSignal(payload: any) {
 
   const data = validation.data!;
 
-  // Normalize fields to match DB + updateSignal behaviour
+  // Normalise fields
   const clean = {
     symbol: data.symbol.trim(),
     strategy: data.strategy?.trim() || "",
@@ -20,7 +20,7 @@ export async function addSignal(payload: any) {
     tp1: data.tp1 ?? null,
     tp2: data.tp2 ?? null,
     sl: data.sl ?? null,
-    notes: data.notes?.trim() || "",
+    notes: typeof data.notes === "string" ? data.notes.trim() : "",
     type: data.type,
     halaal: Boolean(data.halaal),
   };

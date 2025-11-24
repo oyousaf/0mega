@@ -2,17 +2,12 @@ import { z } from "zod";
 
 export const signalSchema = z.object({
   symbol: z.string().min(1, "Symbol is required"),
-  strategy: z
-    .string()
-    .nullable()
-    .transform((v) => v ?? ""),
-  entry_price: z.number().positive("Entry price must be greater than 0"),
+  strategy: z.union([z.string(), z.null()]).optional(),
+  entry_price: z.number().positive(),
   tp1: z.number().positive().nullable().optional(),
   tp2: z.number().positive().nullable().optional(),
   sl: z.number().positive().nullable().optional(),
-  notes: z
-    .union([z.string(), z.null(), z.undefined()])
-    .transform((v) => (typeof v === "string" ? v.trim() : "")),
+  notes: z.union([z.string(), z.null()]).optional(),
   status: z.string().optional(),
   type: z.enum(["stock", "crypto", "forex"]),
   halaal: z.boolean(),
