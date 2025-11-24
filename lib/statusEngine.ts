@@ -16,7 +16,12 @@ export function evaluateState(signal: any, price: number) {
   const tp2 = Number(signal.tp2);
   const sl = Number(signal.sl);
 
-  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return "INVALID";
+  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return signal.status;
+  const old = signal.status?.toUpperCase();
+
+  if (["SL HIT", "TP1 HIT", "TP2 HIT", "EXPIRED"].includes(old)) {
+    return old.replace(/ /g, "_");
+  }
 
   if (price >= tp2) return "TP2_HIT";
   if (price >= tp1) return "TP1_HIT";
