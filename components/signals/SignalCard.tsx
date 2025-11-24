@@ -182,24 +182,34 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
             </Typography>
           </Box>
 
-          {/* NOTES — ONLY SHOW IF ACTUALLY PRESENT */}
+          {/* NOTES */}
           {hasNotes && (
-            <Typography
-              sx={{
-                marginTop: "14px",
-                opacity: 0.85,
-                fontSize: "0.85rem",
-                color: "var(--omega-gold)",
-                lineHeight: 1.4,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className="mt-3 p-3 rounded-md border border-omega-dark-gold bg-omega-green/40 shadow-sm"
+              style={{
+                backdropFilter: "blur(2px)",
               }}
             >
-              {signal.notes}
-            </Typography>
+              <Typography
+                sx={{
+                  opacity: 0.95,
+                  fontSize: "0.85rem",
+                  color: "var(--omega-gold)",
+                  lineHeight: 1.4,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  fontWeight: 500,
+                }}
+              >
+                {signal.notes}
+              </Typography>
+            </motion.div>
           )}
 
           {/* LAST UPDATED */}
