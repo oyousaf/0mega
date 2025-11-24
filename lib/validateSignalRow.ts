@@ -4,37 +4,31 @@ export const signalRowSchema = z.object({
   id: z.number(),
 
   symbol: z.string(),
-  strategy: z.string(),
+  strategy: z.string().nullable().optional(),
+
+  // DB returns numeric fields as strings → accept both
   entry_price: z.union([z.string(), z.number(), z.null()]),
   tp1: z.union([z.string(), z.number(), z.null()]),
   tp2: z.union([z.string(), z.number(), z.null()]),
   sl: z.union([z.string(), z.number(), z.null()]),
-  status: z.union([
-    z.enum(["ACTIVE", "TP1 HIT", "TP2 HIT", "SL HIT", "EXPIRED", "INVALID"]),
-    z.null(),
-  ]),
 
-  halaal: z.boolean(),
+  notes: z.string().nullable().optional(),
+
   type: z.enum(["stock", "crypto", "forex"]),
+  halaal: z.boolean(),
 
-  current_price: z.union([z.string(), z.number(), z.null()]),
+  // DB can return null → allow null
+  status: z.string().nullable().optional(),
 
-  // Neon gives Date objects or strings
-  created_at: z.union([z.string(), z.date()]),
-  updated_at: z.union([z.string(), z.date(), z.null()]),
+  current_price: z.union([z.string(), z.number(), z.null()]).optional(),
 
-  notes: z.union([z.string(), z.null()]),
+  created_at: z.any(),
+  updated_at: z.any().nullable().optional(),
 
-  processing: z.boolean(),
+  // ignore this
+  processing: z.boolean().optional(),
 });
 
 export function isValidSignalRow(row: any) {
-  const validated = signalRowSchema.safeParse(row);
-
-  if (!validated.success) {
-    console.error("Invalid row:", row);
-    console.error("Error:", validated.error);
-  }
-
-  return validated.success;
+  return signalRowSchema.safeParse(row).success;
 }

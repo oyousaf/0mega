@@ -11,9 +11,8 @@ export const signalSchema = z.object({
   tp2: z.number().positive().nullable().optional(),
   sl: z.number().positive().nullable().optional(),
   notes: z
-    .string()
-    .nullable()
-    .transform((v) => v ?? ""),
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((v) => (typeof v === "string" ? v.trim() : "")),
   status: z.string().optional(),
   type: z.enum(["stock", "crypto", "forex"]),
   halaal: z.boolean(),
