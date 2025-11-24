@@ -36,6 +36,11 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
     ? "#A77F35"
     : "#789FCC";
 
+  const hasNotes =
+    signal.notes &&
+    typeof signal.notes === "string" &&
+    signal.notes.trim().length > 0;
+
   return (
     <motion.div
       layout
@@ -59,7 +64,7 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
         }}
       >
         <CardContent sx={{ p: 3 }}>
-          {/* Header: Symbol + pulsing dot + strategy */}
+          {/* Header: Symbol + pulse + strategy */}
           <Box
             sx={{
               display: "flex",
@@ -108,17 +113,19 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
               />
 
               {/* STRATEGY */}
-              <span
-                style={{
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                  opacity: 0.9,
-                  marginLeft: "2px",
-                  color: "var(--omega-gold)",
-                }}
-              >
-                {signal.strategy ? signal.strategy.toUpperCase() : ""}
-              </span>
+              {signal.strategy && (
+                <span
+                  style={{
+                    fontSize: "0.85rem",
+                    fontWeight: 500,
+                    opacity: 0.9,
+                    marginLeft: "2px",
+                    color: "var(--omega-gold)",
+                  }}
+                >
+                  {signal.strategy.toUpperCase()}
+                </span>
+              )}
             </Typography>
 
             {/* STATUS CHIP */}
@@ -175,12 +182,32 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
             </Typography>
           </Box>
 
+          {/* NOTES — ONLY SHOW IF ACTUALLY PRESENT */}
+          {hasNotes && (
+            <Typography
+              sx={{
+                marginTop: "14px",
+                opacity: 0.85,
+                fontSize: "0.85rem",
+                color: "var(--omega-gold)",
+                lineHeight: 1.4,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {signal.notes}
+            </Typography>
+          )}
+
           {/* LAST UPDATED */}
           <Typography
             variant="caption"
             sx={{ display: "block", opacity: 0.6, mt: 2 }}
           >
-            Last updated: {signal.lastUpdatedFormatted}
+            Last updated: {signal.lastUpdatedFormatted ?? "—"}
           </Typography>
 
           {/* BUTTONS */}
