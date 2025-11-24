@@ -15,6 +15,6 @@ export async function getForexPrice(pair: string): Promise<number> {
     return Number((base + noise).toFixed(5));
   }
 
-  // TEMP → prevents SL nuking everything
+  // TEMP: Until we wire live API, return stable “mock”
   return 1.12345;
 }

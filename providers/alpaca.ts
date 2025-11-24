@@ -13,6 +13,6 @@ export async function getStockPrice(symbol: string): Promise<number> {
     return Number((base + noise).toFixed(2));
   }
 
-  // TEMP UNTIL LIVE ALPACA IMPLEMENTATION
+  // TEMP: Until we wire live API, return stable “mock”
   return 200.0;
 }
