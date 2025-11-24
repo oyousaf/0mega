@@ -43,7 +43,16 @@ export default function SignalForm({
     halaal: true,
   };
 
-  const [form, setForm] = useState<any>({ ...empty, ...initialData });
+  // Normalises incoming null/undefined to empty string for React inputs
+  const normalize = (v: any) => (v === null || v === undefined ? "" : v);
+
+  const [form, setForm] = useState<any>({
+    ...empty,
+    ...Object.fromEntries(
+      Object.entries(initialData || {}).map(([k, v]) => [k, normalize(v)])
+    ),
+  });
+
   const [loading, setLoading] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
@@ -57,7 +66,12 @@ export default function SignalForm({
 
   useEffect(() => {
     if (initialData) {
-      setForm({ ...empty, ...initialData });
+      setForm({
+        ...empty,
+        ...Object.fromEntries(
+          Object.entries(initialData).map(([k, v]) => [k, normalize(v)])
+        ),
+      });
     }
   }, [initialData]);
 
@@ -109,7 +123,6 @@ export default function SignalForm({
     setLoading(false);
   }
 
-  // Omega styles
   const inputStyles = {
     "& .MuiFilledInput-root": {
       backgroundColor: "var(--omega-green)",
@@ -157,7 +170,6 @@ export default function SignalForm({
         onSubmit={handleSubmit}
         className="space-y-4 bg-omega-green p-6 rounded-lg shadow-md border border-omega-dark-gold"
       >
-        {/* SYMBOL */}
         <TextField
           label="Symbol"
           variant="filled"
@@ -168,7 +180,6 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, symbol: e.target.value })}
         />
 
-        {/* STRATEGY */}
         <TextField
           label="Strategy"
           variant="filled"
@@ -178,7 +189,6 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, strategy: e.target.value })}
         />
 
-        {/* ENTRY PRICE */}
         <TextField
           label="Entry Price"
           variant="filled"
@@ -189,25 +199,19 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
         />
 
-        {/* TP1 / TP2 / SL */}
         <div className="grid grid-cols-3 gap-2">
-          {[
-            { key: "tp1", label: "TP1" },
-            { key: "tp2", label: "TP2" },
-            { key: "sl", label: "SL" },
-          ].map((i) => (
+          {["tp1", "tp2", "sl"].map((key) => (
             <TextField
-              key={i.key}
-              label={i.label}
+              key={key}
+              label={key.toUpperCase()}
               variant="filled"
               sx={inputStyles}
-              value={form[i.key]}
-              onChange={(e) => setForm({ ...form, [i.key]: e.target.value })}
+              value={form[key]}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
             />
           ))}
         </div>
 
-        {/* NOTES */}
         <TextField
           label="Notes"
           variant="filled"
@@ -219,7 +223,6 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
-        {/* TYPE */}
         <FormControl fullWidth variant="filled" sx={inputStyles}>
           <InputLabel>Type</InputLabel>
           <Select
@@ -246,7 +249,6 @@ export default function SignalForm({
           </Select>
         </FormControl>
 
-        {/* HALAAL */}
         <FormControlLabel
           control={
             <Switch
@@ -269,7 +271,6 @@ export default function SignalForm({
           sx={{ color: "var(--omega-gold)", fontWeight: 600 }}
         />
 
-        {/* SUBMIT */}
         <Button
           type="submit"
           fullWidth
@@ -290,7 +291,6 @@ export default function SignalForm({
         </Button>
       </form>
 
-      {/* SNACKBAR */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={2500}
