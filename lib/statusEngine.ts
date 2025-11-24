@@ -4,7 +4,7 @@ import { getPrice } from "@/providers";
 /** Minimum change before writing to DB */
 const PRICE_THRESHOLD = 0.05;
 
-/** Convert ENGINE_STATUS → readable UI status */
+/** Convert ENGINE_STATUS */
 function formatStatus(status: string) {
   return status.replace(/_/g, " ");
 }

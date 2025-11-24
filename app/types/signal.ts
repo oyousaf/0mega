@@ -1,5 +1,5 @@
 export interface Signal {
-  id: string;
+  id: number;
 
   symbol: string;
   strategy: string;
