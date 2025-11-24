@@ -10,7 +10,6 @@ export default async function EditSignalPage({
   const { id } = await params;
 
   const numericId = Number(id);
-
   if (!numericId || isNaN(numericId)) {
     return (
       <div className="max-w-7xl mx-auto p-6 text-center text-red-500">
@@ -23,7 +22,7 @@ export default async function EditSignalPage({
     numericId,
   ]);
 
-  if (!rows.length) {
+  if (rows.length === 0) {
     return (
       <div className="max-w-7xl mx-auto p-6 text-center text-red-500">
         Signal not found.
@@ -31,16 +30,28 @@ export default async function EditSignalPage({
     );
   }
 
-  const signal = rows[0];
+  const raw = rows[0];
+
+  // Normalise DB row so UI never receives null/incorrect types
+  const signal = {
+    ...raw,
+    symbol: raw.symbol ?? "",
+    strategy: raw.strategy ?? "",
+    notes: raw.notes ?? "",
+    type: raw.type ?? "stock",
+    halaal: Boolean(raw.halaal),
+    entry_price: raw.entry_price === null ? "" : String(raw.entry_price ?? ""),
+    tp1: raw.tp1 === null ? "" : String(raw.tp1 ?? ""),
+    tp2: raw.tp2 === null ? "" : String(raw.tp2 ?? ""),
+    sl: raw.sl === null ? "" : String(raw.sl ?? ""),
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-10">
-      {/* Left: Edit Form */}
       <div>
         <EditSignalClient signal={signal} />
       </div>
 
-      {/* Right: History Sidebar */}
       <div>
         <SignalHistorySidebar signalId={signal.id} />
       </div>
