@@ -9,7 +9,7 @@ export async function updateSignal(id: number, payload: any) {
     return { ok: false, error: "Invalid signal ID" };
   }
 
-  // Validate incoming payload (already normalised by the form)
+  // Validate incoming fields
   const validation = validateSignal(payload);
   if (!validation.valid) {
     return { ok: false, error: validation.error };
@@ -18,19 +18,16 @@ export async function updateSignal(id: number, payload: any) {
   const clean = validation.data!;
 
   try {
-    // Fetch existing row
-    const existingRes = await pool.query(
+    // Load existing row
+    const { rows, rowCount } = await pool.query(
       `SELECT * FROM signals WHERE id = $1`,
       [id]
     );
+    if (rowCount === 0) return { ok: false, error: "Signal not found" };
 
-    if (existingRes.rowCount === 0) {
-      return { ok: false, error: "Signal not found" };
-    }
+    const old = rows[0];
 
-    const old = existingRes.rows[0];
-
-    // Editable fields
+    // Only user-editable fields
     const fields = [
       "symbol",
       "strategy",
@@ -41,46 +38,43 @@ export async function updateSignal(id: number, payload: any) {
       "notes",
       "type",
       "halaal",
-      "status",
     ] as const;
 
-    type Field = (typeof fields)[number];
-    const changed: Partial<Record<Field, any>> = {};
+    const changed: Record<string, any> = {};
 
-    fields.forEach((key) => {
-      const oldVal = old[key];
-      let newVal = clean[key];
+    for (const key of fields) {
+      let oldVal = old[key];
+      let newVal = clean[key as keyof typeof clean];
 
-      // -------------------------------------------------------
-      // NORMALIZATION RULES (GLOBAL CONSISTENCY)
-      // -------------------------------------------------------
-
-      // Empty strings stay empty strings
-      if (newVal === "" || newVal === undefined || newVal === null) {
-        newVal = "";
-      }
-
-      // Numeric fields must be null OR number
+      // Numeric fields
       if (["entry_price", "tp1", "tp2", "sl"].includes(key)) {
-        if (newVal === "" || newVal === null || newVal === undefined) {
-          newVal = null;
-        } else {
-          newVal = Number(newVal);
-        }
+        const nOld =
+          oldVal === null
+            ? null
+            : typeof oldVal === "string"
+            ? Number(oldVal)
+            : oldVal;
+        const nNew =
+          newVal === "" || newVal === null || newVal === undefined
+            ? null
+            : Number(newVal);
+
+        if (nOld !== nNew) changed[key] = nNew;
+        continue;
       }
 
-      // halaal always boolean
-      if (key === "halaal") {
-        newVal = Boolean(newVal);
-      }
+      // Normalize strings
+      if (typeof newVal === "string") newVal = newVal.trim();
+      if (newVal === "") newVal = "";
+
+      // Boolean
+      if (key === "halaal") newVal = Boolean(newVal);
 
       // Compare normalized values
-      if (oldVal !== newVal) {
-        changed[key] = newVal;
-      }
-    });
+      if (`${oldVal}` !== `${newVal}`) changed[key] = newVal;
+    }
 
-    // Nothing changed → skip DB update
+    // No changes → skip update
     if (Object.keys(changed).length === 0) {
       return { ok: true, unchanged: true, data: old };
     }
@@ -103,7 +97,7 @@ export async function updateSignal(id: number, payload: any) {
     const updatedRes = await pool.query(sql, [...values, id]);
     const updated = updatedRes.rows[0];
 
-    // Revalidate routes
+    // Revalidate pages
     revalidatePath("/signals");
     revalidatePath(`/signals/${id}/edit`);
 
