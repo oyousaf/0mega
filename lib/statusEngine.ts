@@ -69,29 +69,54 @@ async function logEvent(signalId: number, event: string, price: number) {
   }
 }
 
-/** MAIN ENGINE */
+/** MAIN ENGINE — NOW WITH PROCESSING LOCK */
 export async function runStatusEngine(signals: any[]) {
   for (const signal of signals) {
-    const oldStatus = signal.status?.toUpperCase() || "ACTIVE";
-    const oldPrice = Number(signal.current_price ?? 0);
+    // ---------------------------------------------------
+    // 1. Skip signals already locked
+    // ---------------------------------------------------
+    if (signal.processing === true) continue;
 
-    const currentPrice = await getPrice(signal.symbol, signal.type);
-    let engineStatus = evaluateState(signal, currentPrice);
+    // ---------------------------------------------------
+    // 2. Lock this signal
+    // ---------------------------------------------------
+    await pool.query(`UPDATE signals SET processing = TRUE WHERE id = $1`, [
+      signal.id,
+    ]);
 
-    if (isExpired(signal)) engineStatus = "EXPIRED";
+    try {
+      const oldStatus = signal.status?.toUpperCase() || "ACTIVE";
+      const oldPrice = Number(signal.current_price ?? 0);
 
-    const prettyStatus = formatStatus(engineStatus);
+      const currentPrice = await getPrice(signal.symbol, signal.type);
+      let engineStatus = evaluateState(signal, currentPrice);
 
-    const statusChanged =
-      prettyStatus.toUpperCase() !== oldStatus.toUpperCase();
-    const priceChanged = Math.abs(currentPrice - oldPrice) >= PRICE_THRESHOLD;
+      // Expiration check
+      if (isExpired(signal)) engineStatus = "EXPIRED";
 
-    if (!statusChanged && !priceChanged) continue;
+      const prettyStatus = formatStatus(engineStatus);
 
-    await updateSignalRow(signal.id, engineStatus, currentPrice);
+      const statusChanged =
+        prettyStatus.toUpperCase() !== oldStatus.toUpperCase();
+      const priceChanged = Math.abs(currentPrice - oldPrice) >= PRICE_THRESHOLD;
 
-    if (statusChanged) {
-      await logEvent(signal.id, engineStatus, currentPrice);
+      // No change? skip
+      if (!statusChanged && !priceChanged) continue;
+
+      // Apply update
+      await updateSignalRow(signal.id, engineStatus, currentPrice);
+
+      // Log event only when status changed
+      if (statusChanged) {
+        await logEvent(signal.id, engineStatus, currentPrice);
+      }
+    } finally {
+      // ---------------------------------------------------
+      // 3. Always unlock, even if an error was thrown
+      // ---------------------------------------------------
+      await pool.query(`UPDATE signals SET processing = FALSE WHERE id = $1`, [
+        signal.id,
+      ]);
     }
   }
 }

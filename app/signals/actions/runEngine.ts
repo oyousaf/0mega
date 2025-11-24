@@ -2,6 +2,7 @@
 
 import { runStatusEngine } from "@/lib/statusEngine";
 import { pool } from "@/lib/neon";
+import { isValidSignalRow } from "@/lib/validateSignalRow";
 
 export async function runEngineAction() {
   try {
@@ -10,8 +11,19 @@ export async function runEngineAction() {
       `SELECT * FROM signals ORDER BY created_at DESC`
     );
 
+    // Strictly validate rows before engine use
+    const validRows = initial.filter(isValidSignalRow);
+
+    if (validRows.length !== initial.length) {
+      console.warn(
+        `runEngineAction: ${
+          initial.length - validRows.length
+        } invalid rows skipped`
+      );
+    }
+
     // Run status engine
-    await runStatusEngine(initial);
+    await runStatusEngine(validRows);
 
     // Fetch again ONLY after engine operations
     const { rows: updated } = await pool.query(
