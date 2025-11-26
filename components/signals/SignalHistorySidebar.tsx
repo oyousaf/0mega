@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { getSignalHistory } from "@/app/signals/actions/getSignalHistory";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
 import { formatStatus } from "@/app/utils/formatStatus";
@@ -46,20 +47,25 @@ export default function SignalHistorySidebar({
         Recent Activity
       </h2>
 
-      {loading && <p className="text-omega-gold/70">Loading…</p>}
+      {loading && (
+        <p className="text-omega-gold/70">Loading…</p>
+      )}
 
       {!loading && events.length === 0 && (
         <p className="text-omega-gold/70">No recent activity.</p>
       )}
 
       <div className="space-y-3">
-        {events.map((ev) => {
+        {events.map((ev, index) => {
           const formattedStatus = formatStatus(ev.event);
           const color = statusColor(formattedStatus);
 
           return (
-            <div
+            <motion.div
               key={ev.id}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.05, duration: 0.25 }}
               className="p-3 rounded-lg bg-omega-green/20 border border-omega-dark-gold/30"
             >
               {/* STATUS PILL */}
@@ -70,7 +76,7 @@ export default function SignalHistorySidebar({
                 {formattedStatus}
               </span>
 
-              {/* PRICE */}
+              {/* PRICE (optional) */}
               {ev.price && (
                 <p className="text-sm text-omega-gold/80 mt-1">
                   Price: {ev.price}
@@ -81,7 +87,7 @@ export default function SignalHistorySidebar({
               <p className="text-xs text-omega-gold/60 mt-1">
                 {formatTimestamp(ev.timestamp)}
               </p>
-            </div>
+            </motion.div>
           );
         })}
       </div>
