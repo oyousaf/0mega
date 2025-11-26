@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 
 import { Signal } from "@/app/types/signal";
+import { useRouter } from "next/navigation";
 
 type Props = {
   mode: "add" | "edit";
@@ -54,6 +55,7 @@ export default function SignalForm({
   });
 
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -82,46 +84,57 @@ export default function SignalForm({
   };
 
   async function handleSubmit(e: any) {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    const clean: Partial<Signal> = {
-      symbol: form.symbol.trim(),
-      strategy: form.strategy?.trim() || "",
-      entry_price: num(form.entry_price),
-      tp1: num(form.tp1),
-      tp2: num(form.tp2),
-      sl: num(form.sl),
-      notes: form.notes?.trim() || "",
-      type: form.type,
-      halaal: Boolean(form.halaal),
-    };
+  const clean: Partial<Signal> = {
+    symbol: form.symbol.trim(),
+    strategy: form.strategy?.trim() || "",
+    entry_price: num(form.entry_price),
+    tp1: num(form.tp1),
+    tp2: num(form.tp2),
+    sl: num(form.sl),
+    notes: typeof form.notes === "string" ? form.notes.trim() : "",
+    type: form.type,
+    halaal: Boolean(form.halaal),
+  };
 
-    try {
-      if (onSubmit) {
-        await onSubmit(clean);
-        onSuccess?.();
-        setLoading(false);
-        return;
-      }
+  try {
+    if (onSubmit) {
+      await onSubmit(clean);
+      onSuccess?.();
 
-      const res = await fetch("/api/signals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(clean),
-      });
+      setTimeout(() => {
+        router.push("/signals");
+      }, 600);
 
-      if (!res.ok) throw new Error("Failed to add signal");
-
-      showSnackbar("Signal added successfully", "success");
-      setForm(empty);
-    } catch (err) {
-      console.error(err);
-      showSnackbar("Something went wrong", "error");
+      setLoading(false);
+      return;
     }
 
-    setLoading(false);
+    const res = await fetch("/api/signals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(clean),
+    });
+
+    if (!res.ok) throw new Error("Failed to add signal");
+
+    showSnackbar("Signal added successfully", "success");
+
+    setTimeout(() => {
+      router.push("/signals");
+    }, 600);
+
+    setForm(empty);
+  } catch (err) {
+    console.error(err);
+    showSnackbar("Something went wrong", "error");
   }
+
+  setLoading(false);
+}
+
 
   const inputStyles = {
     "& .MuiFilledInput-root": {
@@ -219,7 +232,7 @@ export default function SignalForm({
           multiline
           rows={3}
           sx={inputStyles}
-          value={form.notes}
+          value={form.notes ?? ""}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
