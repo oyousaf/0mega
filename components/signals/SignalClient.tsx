@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { runEngineAction } from "@/app/signals/actions/runEngine";
 import SignalCard from "./SignalCard";
 import DeleteModal from "./DeleteModal";
@@ -12,18 +12,10 @@ import { useRouter } from "next/navigation";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
 import { Signal } from "@/app/types/signal";
 
-// Pretty status (DB stays canonical)
-function formatStatusLabel(s: string | null | undefined): string {
+// Canonical → Pretty Label
+function prettyStatus(s: string | null | undefined): string {
   if (!s) return "ACTIVE";
   return s.replace(/_/g, " ").toUpperCase();
-}
-
-// Simple shallow compare (avoids false state updates)
-function shallowCompare(a: any, b: any) {
-  if (!a || !b) return false;
-  const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
-  return keys.every((k) => a[k] === b[k]);
 }
 
 export default function SignalClient({
@@ -33,7 +25,21 @@ export default function SignalClient({
 }) {
   type ToastType = "success" | "error" | "info" | "warning";
 
-  const [signals, setSignals] = useState<Signal[]>(initialSignals || []);
+  const router = useRouter();
+
+  /* -----------------------------------------------------
+     STATE
+  ----------------------------------------------------- */
+  const [signals, setSignals] = useState<Signal[]>(initialSignals);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Filtering state
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  // Toasts
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
@@ -44,47 +50,33 @@ export default function SignalClient({
     type: "info",
   });
 
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // Keep last-known status + price
+  // Previous status & price tracking
   const prevStatus = useRef<Record<number, string>>({});
   const prevPrice = useRef<Record<number, number | null>>({});
-  const router = useRouter();
 
   /* -----------------------------------------------------
-     REFRESH ENGINE
+     ENGINE REFRESH
   ----------------------------------------------------- */
   async function refresh() {
     try {
-      const updatedRaw = await runEngineAction();
-      if (!updatedRaw || updatedRaw.length === 0) return;
+      const updated = await runEngineAction();
+      if (!Array.isArray(updated) || updated.length === 0) return;
 
-      // Normalise UI-facing fields before comparison
-      const updated = updatedRaw.map((s: any) => ({
+      const normalised = updated.map((s) => ({
         ...s,
-        status: formatStatusLabel(s.status),
+        status: prettyStatus(s.status),
         lastUpdatedFormatted: formatTimestamp(s.updated_at),
       }));
 
-      // Avoid rerender if identical
-      const same =
-        updated.length === signals.length &&
-        updated.every((u, i) => shallowCompare(u, signals[i]));
-
-      if (same) return;
-
-      // Toast logic
-      updated.forEach((sig) => {
-        const sId = sig.id;
+      // Detect status changes for toast
+      normalised.forEach((sig) => {
+        const id = sig.id;
         const newStatus = sig.status;
         const newPrice = sig.current_price ?? null;
 
-        const oldStatus = prevStatus.current[sId];
-        const oldPrice = prevPrice.current[sId];
-
-        const statusChanged = oldStatus && newStatus !== oldStatus;
-        const priceChanged = oldPrice !== null && newPrice !== oldPrice;
+        const oldStatus = prevStatus.current[id];
+        const statusChanged =
+          oldStatus !== undefined && newStatus !== oldStatus;
 
         if (statusChanged) {
           setToast({
@@ -100,19 +92,16 @@ export default function SignalClient({
           });
         }
 
-        prevStatus.current[sId] = newStatus;
-        prevPrice.current[sId] = newPrice;
+        prevStatus.current[id] = newStatus;
+        prevPrice.current[id] = newPrice;
       });
 
-      setSignals(updated);
+      setSignals(normalised);
     } catch (err) {
-      console.error("Engine error:", err);
+      console.error("Engine refresh error:", err);
     }
   }
 
-  /* -----------------------------------------------------
-     INTERVAL
-  ----------------------------------------------------- */
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 15000);
@@ -124,11 +113,12 @@ export default function SignalClient({
   ----------------------------------------------------- */
   async function confirmDelete() {
     if (!deleteId) return;
-
     setDeleting(true);
+
     await deleteSignal(deleteId);
 
     setSignals((prev) => prev.filter((s) => s.id !== deleteId));
+
     setDeleting(false);
     setDeleteId(null);
 
@@ -138,6 +128,30 @@ export default function SignalClient({
       type: "success",
     });
   }
+
+  /* -----------------------------------------------------
+     FILTERING LOGIC
+  ----------------------------------------------------- */
+  const filteredSignals = useMemo(() => {
+    return signals
+      .filter((s) => {
+        if (search.trim() === "") return true;
+        const t = search.toLowerCase();
+        return (
+          s.symbol.toLowerCase().includes(t) ||
+          s.status.toLowerCase().includes(t) ||
+          s.type.toLowerCase().includes(t)
+        );
+      })
+      .filter((s) => {
+        if (filterType === "all") return true;
+        return s.type === filterType;
+      })
+      .filter((s) => {
+        if (filterStatus === "all") return true;
+        return prettyStatus(s.status) === filterStatus;
+      });
+  }, [signals, search, filterType, filterStatus]);
 
   /* -----------------------------------------------------
      UI
@@ -171,19 +185,56 @@ export default function SignalClient({
         </div>
       </div>
 
+      {/* FILTER BAR */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+        {/* SEARCH */}
+        <input
+          placeholder="Search symbols, status, type…"
+          className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold focus:outline-none"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        {/* TYPE FILTER */}
+        <select
+          className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
+          <option value="all">All Types</option>
+          <option value="stock">Stocks</option>
+          <option value="crypto">Crypto</option>
+          <option value="forex">Forex</option>
+        </select>
+
+        {/* STATUS FILTER */}
+        <select
+          className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+        >
+          <option value="all">All Status</option>
+          <option value="ACTIVE">ACTIVE</option>
+          <option value="TP1 HIT">TP1 HIT</option>
+          <option value="TP2 HIT">TP2 HIT</option>
+          <option value="SL HIT">SL HIT</option>
+          <option value="EXPIRED">EXPIRED</option>
+          <option value="INVALID">INVALID</option>
+        </select>
+      </div>
+
       {/* SIGNAL CARDS */}
       <AnimatePresence mode="popLayout">
-        {signals.length === 0 ? (
+        {filteredSignals.length === 0 ? (
           <motion.p
-            className="text-foreground opacity-70 text-center"
+            className="text-foreground opacity-70 text-center mt-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
           >
-            No signals found.
+            No matching signals.
           </motion.p>
         ) : (
-          signals.map((signal) => (
+          filteredSignals.map((signal: Signal) => (
             <motion.div
               key={signal.id}
               layout
