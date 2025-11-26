@@ -213,7 +213,7 @@ export default function SignalClient({
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
         >
-          <option value="all">All Status</option>
+          <option value="all">All Statuses</option>
           <option value="ACTIVE">ACTIVE</option>
           <option value="TP1 HIT">TP1 HIT</option>
           <option value="TP2 HIT">TP2 HIT</option>
