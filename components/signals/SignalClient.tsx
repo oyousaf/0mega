@@ -14,11 +14,10 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
-import { usePersistentState } from "@/app/utils/usePersistentState";
+import { usePersistentStateSafe } from "@/app/utils/usePersistentState";
 import { Signal } from "@/app/types/signal";
 
-// Convert canonical → pretty
-function prettyStatus(s: string | null | undefined): string {
+function prettyStatus(s: string | null | undefined) {
   if (!s) return "ACTIVE";
   return s.replace(/_/g, " ").toUpperCase();
 }
@@ -33,37 +32,42 @@ export default function SignalClient({
   type ToastType = "success" | "error" | "info" | "warning";
 
   /* -----------------------------------------------------
-     STATE
+     MAIN STATE
   ----------------------------------------------------- */
   const [signals, setSignals] = useState<Signal[]>(initialSignals);
 
-  // Persisted UI State
-  const [search, setSearch] = usePersistentState<string>("sig.search", "");
-  const [filterType, setFilterType] = usePersistentState<string>(
+  // Hydration-safe persisted UI filters
+  const [search, setSearch, hydrated1] = usePersistentStateSafe(
+    "sig.search",
+    ""
+  );
+  const [filterType, setFilterType, hydrated2] = usePersistentStateSafe(
     "sig.filterType",
     "all"
   );
-  const [filterStatus, setFilterStatus] = usePersistentState<string>(
+  const [filterStatus, setFilterStatus, hydrated3] = usePersistentStateSafe(
     "sig.filterStatus",
     "all"
   );
-  const [sortBy, setSortBy] = usePersistentState<string>(
+  const [sortBy, setSortBy, hydrated4] = usePersistentStateSafe(
     "sig.sortBy",
     "updated"
   );
 
-  // Delete modal
+  const uiReady = hydrated1 && hydrated2 && hydrated3 && hydrated4;
+
+  // Delete state
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
 
-  // Toast
+  // Toast state
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
     type: ToastType;
   }>({ open: false, message: "", type: "info" });
 
-  // Tracking status changes
+  // Track status+price changes
   const prevStatus = useRef<Record<number, string>>({});
   const prevPrice = useRef<Record<number, number | null>>({});
 
@@ -81,7 +85,7 @@ export default function SignalClient({
         lastUpdatedFormatted: formatTimestamp(s.updated_at),
       }));
 
-      // Detect status changes
+      // Status change toasts
       normalised.forEach((sig) => {
         const id = sig.id;
         const newStatus = sig.status;
@@ -141,27 +145,27 @@ export default function SignalClient({
   }
 
   /* -----------------------------------------------------
-     FILTER & SORT LOGIC
+     FILTER + SORT LOGIC
   ----------------------------------------------------- */
   const filteredSignals = useMemo(() => {
+    if (!uiReady) return [];
+
     return signals
       .filter((s) => {
-        if (!search.trim()) return true;
         const t = search.toLowerCase();
+        if (!t.trim()) return true;
         return (
           s.symbol.toLowerCase().includes(t) ||
           s.status.toLowerCase().includes(t) ||
           s.type.toLowerCase().includes(t)
         );
       })
-      .filter((s) => {
-        if (filterType === "all") return true;
-        return s.type === filterType;
-      })
-      .filter((s) => {
-        if (filterStatus === "all") return true;
-        return prettyStatus(s.status) === filterStatus;
-      })
+      .filter((s) => (filterType === "all" ? true : s.type === filterType))
+      .filter((s) =>
+        filterStatus === "all"
+          ? true
+          : prettyStatus(s.status) === filterStatus
+      )
       .sort((a, b) => {
         if (sortBy === "updated") {
           return (
@@ -183,7 +187,15 @@ export default function SignalClient({
         }
         return 0;
       });
-  }, [signals, search, filterType, filterStatus, sortBy]);
+  }, [signals, search, filterType, filterStatus, sortBy, uiReady]);
+
+  /* -----------------------------------------------------
+     HYDRATION GATE
+  ----------------------------------------------------- */
+  if (!uiReady) {
+    // Uses your existing /app/loading.tsx automatically
+    return null;
+  }
 
   /* -----------------------------------------------------
      UI
@@ -267,7 +279,7 @@ export default function SignalClient({
         </select>
       </div>
 
-      {/* CARDS */}
+      {/* SIGNAL CARDS */}
       <AnimatePresence mode="popLayout">
         {filteredSignals.length === 0 ? (
           <motion.p
