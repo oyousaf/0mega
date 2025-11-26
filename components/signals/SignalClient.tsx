@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
+
 import { runEngineAction } from "@/app/signals/actions/runEngine";
+import { deleteSignal } from "@/app/signals/actions/deleteSignal";
+
 import SignalCard from "./SignalCard";
 import DeleteModal from "./DeleteModal";
-import { deleteSignal } from "@/app/signals/actions/deleteSignal";
+
 import { motion, AnimatePresence } from "framer-motion";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
-import { useRouter } from "next/navigation";
+
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
+import { usePersistentState } from "@/app/utils/usePersistentState";
 import { Signal } from "@/app/types/signal";
 
-// Canonical → Pretty Label
+// Convert canonical → pretty
 function prettyStatus(s: string | null | undefined): string {
   if (!s) return "ACTIVE";
   return s.replace(/_/g, " ").toUpperCase();
@@ -23,37 +28,42 @@ export default function SignalClient({
 }: {
   initialSignals: Signal[];
 }) {
-  type ToastType = "success" | "error" | "info" | "warning";
-
   const router = useRouter();
+
+  type ToastType = "success" | "error" | "info" | "warning";
 
   /* -----------------------------------------------------
      STATE
   ----------------------------------------------------- */
   const [signals, setSignals] = useState<Signal[]>(initialSignals);
+
+  // Persisted UI State
+  const [search, setSearch] = usePersistentState<string>("sig.search", "");
+  const [filterType, setFilterType] = usePersistentState<string>(
+    "sig.filterType",
+    "all"
+  );
+  const [filterStatus, setFilterStatus] = usePersistentState<string>(
+    "sig.filterStatus",
+    "all"
+  );
+  const [sortBy, setSortBy] = usePersistentState<string>(
+    "sig.sortBy",
+    "updated"
+  );
+
+  // Delete modal
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting] = useState<boolean>(false);
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-
-  // Sorting
-  const [sortBy, setSortBy] = useState("updated");
-
-  // Toast state
+  // Toast
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
     type: ToastType;
-  }>({
-    open: false,
-    message: "",
-    type: "info",
-  });
+  }>({ open: false, message: "", type: "info" });
 
-  // Track last-known status/price
+  // Tracking status changes
   const prevStatus = useRef<Record<number, string>>({});
   const prevPrice = useRef<Record<number, number | null>>({});
 
@@ -71,7 +81,7 @@ export default function SignalClient({
         lastUpdatedFormatted: formatTimestamp(s.updated_at),
       }));
 
-      // Toast on status change
+      // Detect status changes
       normalised.forEach((sig) => {
         const id = sig.id;
         const newStatus = sig.status;
@@ -79,10 +89,7 @@ export default function SignalClient({
 
         const oldStatus = prevStatus.current[id];
 
-        const statusChanged =
-          oldStatus !== undefined && newStatus !== oldStatus;
-
-        if (statusChanged) {
+        if (oldStatus && oldStatus !== newStatus) {
           setToast({
             open: true,
             message: `${sig.symbol}: ${newStatus}`,
@@ -134,10 +141,10 @@ export default function SignalClient({
   }
 
   /* -----------------------------------------------------
-     FILTER + SORT LOGIC
+     FILTER & SORT LOGIC
   ----------------------------------------------------- */
   const filteredSignals = useMemo(() => {
-    let list = signals
+    return signals
       .filter((s) => {
         if (!search.trim()) return true;
         const t = search.toLowerCase();
@@ -154,35 +161,28 @@ export default function SignalClient({
       .filter((s) => {
         if (filterStatus === "all") return true;
         return prettyStatus(s.status) === filterStatus;
-      });
-
-    // ---- SORTING ----
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case "updated":
+      })
+      .sort((a, b) => {
+        if (sortBy === "updated") {
           return (
-            new Date(b.updated_at || 0).getTime() -
-            new Date(a.updated_at || 0).getTime()
+            new Date(b.updated_at ?? 0).getTime() -
+            new Date(a.updated_at ?? 0).getTime()
           );
-
-        case "created":
+        }
+        if (sortBy === "created") {
           return (
-            new Date(b.created_at).getTime() -
-            new Date(a.created_at).getTime()
+            new Date(b.created_at ?? 0).getTime() -
+            new Date(a.created_at ?? 0).getTime()
           );
-
-        case "symbol":
-          return a.symbol.localeCompare(b.symbol);
-
-        case "status":
+        }
+        if (sortBy === "status") {
           return prettyStatus(a.status).localeCompare(prettyStatus(b.status));
-
-        default:
-          return 0;
-      }
-    });
-
-    return list;
+        }
+        if (sortBy === "type") {
+          return a.type.localeCompare(b.type);
+        }
+        return 0;
+      });
   }, [signals, search, filterType, filterStatus, sortBy]);
 
   /* -----------------------------------------------------
@@ -217,7 +217,7 @@ export default function SignalClient({
         </div>
       </div>
 
-      {/* FILTER + SORT BAR */}
+      {/* FILTER BAR */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
         {/* SEARCH */}
         <input
@@ -234,7 +234,7 @@ export default function SignalClient({
           onChange={(e) => setFilterType(e.target.value)}
         >
           <option value="all">All Types</option>
-          <option value="stock">Stocks</option>
+          <option value="stock">Stock</option>
           <option value="crypto">Crypto</option>
           <option value="forex">Forex</option>
         </select>
@@ -260,14 +260,14 @@ export default function SignalClient({
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
         >
-          <option value="updated">Sort: Last Updated</option>
-          <option value="created">Sort: Created At</option>
-          <option value="symbol">Sort: Symbol</option>
-          <option value="status">Sort: Status</option>
+          <option value="updated">Last Updated</option>
+          <option value="created">Newest First</option>
+          <option value="status">Status</option>
+          <option value="type">Type</option>
         </select>
       </div>
 
-      {/* SIGNAL CARDS */}
+      {/* CARDS */}
       <AnimatePresence mode="popLayout">
         {filteredSignals.length === 0 ? (
           <motion.p
