@@ -76,7 +76,7 @@ export default function SignalHistorySidebar({
                 {formattedStatus}
               </span>
 
-              {/* PRICE (optional) */}
+              {/* PRICE */}
               {ev.price && (
                 <p className="text-sm text-omega-gold/80 mt-1">
                   Price: {ev.price}
