@@ -91,8 +91,8 @@ export default function SignalClient({
   /* -----------------------------------------------------
      STATE
   ----------------------------------------------------- */
-  const [signals, setSignals] = useState<Signal[]>(() =>
-    initialSignals.map(normalizeSignalRow).filter((s) => s.status !== "CLOSED")
+  const [signals, setSignals] = useState<Signal[]>(
+    () => initialSignals.map(normalizeSignalRow) // ← NO CLOSED FILTERING
   );
 
   const [search, setSearch, hyd1] = usePersistentStateSafe("sig.search", "");
@@ -133,9 +133,7 @@ export default function SignalClient({
       const updated = await runEngineAction();
       if (!Array.isArray(updated)) return;
 
-      const normalised = updated
-        .map(normalizeSignalRow)
-        .filter((s) => s.status !== "CLOSED");
+      const normalised = updated.map(normalizeSignalRow); // ← NO CLOSED FILTERING
 
       // Toast system
       normalised.forEach((sig) => {
@@ -226,7 +224,7 @@ export default function SignalClient({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          📡 Active Signals
+          📁 All Signals
         </motion.h1>
 
         <div className="flex gap-3">
@@ -256,7 +254,7 @@ export default function SignalClient({
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        {/* TYPE FILTER */}
+        {/* TYPE */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterType}
@@ -268,7 +266,7 @@ export default function SignalClient({
           <option value="forex">Forex</option>
         </select>
 
-        {/* STATUS FILTER */}
+        {/* STATUS */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterStatus}
@@ -280,9 +278,10 @@ export default function SignalClient({
           <option value="TP2 HIT">TP2 HIT</option>
           <option value="SL HIT">SL HIT</option>
           <option value="EXPIRED">EXPIRED</option>
+          <option value="CLOSED">CLOSED</option>
         </select>
 
-        {/* SORT FILTER */}
+        {/* SORT */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={sortBy}
