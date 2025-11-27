@@ -158,7 +158,7 @@ export default function DevToolsPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        ⚙️ 𝛀mega Dev Tools
+        ⚙️ 𝛀mega DevTools
       </motion.h1>
 
       <motion.div

@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
-// Prevent accidental execution in production
-const isProduction = process.env.NODE_ENV === "production";
-
-export async function GET() {
-  if (isProduction) {
-    return NextResponse.json(
-      { error: "Not allowed in production." },
-      { status: 403 }
-    );
-  }
-
+export async function POST() {
   try {
-    // Clear history table first (FK-safe)
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "Not allowed in production." },
+        { status: 403 }
+      );
+    }
+
+    // Clear history table first
     await pool.query(`DELETE FROM signal_history;`);
 
-    // Clear all signals
+    // Clear signals
     await pool.query(`DELETE FROM signals;`);
 
     return NextResponse.json({

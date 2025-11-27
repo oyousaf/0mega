@@ -4,7 +4,7 @@ import Chance from "chance";
 
 const chance = new Chance();
 
-export async function GET() {
+export async function POST() {
   try {
     // Protect production
     if (process.env.NODE_ENV === "production") {
@@ -14,15 +14,13 @@ export async function GET() {
       );
     }
 
-    // Clear table (optional)
+    // Clear previous dummy data
     await pool.query(`DELETE FROM signals`);
 
     const types = ["stock", "crypto", "forex"];
-
     const results: any[] = [];
 
     function createSignal(type: string) {
-      // Generate base symbol per type
       const symbol =
         type === "crypto"
           ? chance.pickone(["BTC", "ETH", "SOL", "XRP", "ADA"])
@@ -32,25 +30,13 @@ export async function GET() {
 
       const entry = chance.floating({ min: 10, max: 200, fixed: 2 });
 
-      const tp1 = Number(
-        (entry * (1 + chance.floating({ min: 0.01, max: 0.04 }))).toFixed(2)
-      );
-      const tp2 = Number(
-        (entry * (1 + chance.floating({ min: 0.05, max: 0.1 }))).toFixed(2)
-      );
-      const sl = Number(
-        (entry * (1 - chance.floating({ min: 0.01, max: 0.04 }))).toFixed(2)
-      );
+      const tp1 = +(entry * (1 + chance.floating({ min: 0.01, max: 0.04 }))).toFixed(2);
+      const tp2 = +(entry * (1 + chance.floating({ min: 0.05, max: 0.1 }))).toFixed(2);
+      const sl = +(entry * (1 - chance.floating({ min: 0.01, max: 0.04 }))).toFixed(2);
 
       return {
         symbol,
-        strategy: chance.pickone([
-          "Breakout",
-          "Reversal",
-          "Momentum",
-          "Scalp",
-          "News",
-        ]),
+        strategy: chance.pickone(["Breakout", "Reversal", "Momentum", "Scalp", "News"]),
         entry_price: entry,
         tp1,
         tp2,
@@ -63,7 +49,7 @@ export async function GET() {
       };
     }
 
-    // Generate 5 per type
+    // Generate 5 signals per type
     for (const type of types) {
       for (let i = 0; i < 5; i++) {
         const sig = createSignal(type);
