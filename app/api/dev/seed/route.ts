@@ -14,12 +14,56 @@ export async function POST() {
       );
     }
 
-    // Clear previous dummy data
+    // Clear previous dummy signals
     await pool.query(`DELETE FROM signals`);
 
     const types = ["stock", "crypto", "forex"];
     const results: any[] = [];
 
+    /* -----------------------------------------------------
+       STRATEGY-SPECIFIC NOTES
+    ----------------------------------------------------- */
+    const strategyNotes: Record<string, string[]> = {
+      Breakout: [
+        "Watching for continuation above resistance.",
+        "Breakout clean; looking for follow-through.",
+        "Holding structure; breakout remains valid.",
+        "Strong move; monitoring next resistance.",
+        "Retest forming; waiting for confirmation.",
+      ],
+      Reversal: [
+        "Reversal forming; watching candle structure.",
+        "Momentum slowing; early reversal signs.",
+        "Price rejecting key level repeatedly.",
+        "Structure weakening; reversal possible.",
+        "Monitoring volume shift for confirmation.",
+      ],
+      Momentum: [
+        "Momentum strong; trend intact.",
+        "Clean impulse; watching next push.",
+        "Momentum stable; TP1 likely soon.",
+        "Strong leg up; tracking trendline.",
+        "Pullback shallow; momentum healthy.",
+      ],
+      Scalp: [
+        "Quick scalp setup forming.",
+        "Watching micro-structure closely.",
+        "Fast reaction needed; monitoring level.",
+        "Small range; waiting for trigger.",
+        "Tight structure; potential quick move.",
+      ],
+      News: [
+        "News volatility expected; careful timing.",
+        "Sharp movement possible; watching feed.",
+        "Event incoming; monitoring reaction.",
+        "Market unstable; waiting for clarity.",
+        "News spike likely; careful entry needed.",
+      ],
+    };
+
+    /* -----------------------------------------------------
+       Generate a single signal
+    ----------------------------------------------------- */
     function createSignal(type: string) {
       const symbol =
         type === "crypto"
@@ -30,13 +74,39 @@ export async function POST() {
 
       const entry = chance.floating({ min: 10, max: 200, fixed: 2 });
 
-      const tp1 = +(entry * (1 + chance.floating({ min: 0.01, max: 0.04 }))).toFixed(2);
-      const tp2 = +(entry * (1 + chance.floating({ min: 0.05, max: 0.1 }))).toFixed(2);
-      const sl = +(entry * (1 - chance.floating({ min: 0.01, max: 0.04 }))).toFixed(2);
+      const tp1 = +(
+        entry *
+        (1 + chance.floating({ min: 0.01, max: 0.04 }))
+      ).toFixed(2);
+
+      const tp2 = +(
+        entry *
+        (1 + chance.floating({ min: 0.05, max: 0.1 }))
+      ).toFixed(2);
+
+      const sl = +(
+        entry *
+        (1 - chance.floating({ min: 0.01, max: 0.04 }))
+      ).toFixed(2);
+
+      const current_price = +(
+        entry *
+        (1 + chance.floating({ min: -0.03, max: 0.05 }))
+      ).toFixed(2);
+
+      const strategy = chance.pickone([
+        "Breakout",
+        "Reversal",
+        "Momentum",
+        "Scalp",
+        "News",
+      ]);
+
+      const notes = chance.pickone(strategyNotes[strategy]);
 
       return {
         symbol,
-        strategy: chance.pickone(["Breakout", "Reversal", "Momentum", "Scalp", "News"]),
+        strategy,
         entry_price: entry,
         tp1,
         tp2,
@@ -44,12 +114,14 @@ export async function POST() {
         status: "ACTIVE",
         type,
         halaal: chance.bool({ likelihood: 90 }),
-        current_price: entry,
-        notes: chance.sentence({ words: 6 }),
+        current_price,
+        notes,
       };
     }
 
-    // Generate 5 signals per type
+    /* -----------------------------------------------------
+       Generate 5 per type
+    ----------------------------------------------------- */
     for (const type of types) {
       for (let i = 0; i < 5; i++) {
         const sig = createSignal(type);
