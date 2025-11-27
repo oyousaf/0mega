@@ -1,9 +1,7 @@
 import SignalClient from "@/components/signals/SignalClient";
-import { getSignals } from "./actions/getSignals";
-import DevSeedButton from "@/components/dev/DevSeedButton";
+import { getSignalsAll } from "./actions/getSignals";
 
 export default async function SignalsPage() {
-  const signals = await getSignals();
+  const signals = await getSignalsAll();
   return <SignalClient initialSignals={signals} />;
-  <DevSeedButton />
 }
