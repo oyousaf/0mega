@@ -15,7 +15,7 @@ export interface Signal {
   notes: string;
 
   // Strict statuses only
-  status: "ACTIVE" | "TP1 HIT" | "TP2 HIT" | "SL HIT" | "EXPIRED" | "INVALID";
+  status: "ACTIVE" | "TP1 HIT" | "TP2 HIT" | "SL HIT" | "EXPIRED" | "CLOSED";
 
   created_at: string;
   updated_at: string | null;

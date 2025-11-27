@@ -4,44 +4,66 @@ import { runStatusEngine } from "@/lib/statusEngine";
 import { pool } from "@/lib/neon";
 import { isValidSignalRow } from "@/lib/validateSignalRow";
 
+/**
+ * Converts Postgres row dates to clean ISO strings without mutation.
+ */
+function normaliseRow(row: any) {
+  return {
+    ...row,
+    created_at:
+      row.created_at instanceof Date
+        ? row.created_at.toISOString()
+        : row.created_at,
+    updated_at:
+      row.updated_at instanceof Date
+        ? row.updated_at.toISOString()
+        : row.updated_at,
+  };
+}
+
 export async function runEngineAction() {
   try {
-    // Fetch once
-    const { rows: initial } = await pool.query(
-      `SELECT * FROM signals ORDER BY created_at DESC`
-    );
+    /**
+     * 1. Fetch all signals once.
+     * Always sorted newest → oldest for consistent UI.
+     */
+    const { rows: initial } = await pool.query(`
+      SELECT * FROM signals
+      ORDER BY created_at DESC
+    `);
 
-    // Strictly validate rows before engine use
-    const validRows = initial.filter(isValidSignalRow);
+    /**
+     * 2. Filter out malformed rows BEFORE engine logic touches them.
+     */
+    const valid = initial.filter(isValidSignalRow);
 
-    if (validRows.length !== initial.length) {
+    if (valid.length !== initial.length) {
       console.warn(
-        `runEngineAction: ${
-          initial.length - validRows.length
-        } invalid rows skipped`
+        `runEngineAction: ${initial.length - valid.length} invalid rows skipped`
       );
     }
 
-    // Run status engine
-    await runStatusEngine(validRows);
+    /**
+     * 3. Run the Option-B engine:
+     *    ACTIVE → TP? → CLOSED
+     *    ACTIVE → EXPIRED → CLOSED
+     */
+    await runStatusEngine(valid);
 
-    // Fetch again ONLY after engine operations
-    const { rows: updated } = await pool.query(
-      `SELECT * FROM signals ORDER BY created_at DESC`
-    );
+    /**
+     * 4. Re-fetch after engine completes.
+     * This guarantees the UI always receives the actual state after transitions.
+     */
+    const { rows: postEngine } = await pool.query(`
+      SELECT * FROM signals
+      ORDER BY created_at DESC
+    `);
 
-    // Normalize timestamps to readable ISO format
-    return updated.map((row: any) => ({
-      ...row,
-      created_at:
-        row.created_at instanceof Date
-          ? row.created_at.toISOString()
-          : row.created_at,
-      updated_at:
-        row.updated_at instanceof Date
-          ? row.updated_at.toISOString()
-          : row.updated_at,
-    }));
+    /**
+     * 5. Normalise timestamps for client-side use.
+     * Avoids hydration mismatches & TS warnings.
+     */
+    return postEngine.map(normaliseRow);
   } catch (err) {
     console.error("runEngineAction error:", err);
     return [];

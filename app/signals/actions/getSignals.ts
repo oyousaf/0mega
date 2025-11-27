@@ -1,8 +1,18 @@
-import { pool } from '@/lib/neon';
+import { pool } from "@/lib/neon";
 
+/**
+ * ACTIVE SIGNALS ONLY
+ * CLOSED rows are preserved in DB but never returned for the Active UI.
+ */
 export async function getSignals() {
-  const result = await pool.query(
-    "SELECT * FROM signals ORDER BY created_at DESC"
+  const { rows } = await pool.query(
+    `
+    SELECT *
+    FROM signals
+    WHERE UPPER(status) != 'CLOSED'
+    ORDER BY created_at DESC
+    `
   );
-  return result.rows;
+
+  return rows;
 }

@@ -17,11 +17,34 @@ import { formatTimestamp } from "@/app/utils/formatTimestamp";
 import { usePersistentStateSafe } from "@/app/utils/usePersistentState";
 import { Signal } from "@/app/types/signal";
 
-function prettyStatus(s: string | null | undefined) {
-  if (!s) return "ACTIVE";
-  return s.replace(/_/g, " ").toUpperCase();
+/* -----------------------------------------------------
+   STRICT STATUS NORMALISATION
+----------------------------------------------------- */
+const ALLOWED_STATUSES = [
+  "ACTIVE",
+  "TP1 HIT",
+  "TP2 HIT",
+  "SL HIT",
+  "EXPIRED",
+  "CLOSED",
+] as const;
+
+type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
+
+/** Convert DB → Pretty, but strongly typed */
+function pretty(raw: string | null | undefined): AllowedStatus {
+  const formatted = (raw || "ACTIVE").replace(/_/g, " ").toUpperCase();
+
+  if (ALLOWED_STATUSES.includes(formatted as AllowedStatus)) {
+    return formatted as AllowedStatus;
+  }
+
+  return "ACTIVE";
 }
 
+/* -----------------------------------------------------
+   COMPONENT
+----------------------------------------------------- */
 export default function SignalClient({
   initialSignals,
 }: {
@@ -34,76 +57,86 @@ export default function SignalClient({
   /* -----------------------------------------------------
      MAIN STATE
   ----------------------------------------------------- */
-  const [signals, setSignals] = useState<Signal[]>(initialSignals);
-
-  // Hydration-safe persisted UI filters
-  const [search, setSearch, hydrated1] = usePersistentStateSafe(
-    "sig.search",
-    ""
+  const [signals, setSignals] = useState<Signal[]>(() =>
+    initialSignals.map((s) => ({
+      ...s,
+      status: pretty(s.status),
+      lastUpdatedFormatted: formatTimestamp(s.updated_at),
+    }))
   );
-  const [filterType, setFilterType, hydrated2] = usePersistentStateSafe(
+
+  /* -----------------------------------------------------
+     HYDRATION PERSISTENT FILTERS
+  ----------------------------------------------------- */
+  const [search, setSearch, hyd1] = usePersistentStateSafe("sig.search", "");
+  const [filterType, setFilterType, hyd2] = usePersistentStateSafe(
     "sig.filterType",
     "all"
   );
-  const [filterStatus, setFilterStatus, hydrated3] = usePersistentStateSafe(
+  const [filterStatus, setFilterStatus, hyd3] = usePersistentStateSafe(
     "sig.filterStatus",
     "all"
   );
-  const [sortBy, setSortBy, hydrated4] = usePersistentStateSafe(
+  const [sortBy, setSortBy, hyd4] = usePersistentStateSafe(
     "sig.sortBy",
     "updated"
   );
 
-  const uiReady = hydrated1 && hydrated2 && hydrated3 && hydrated4;
+  const uiReady = hyd1 && hyd2 && hyd3 && hyd4;
 
-  // Delete state
+  /* -----------------------------------------------------
+     DELETE STATE
+  ----------------------------------------------------- */
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState<boolean>(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Toast state
+  /* -----------------------------------------------------
+     TOAST STATE
+  ----------------------------------------------------- */
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
     type: ToastType;
   }>({ open: false, message: "", type: "info" });
 
-  // Track status+price changes
-  const prevStatus = useRef<Record<number, string>>({});
+  const prevStatus = useRef<Record<number, AllowedStatus>>({});
   const prevPrice = useRef<Record<number, number | null>>({});
 
   /* -----------------------------------------------------
-     ENGINE REFRESH
+     REFRESH ENGINE
   ----------------------------------------------------- */
   async function refresh() {
     try {
       const updated = await runEngineAction();
       if (!Array.isArray(updated) || updated.length === 0) return;
 
-      const normalised = updated.map((s) => ({
-        ...s,
-        status: prettyStatus(s.status),
-        lastUpdatedFormatted: formatTimestamp(s.updated_at),
-      }));
+      const normalised = updated
+        .map((s) => ({
+          ...s,
+          status: pretty(s.status),
+          lastUpdatedFormatted: formatTimestamp(s.updated_at),
+        }))
+        .filter((s) => s.status !== "CLOSED");
 
-      // Status change toasts
+      // TOAST EVENTS
       normalised.forEach((sig) => {
-        const id = sig.id;
-        const newStatus = sig.status;
+        const { id, status: newStatus } = sig;
         const newPrice = sig.current_price ?? null;
-
         const oldStatus = prevStatus.current[id];
 
         if (oldStatus && oldStatus !== newStatus) {
+          const type: ToastType = newStatus.includes("TP")
+            ? "success"
+            : newStatus.includes("SL")
+            ? "error"
+            : newStatus.includes("EXP")
+            ? "warning"
+            : "info";
+
           setToast({
             open: true,
             message: `${sig.symbol}: ${newStatus}`,
-            type: newStatus.includes("TP")
-              ? "success"
-              : newStatus.includes("SL")
-              ? "error"
-              : newStatus.includes("EXP")
-              ? "warning"
-              : "info",
+            type,
           });
         }
 
@@ -145,26 +178,25 @@ export default function SignalClient({
   }
 
   /* -----------------------------------------------------
-     FILTER + SORT LOGIC
+     FILTER + SORT
   ----------------------------------------------------- */
-  const filteredSignals = useMemo(() => {
+  const visibleSignals = useMemo(() => {
     if (!uiReady) return [];
+
+    const term = search.toLowerCase();
 
     return signals
       .filter((s) => {
-        const t = search.toLowerCase();
-        if (!t.trim()) return true;
+        if (!term.trim()) return true;
         return (
-          s.symbol.toLowerCase().includes(t) ||
-          s.status.toLowerCase().includes(t) ||
-          s.type.toLowerCase().includes(t)
+          s.symbol.toLowerCase().includes(term) ||
+          s.status.toLowerCase().includes(term) ||
+          s.type.toLowerCase().includes(term)
         );
       })
       .filter((s) => (filterType === "all" ? true : s.type === filterType))
       .filter((s) =>
-        filterStatus === "all"
-          ? true
-          : prettyStatus(s.status) === filterStatus
+        filterStatus === "all" ? true : pretty(s.status) === filterStatus
       )
       .sort((a, b) => {
         if (sortBy === "updated") {
@@ -180,7 +212,7 @@ export default function SignalClient({
           );
         }
         if (sortBy === "status") {
-          return prettyStatus(a.status).localeCompare(prettyStatus(b.status));
+          return a.status.localeCompare(b.status);
         }
         if (sortBy === "type") {
           return a.type.localeCompare(b.type);
@@ -192,10 +224,7 @@ export default function SignalClient({
   /* -----------------------------------------------------
      HYDRATION GATE
   ----------------------------------------------------- */
-  if (!uiReady) {
-    // Uses your existing /app/loading.tsx automatically
-    return null;
-  }
+  if (!uiReady) return null;
 
   /* -----------------------------------------------------
      UI
@@ -231,7 +260,6 @@ export default function SignalClient({
 
       {/* FILTER BAR */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
-        {/* SEARCH */}
         <input
           placeholder="Search symbols, status, type…"
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold focus:outline-none"
@@ -239,7 +267,6 @@ export default function SignalClient({
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        {/* TYPE */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterType}
@@ -251,7 +278,6 @@ export default function SignalClient({
           <option value="forex">Forex</option>
         </select>
 
-        {/* STATUS */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterStatus}
@@ -259,14 +285,9 @@ export default function SignalClient({
         >
           <option value="all">All Statuses</option>
           <option value="ACTIVE">ACTIVE</option>
-          <option value="TP1 HIT">TP1 HIT</option>
-          <option value="TP2 HIT">TP2 HIT</option>
-          <option value="SL HIT">SL HIT</option>
-          <option value="EXPIRED">EXPIRED</option>
           <option value="INVALID">INVALID</option>
         </select>
 
-        {/* SORT */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={sortBy}
@@ -279,9 +300,9 @@ export default function SignalClient({
         </select>
       </div>
 
-      {/* SIGNAL CARDS */}
+      {/* SIGNAL LIST */}
       <AnimatePresence mode="popLayout">
-        {filteredSignals.length === 0 ? (
+        {visibleSignals.length === 0 ? (
           <motion.p
             className="text-foreground opacity-70 text-center mt-8"
             initial={{ opacity: 0 }}
@@ -290,7 +311,7 @@ export default function SignalClient({
             No matching signals.
           </motion.p>
         ) : (
-          filteredSignals.map((signal) => (
+          visibleSignals.map((signal) => (
             <motion.div
               key={signal.id}
               layout

@@ -4,25 +4,31 @@ import { getPrice } from "@/providers";
 /** Minimum change before writing to DB */
 const PRICE_THRESHOLD = 0.05;
 
-/** Convert ENGINE_STATUS */
-function formatStatus(status: string) {
-  return status.replace(/_/g, " ");
+/** Canonical → Pretty */
+function formatStatus(s: string) {
+  return s.replace(/_/g, " ");
 }
 
-/** Evaluate new status based on TP/SL logic */
-export function evaluateState(signal: any, price: number) {
+/** PRIMARY STATE MACHINE (pre-finalisation) */
+function evaluateState(signal: any, price: number): string {
   const entry = Number(signal.entry_price);
   const tp1 = Number(signal.tp1);
   const tp2 = Number(signal.tp2);
   const sl = Number(signal.sl);
 
-  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return signal.status;
-  const old = signal.status?.toUpperCase();
-
-  if (["SL HIT", "TP1 HIT", "TP2 HIT", "EXPIRED"].includes(old)) {
-    return old.replace(/ /g, "_");
+  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) {
+    return signal.status?.toUpperCase().replace(/ /g, "_") || "ACTIVE";
   }
 
+  const prev = signal.status?.toUpperCase().replace(/ /g, "_");
+
+  // If already CLOSED, never reopen
+  if (prev === "CLOSED") return "CLOSED";
+
+  // If already hit a level, remains until finalisation
+  if (["TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"].includes(prev)) return prev;
+
+  // Live checks
   if (price >= tp2) return "TP2_HIT";
   if (price >= tp1) return "TP1_HIT";
   if (price <= sl) return "SL_HIT";
@@ -30,19 +36,28 @@ export function evaluateState(signal: any, price: number) {
   return "ACTIVE";
 }
 
-/** Auto expire after 7 days */
-export function isExpired(signal: any) {
+/** After 7 days convert → EXPIRED (later resolves to CLOSED) */
+function isExpired(signal: any) {
   const created = new Date(signal.created_at);
   const now = new Date();
   return (now.getTime() - created.getTime()) / 86400000 >= 7;
 }
 
+/** FINALISER (Option B)
+    All hit states + expired become CLOSED */
+function finaliseStatus(rawStatus: string, signal: any) {
+  const s = rawStatus.toUpperCase();
+
+  if (s === "TP1_HIT" || s === "TP2_HIT" || s === "SL_HIT" || s === "EXPIRED") {
+    return "CLOSED";
+  }
+
+  // Active or unchanged
+  return s;
+}
+
 /** Update DB */
-async function updateSignalRow(
-  id: number,
-  newStatus: string,
-  newPrice: number
-) {
+async function updateSignalRow(id: number, status: string, price: number) {
   await pool.query(
     `
     UPDATE signals
@@ -55,11 +70,11 @@ async function updateSignalRow(
       END
     WHERE id = $3
     `,
-    [formatStatus(newStatus), newPrice, id]
+    [formatStatus(status), price, id]
   );
 }
 
-/** Log meaningful transitions */
+/** Log status transitions */
 async function logEvent(signalId: number, event: string, price: number) {
   try {
     await pool.query(
@@ -74,51 +89,46 @@ async function logEvent(signalId: number, event: string, price: number) {
   }
 }
 
-/** MAIN ENGINE — NOW WITH PROCESSING LOCK */
+/** MAIN ENGINE */
 export async function runStatusEngine(signals: any[]) {
   for (const signal of signals) {
-    // ---------------------------------------------------
-    // 1. Skip signals already locked
-    // ---------------------------------------------------
     if (signal.processing === true) continue;
 
-    // ---------------------------------------------------
-    // 2. Lock this signal
-    // ---------------------------------------------------
+    // Lock the row
     await pool.query(`UPDATE signals SET processing = TRUE WHERE id = $1`, [
       signal.id,
     ]);
 
     try {
-      const oldStatus = signal.status?.toUpperCase() || "ACTIVE";
+      const oldPretty = signal.status?.toUpperCase() || "ACTIVE";
+      const old = oldPretty.replace(/ /g, "_");
+
       const oldPrice = Number(signal.current_price ?? 0);
+      const price = await getPrice(signal.symbol, signal.type);
 
-      const currentPrice = await getPrice(signal.symbol, signal.type);
-      let engineStatus = evaluateState(signal, currentPrice);
+      // ---------- 1. Calculate raw engine state ----------
+      let rawState = evaluateState(signal, price);
 
-      // Expiration check
-      if (isExpired(signal)) engineStatus = "EXPIRED";
+      // ---------- 2. Add expiration ----------
+      if (isExpired(signal)) rawState = "EXPIRED";
 
-      const prettyStatus = formatStatus(engineStatus);
+      // ---------- 3. Apply Option B finalisation ----------
+      const finalState = finaliseStatus(rawState, signal);
 
-      const statusChanged =
-        prettyStatus.toUpperCase() !== oldStatus.toUpperCase();
-      const priceChanged = Math.abs(currentPrice - oldPrice) >= PRICE_THRESHOLD;
+      const statusChanged = finalState !== old;
+      const priceChanged = Math.abs(price - oldPrice) >= PRICE_THRESHOLD;
 
-      // No change? skip
       if (!statusChanged && !priceChanged) continue;
 
-      // Apply update
-      await updateSignalRow(signal.id, engineStatus, currentPrice);
+      // ---------- 4. Update DB ----------
+      await updateSignalRow(signal.id, finalState, price);
 
-      // Log event only when status changed
+      // ---------- 5. Log transitions only ----------
       if (statusChanged) {
-        await logEvent(signal.id, engineStatus, currentPrice);
+        await logEvent(signal.id, finalState, price);
       }
     } finally {
-      // ---------------------------------------------------
-      // 3. Always unlock, even if an error was thrown
-      // ---------------------------------------------------
+      // Always unlock
       await pool.query(`UPDATE signals SET processing = FALSE WHERE id = $1`, [
         signal.id,
       ]);
