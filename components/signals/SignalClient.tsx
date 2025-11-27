@@ -248,6 +248,7 @@ export default function SignalClient({
 
       {/* FILTER BAR */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
+        {/* SEARCH */}
         <input
           placeholder="Search symbols, status, type…"
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold focus:outline-none"
@@ -255,6 +256,7 @@ export default function SignalClient({
           onChange={(e) => setSearch(e.target.value)}
         />
 
+        {/* TYPE FILTER */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterType}
@@ -266,6 +268,7 @@ export default function SignalClient({
           <option value="forex">Forex</option>
         </select>
 
+        {/* STATUS FILTER */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterStatus}
@@ -273,9 +276,13 @@ export default function SignalClient({
         >
           <option value="all">All Statuses</option>
           <option value="ACTIVE">ACTIVE</option>
-          <option value="INVALID">INVALID</option>
+          <option value="TP1 HIT">TP1 HIT</option>
+          <option value="TP2 HIT">TP2 HIT</option>
+          <option value="SL HIT">SL HIT</option>
+          <option value="EXPIRED">EXPIRED</option>
         </select>
 
+        {/* SORT FILTER */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={sortBy}

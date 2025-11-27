@@ -1,18 +1,17 @@
 import { pool } from "@/lib/neon";
+import { normalizeSignalRow } from "@/lib/signal/normalise";
 
 /**
- * ACTIVE SIGNALS ONLY
- * CLOSED rows are preserved in DB but never returned for the Active UI.
+ * Fetches all non-closed signals for dashboards / metrics.
+ * All rows are normalised so UI receives consistent shape.
  */
 export async function getSignals() {
-  const { rows } = await pool.query(
-    `
+  const { rows } = await pool.query(`
     SELECT *
     FROM signals
     WHERE UPPER(status) != 'CLOSED'
     ORDER BY created_at DESC
-    `
-  );
+  `);
 
-  return rows;
+  return rows.map(normalizeSignalRow);
 }
