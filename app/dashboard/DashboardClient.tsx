@@ -126,9 +126,7 @@ export default function DashboardClient({
   const [marketFilter, setMarketFilter] = useState("all");
 
   // Metrics
-  const [metrics, setMetrics] = useState(() =>
-    computeMetrics(initialSignals)
-  );
+  const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
 
   /* -------------------------------------------------------
      Auto-refresh
@@ -280,8 +278,9 @@ export default function DashboardClient({
       {/* Recent Signals */}
       <RecentSignals signals={recentSignals} />
 
-      {/* Nav Buttons */}
+      {/* ---------------- Nav Buttons ---------------- */}
       <Box className="flex justify-center gap-4 mt-4">
+        {/* View Active Signals */}
         <Link href="/signals">
           <Button
             variant="contained"
@@ -291,10 +290,25 @@ export default function DashboardClient({
               fontWeight: 600,
             }}
           >
-            📡 View Signals
+            📡 View Active Signals
           </Button>
         </Link>
 
+        {/* View ALL Signals */}
+        <Link href="/signals/all">
+          <Button
+            variant="contained"
+            sx={{
+              backgroundColor: "var(--omega-gold)",
+              color: "var(--omega-green)",
+              fontWeight: 600,
+            }}
+          >
+            📁 View All Signals
+          </Button>
+        </Link>
+
+        {/* Add Signal */}
         <Link href="/signals/new">
           <Button
             variant="contained"
