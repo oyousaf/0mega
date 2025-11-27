@@ -4,13 +4,18 @@ import { Card, CardContent, Typography, Box, Chip } from "@mui/material";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
-type Signal = {
-  id: number;
-  symbol: string;
-  status: string;
-  created_at: string;
-  halaal?: boolean;
-};
+import { Signal } from "@/app/types/signal";
+import { formatTimestamp } from "@/app/utils/formatTimestamp";
+
+/** Colour logic for Chip */
+function statusColour(status: string) {
+  const s = status.toLowerCase();
+
+  if (s.includes("tp")) return "#56AE57";
+  if (s.includes("sl")) return "#C23B22";
+  if (s.includes("exp")) return "#D99A00";
+  return "#789FCC";
+}
 
 export default function RecentSignals({ signals }: { signals: Signal[] }) {
   return (
@@ -46,17 +51,18 @@ export default function RecentSignals({ signals }: { signals: Signal[] }) {
                   transition={{ duration: 0.25 }}
                   className="flex justify-between items-center p-2 rounded-lg border border-[var(--omega-dark-gold)]"
                 >
-                  <Typography fontWeight={600}>{sig.symbol}</Typography>
+                  <div className="flex flex-col">
+                    <Typography fontWeight={600}>{sig.symbol}</Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                      {formatTimestamp(sig.created_at)}
+                    </Typography>
+                  </div>
 
                   <Chip
-                    label={sig.status.toUpperCase()}
+                    label={sig.status}
                     size="small"
                     sx={{
-                      backgroundColor: sig.status.toLowerCase().includes("tp")
-                        ? "#56AE57"
-                        : sig.status.toLowerCase().includes("sl")
-                        ? "#C23B22"
-                        : "#789FCC",
+                      backgroundColor: statusColour(sig.status),
                       color: "#fff",
                       fontWeight: 600,
                     }}
