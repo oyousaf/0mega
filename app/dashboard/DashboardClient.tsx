@@ -16,17 +16,17 @@ import { useEffect, useState, useMemo } from "react";
 
 import { computeMetrics } from "@/lib/metrics";
 import RecentSignals from "@/components/dashboard/RecentSignals";
-import { Signal } from "../types/signal";
+import { Signal } from "@/app/types/signal";
 
-// PerformanceChart as client-side only
+// Client-only chart
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
   { ssr: false }
 );
 
-// -------------------------------------------------------
-// Helper: Format date based on selected range
-// -------------------------------------------------------
+/* -------------------------------------------------------
+   Time Range Formatting
+------------------------------------------------------- */
 function formatDate(date: Date, range: "hour" | "day" | "week"): string {
   if (range === "hour") return date.toISOString().slice(0, 13) + ":00";
   if (range === "day") return date.toISOString().split("T")[0];
@@ -42,9 +42,9 @@ function formatDate(date: Date, range: "hour" | "day" | "week"): string {
   return "unknown";
 }
 
-// -------------------------------------------------------
-// Equity Curve
-// -------------------------------------------------------
+/* -------------------------------------------------------
+   Equity Curve
+------------------------------------------------------- */
 function buildEquityCurve(signals: Signal[]) {
   let eq = 0;
   return signals.map((s) => {
@@ -59,9 +59,9 @@ interface DashboardClientProps {
   recentSignals: Signal[];
 }
 
-// -------------------------------------------------------
-// OMEGA DROPDOWN STYLE
-// -------------------------------------------------------
+/* -------------------------------------------------------
+   Dropdown styling (Omega style)
+------------------------------------------------------- */
 const selectStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
@@ -90,7 +90,6 @@ const selectStyle = {
   },
 };
 
-// ---- Menu list ----
 const menuProps = {
   PaperProps: {
     sx: {
@@ -112,27 +111,50 @@ const menuProps = {
   },
 };
 
+/* -------------------------------------------------------
+   MAIN
+------------------------------------------------------- */
 export default function DashboardClient({
   initialSignals,
   recentSignals,
 }: DashboardClientProps) {
   const [allSignals, setAllSignals] = useState(initialSignals);
 
-  // Filter state
+  // Filters
   const [range, setRange] = useState<"hour" | "day" | "week">("day");
   const [symbolFilter, setSymbolFilter] = useState("all");
   const [marketFilter, setMarketFilter] = useState("all");
 
-  const [metrics, setMetrics] = useState({
-    total: 0,
-    active: 0,
-    winRate: 0,
-    halaalRatio: 0,
-  });
+  // Metrics
+  const [metrics, setMetrics] = useState(() =>
+    computeMetrics(initialSignals)
+  );
 
-  // -------------------------------------------------------
-  // Build ChartData
-  // -------------------------------------------------------
+  /* -------------------------------------------------------
+     Auto-refresh
+     Uses your normalise() pipeline on server.
+  ------------------------------------------------------- */
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/dashboard-signals");
+        const data = await res.json();
+
+        if (Array.isArray(data.signals)) {
+          setAllSignals(data.signals);
+          setMetrics(computeMetrics(data.signals));
+        }
+      } catch {}
+    };
+
+    refresh();
+    const id = setInterval(refresh, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* -------------------------------------------------------
+     Chart Data
+  ------------------------------------------------------- */
   const chartData = useMemo(() => {
     const grouped: Record<
       string,
@@ -166,32 +188,16 @@ export default function DashboardClient({
     }));
   }, [allSignals, range, symbolFilter, marketFilter]);
 
-  // -------------------------------------------------------
-  // Auto-refresh
-  // -------------------------------------------------------
-  useEffect(() => {
-    const refresh = async () => {
-      try {
-        const res = await fetch("/api/dashboard-signals");
-        const data = await res.json();
-        if (data?.signals) {
-          setAllSignals(data.signals);
-          setMetrics(computeMetrics(data.signals));
-        }
-      } catch (e) {}
-    };
-    refresh();
-    const id = setInterval(refresh, 30000);
-    return () => clearInterval(id);
-  }, []);
-
-  // -------------------------------------------------------
-  // Unique Symbols
-  // -------------------------------------------------------
+  /* -------------------------------------------------------
+     Unique Symbols
+  ------------------------------------------------------- */
   const symbolList = Array.from(
     new Set(allSignals.map((s) => s.symbol))
   ).sort();
 
+  /* -------------------------------------------------------
+     RENDER
+  ------------------------------------------------------- */
   return (
     <motion.main
       initial={{ opacity: 0 }}
@@ -207,9 +213,8 @@ export default function DashboardClient({
         𝛀mega Dashboard
       </motion.h1>
 
-      {/* ---------------- Filters ---------------- */}
+      {/* Filters */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Time Range */}
         <Grid size={{ xs: 12, sm: 4 }}>
           <Select
             fullWidth
@@ -226,7 +231,6 @@ export default function DashboardClient({
           </Select>
         </Grid>
 
-        {/* Symbol Filter */}
         <Grid size={{ xs: 12, sm: 4 }}>
           <Select
             fullWidth
@@ -244,7 +248,6 @@ export default function DashboardClient({
           </Select>
         </Grid>
 
-        {/* Market Filter */}
         <Grid size={{ xs: 12, sm: 4 }}>
           <Select
             fullWidth
@@ -256,14 +259,12 @@ export default function DashboardClient({
             <MenuItem value="all">All Markets</MenuItem>
             <MenuItem value="forex">FOREX</MenuItem>
             <MenuItem value="crypto">CRYPTO</MenuItem>
-
-            {/* FIXED: stock not stocks */}
             <MenuItem value="stock">STOCKS</MenuItem>
           </Select>
         </Grid>
       </Grid>
 
-      {/* ---------------- Chart ---------------- */}
+      {/* Chart */}
       <AnimatePresence mode="wait">
         <motion.div
           key={JSON.stringify(chartData)}
@@ -276,12 +277,10 @@ export default function DashboardClient({
         </motion.div>
       </AnimatePresence>
 
-      {/* ---------------- Recent Signals ---------------- */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <RecentSignals signals={recentSignals} />
-      </motion.div>
+      {/* Recent Signals */}
+      <RecentSignals signals={recentSignals} />
 
-      {/* ---------------- Nav Buttons ---------------- */}
+      {/* Nav Buttons */}
       <Box className="flex justify-center gap-4 mt-4">
         <Link href="/signals">
           <Button

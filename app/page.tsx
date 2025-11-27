@@ -1,22 +1,14 @@
 import DashboardClient from "./dashboard/DashboardClient";
-import { pool } from "@/lib/neon";
+import { getSignalsAll } from "./signals/actions/getSignals";
 
 export default async function HomePage() {
-  const { rows: initialSignals } = await pool.query(
-    `SELECT * FROM signals ORDER BY created_at DESC`
-  );
-
-  const { rows: recentSignals } = await pool.query(
-    `SELECT id, symbol, status, created_at, halaal
-     FROM signals
-     ORDER BY created_at DESC
-     LIMIT 5`
-  );
+  const allSignals = await getSignalsAll();
+  const recentSignals = allSignals.slice(0, 5);
 
   return (
     <main className="max-w-7xl mx-auto w-full">
       <DashboardClient
-        initialSignals={initialSignals}
+        initialSignals={allSignals}
         recentSignals={recentSignals}
       />
     </main>

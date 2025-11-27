@@ -1,17 +1,4 @@
-export interface Signal {
-  id: number;
-  symbol: string;
-  strategy: string;
-  entry_price: number;
-  tp1: number;
-  tp2: number;
-  sl: number;
-  status: string;
-  type?: string;
-  halaal?: boolean;
-  created_at: string;
-  current_price?: number;
-}
+import { Signal } from "@/app/types/signal";
 
 export interface DashboardMetrics {
   total: number;
@@ -21,31 +8,24 @@ export interface DashboardMetrics {
 }
 
 /* ---------------------------------------------
-   Helper: Count Total Signals
+   Total Signals
 ---------------------------------------------- */
 function getTotalSignals(signals: Signal[]): number {
   return signals.length;
 }
 
 /* ---------------------------------------------
-   Helper: Count Active Signals
-   (status does NOT include TP/SL, not closed)
+   Active Signals
+   ACTIVE = status === "ACTIVE"
 ---------------------------------------------- */
 function getActiveSignals(signals: Signal[]): number {
-  return signals.filter((s) => {
-    const status = s.status.toLowerCase();
-    return (
-      !status.includes("tp") &&
-      !status.includes("sl") &&
-      !status.includes("closed")
-    );
-  }).length;
+  return signals.filter((s) => s.status === "ACTIVE").length;
 }
 
 /* ---------------------------------------------
-   Helper: Win Rate
-   WIN = status contains "tp"
-   LOSS = status contains "sl"
+   Win Rate
+   WIN = status includes TP
+   LOSS = status includes SL
 ---------------------------------------------- */
 function getWinRate(signals: Signal[]): number {
   const total = signals.length;
@@ -59,7 +39,7 @@ function getWinRate(signals: Signal[]): number {
 }
 
 /* ---------------------------------------------
-   Helper: Halaal Ratio
+   Halaal Ratio
 ---------------------------------------------- */
 function getHalaalRatio(signals: Signal[]): number {
   const total = signals.length;
