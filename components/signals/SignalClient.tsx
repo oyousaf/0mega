@@ -20,6 +20,7 @@ import { Signal } from "@/app/types/signal";
 import { AllowedStatus, prettyStatus } from "@/lib/signal/status";
 
 import { normalizeSignalRow } from "@/lib/signal/normalise";
+import { formatTimestamp } from "@/app/utils/formatTimestamp";
 
 /* -----------------------------------------------------
    LOCAL TYPES
@@ -91,8 +92,11 @@ export default function SignalClient({
   /* -----------------------------------------------------
      STATE
   ----------------------------------------------------- */
-  const [signals, setSignals] = useState<Signal[]>(
-    () => initialSignals.map(normalizeSignalRow) // ← NO CLOSED FILTERING
+  const [signals, setSignals] = useState<Signal[]>(() =>
+    initialSignals.map((s) => ({
+      ...normalizeSignalRow(s),
+      lastUpdatedFormatted: formatTimestamp(s.updated_at),
+    }))
   );
 
   const [search, setSearch, hyd1] = usePersistentStateSafe("sig.search", "");
@@ -133,7 +137,10 @@ export default function SignalClient({
       const updated = await runEngineAction();
       if (!Array.isArray(updated)) return;
 
-      const normalised = updated.map(normalizeSignalRow); // ← NO CLOSED FILTERING
+      const normalised = updated.map((s) => ({
+        ...normalizeSignalRow(s),
+        lastUpdatedFormatted: formatTimestamp(s.updated_at),
+      }));
 
       // Toast system
       normalised.forEach((sig) => {
