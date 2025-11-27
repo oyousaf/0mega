@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { runEngineAction } from "@/app/signals/actions/runEngine";
@@ -10,40 +10,76 @@ import SignalCard from "./SignalCard";
 import DeleteModal from "./DeleteModal";
 
 import { motion, AnimatePresence } from "framer-motion";
+
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
-import { formatTimestamp } from "@/app/utils/formatTimestamp";
 import { usePersistentStateSafe } from "@/app/utils/usePersistentState";
 import { Signal } from "@/app/types/signal";
 
+import { AllowedStatus, prettyStatus } from "@/lib/signal/status";
+
+import { normalizeSignalRow } from "@/lib/signal/normalise";
+
 /* -----------------------------------------------------
-   STRICT STATUS NORMALISATION
+   LOCAL TYPES
 ----------------------------------------------------- */
-const ALLOWED_STATUSES = [
-  "ACTIVE",
-  "TP1 HIT",
-  "TP2 HIT",
-  "SL HIT",
-  "EXPIRED",
-  "CLOSED",
-] as const;
+type ToastType = "success" | "error" | "info" | "warning";
 
-type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
-
-/** Convert DB → Pretty, but strongly typed */
-function pretty(raw: string | null | undefined): AllowedStatus {
-  const formatted = (raw || "ACTIVE").replace(/_/g, " ").toUpperCase();
-
-  if (ALLOWED_STATUSES.includes(formatted as AllowedStatus)) {
-    return formatted as AllowedStatus;
-  }
-
-  return "ACTIVE";
+interface ToastState {
+  open: boolean;
+  message: string;
+  type: ToastType;
 }
 
 /* -----------------------------------------------------
-   COMPONENT
+   FILTER HELPERS
+----------------------------------------------------- */
+const filterBySearch = (signal: Signal, term: string) => {
+  if (!term.trim()) return true;
+  term = term.toLowerCase();
+
+  return (
+    signal.symbol.toLowerCase().includes(term) ||
+    signal.status.toLowerCase().includes(term) ||
+    signal.type.toLowerCase().includes(term)
+  );
+};
+
+const filterByType = (signal: Signal, typeFilter: string) => {
+  return typeFilter === "all" ? true : signal.type === typeFilter;
+};
+
+const filterByStatus = (signal: Signal, statusFilter: string) => {
+  return statusFilter === "all"
+    ? true
+    : prettyStatus(signal.status) === statusFilter;
+};
+
+const sortSignals = (a: Signal, b: Signal, sortBy: string) => {
+  if (sortBy === "updated") {
+    return (
+      new Date(b.updated_at ?? 0).getTime() -
+      new Date(a.updated_at ?? 0).getTime()
+    );
+  }
+  if (sortBy === "created") {
+    return (
+      new Date(b.created_at ?? 0).getTime() -
+      new Date(a.created_at ?? 0).getTime()
+    );
+  }
+  if (sortBy === "status") {
+    return prettyStatus(a.status).localeCompare(prettyStatus(b.status));
+  }
+  if (sortBy === "type") {
+    return a.type.localeCompare(b.type);
+  }
+  return 0;
+};
+
+/* -----------------------------------------------------
+   MAIN COMPONENT
 ----------------------------------------------------- */
 export default function SignalClient({
   initialSignals,
@@ -52,22 +88,13 @@ export default function SignalClient({
 }) {
   const router = useRouter();
 
-  type ToastType = "success" | "error" | "info" | "warning";
-
   /* -----------------------------------------------------
-     MAIN STATE
+     STATE
   ----------------------------------------------------- */
   const [signals, setSignals] = useState<Signal[]>(() =>
-    initialSignals.map((s) => ({
-      ...s,
-      status: pretty(s.status),
-      lastUpdatedFormatted: formatTimestamp(s.updated_at),
-    }))
+    initialSignals.map(normalizeSignalRow).filter((s) => s.status !== "CLOSED")
   );
 
-  /* -----------------------------------------------------
-     HYDRATION PERSISTENT FILTERS
-  ----------------------------------------------------- */
   const [search, setSearch, hyd1] = usePersistentStateSafe("sig.search", "");
   const [filterType, setFilterType, hyd2] = usePersistentStateSafe(
     "sig.filterType",
@@ -84,20 +111,16 @@ export default function SignalClient({
 
   const uiReady = hyd1 && hyd2 && hyd3 && hyd4;
 
-  /* -----------------------------------------------------
-     DELETE STATE
-  ----------------------------------------------------- */
+  /* DELETE */
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* -----------------------------------------------------
-     TOAST STATE
-  ----------------------------------------------------- */
-  const [toast, setToast] = useState<{
-    open: boolean;
-    message: string;
-    type: ToastType;
-  }>({ open: false, message: "", type: "info" });
+  /* TOAST */
+  const [toast, setToast] = useState<ToastState>({
+    open: false,
+    message: "",
+    type: "info",
+  });
 
   const prevStatus = useRef<Record<number, AllowedStatus>>({});
   const prevPrice = useRef<Record<number, number | null>>({});
@@ -108,40 +131,36 @@ export default function SignalClient({
   async function refresh() {
     try {
       const updated = await runEngineAction();
-      if (!Array.isArray(updated) || updated.length === 0) return;
+      if (!Array.isArray(updated)) return;
 
       const normalised = updated
-        .map((s) => ({
-          ...s,
-          status: pretty(s.status),
-          lastUpdatedFormatted: formatTimestamp(s.updated_at),
-        }))
+        .map(normalizeSignalRow)
         .filter((s) => s.status !== "CLOSED");
 
-      // TOAST EVENTS
+      // Toast system
       normalised.forEach((sig) => {
-        const { id, status: newStatus } = sig;
+        const old = prevStatus.current[sig.id];
+        const next = sig.status;
         const newPrice = sig.current_price ?? null;
-        const oldStatus = prevStatus.current[id];
 
-        if (oldStatus && oldStatus !== newStatus) {
-          const type: ToastType = newStatus.includes("TP")
+        if (old && old !== next) {
+          const type: ToastType = next.includes("TP")
             ? "success"
-            : newStatus.includes("SL")
+            : next.includes("SL")
             ? "error"
-            : newStatus.includes("EXP")
+            : next.includes("EXP")
             ? "warning"
             : "info";
 
           setToast({
             open: true,
-            message: `${sig.symbol}: ${newStatus}`,
+            message: `${sig.symbol}: ${next}`,
             type,
           });
         }
 
-        prevStatus.current[id] = newStatus;
-        prevPrice.current[id] = newPrice;
+        prevStatus.current[sig.id] = next;
+        prevPrice.current[sig.id] = newPrice;
       });
 
       setSignals(normalised);
@@ -178,47 +197,16 @@ export default function SignalClient({
   }
 
   /* -----------------------------------------------------
-     FILTER + SORT
+     FILTER + SORT MEMO
   ----------------------------------------------------- */
   const visibleSignals = useMemo(() => {
     if (!uiReady) return [];
 
-    const term = search.toLowerCase();
-
     return signals
-      .filter((s) => {
-        if (!term.trim()) return true;
-        return (
-          s.symbol.toLowerCase().includes(term) ||
-          s.status.toLowerCase().includes(term) ||
-          s.type.toLowerCase().includes(term)
-        );
-      })
-      .filter((s) => (filterType === "all" ? true : s.type === filterType))
-      .filter((s) =>
-        filterStatus === "all" ? true : pretty(s.status) === filterStatus
-      )
-      .sort((a, b) => {
-        if (sortBy === "updated") {
-          return (
-            new Date(b.updated_at ?? 0).getTime() -
-            new Date(a.updated_at ?? 0).getTime()
-          );
-        }
-        if (sortBy === "created") {
-          return (
-            new Date(b.created_at ?? 0).getTime() -
-            new Date(a.created_at ?? 0).getTime()
-          );
-        }
-        if (sortBy === "status") {
-          return a.status.localeCompare(b.status);
-        }
-        if (sortBy === "type") {
-          return a.type.localeCompare(b.type);
-        }
-        return 0;
-      });
+      .filter((s) => filterBySearch(s, search))
+      .filter((s) => filterByType(s, filterType))
+      .filter((s) => filterByStatus(s, filterStatus))
+      .sort((a, b) => sortSignals(a, b, sortBy));
   }, [signals, search, filterType, filterStatus, sortBy, uiReady]);
 
   /* -----------------------------------------------------
