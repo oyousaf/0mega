@@ -281,7 +281,7 @@ export default function DashboardClient({
       {/* ---------------- Nav Buttons ---------------- */}
       <Box className="flex justify-center gap-4 mt-4">
         {/* View Active Signals */}
-        <Link href="/signals">
+        <Link href="/signals/active">
           <Button
             variant="contained"
             sx={{
