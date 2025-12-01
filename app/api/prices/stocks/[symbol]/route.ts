@@ -10,39 +10,73 @@ export async function GET(
 
   const cacheKey = `stocks_${upper}`;
 
-  // 1. Serve cached result if available
+  // 1. Check cache first
   const cached = getCached(cacheKey);
   if (cached) {
     return NextResponse.json({ ...cached, cached: true });
   }
 
+  // -------------------------------
+  // PRIMARY PROVIDER → FINNHUB
+  // -------------------------------
   try {
-    const url = `https://api.polygon.io/v2/last/trade/${upper}?apiKey=${process.env.POLYGON_API_KEY}`;
+    const finnhubUrl = `https://finnhub.io/api/v1/quote?symbol=${upper}&token=${process.env.FINNHUB_API_KEY}`;
 
-    const res = await fetch(url, { method: "GET", cache: "no-store" });
+    const response = await fetch(finnhubUrl, { cache: "no-store" });
 
-    if (!res.ok) {
-      throw new Error(`Polygon API error: ${res.status}`);
+    if (response.ok) {
+      const data = await response.json();
+
+      const price = data?.c;
+
+      if (price && typeof price === "number") {
+        const result = {
+          source: "finnhub_spot",
+          symbol: upper,
+          price,
+          halaal: true,
+          cached: false,
+        };
+
+        setCached(cacheKey, result, 2000);
+        return NextResponse.json(result);
+      }
+    }
+  } catch (err) {
+    console.warn("Finnhub primary failed:", err);
+  }
+
+  // -------------------------------
+  // FALLBACK PROVIDER → MASSIVE (Polygon v3)
+  // -------------------------------
+  try {
+    const massiveUrl = `https://api.massive.com/v3/stocks/quotes?symbols=${upper}&apiKey=${process.env.POLYGON_API_KEY}`;
+
+    const response = await fetch(massiveUrl, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error(`Massive API error: ${response.status}`);
     }
 
-    const data = await res.json();
-    const price = data?.results?.p ?? null;
+    const data = await response.json();
+
+    // Massive v3 structure → data.quotes[0].last.price
+    const price =
+      data?.quotes?.[0]?.last?.price ?? data?.quotes?.[0]?.price ?? null;
 
     const result = {
-      source: "polygon_spot",
+      source: "massive_spot",
       symbol: upper,
       price,
       halaal: true,
       cached: false,
     };
 
-    // 2. Cache for 2 seconds
     setCached(cacheKey, result, 2000);
-
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json(
-      { error: err.message || "Unknown error" },
+      { error: err.message ?? "Unknown error" },
       { status: 500 }
     );
   }

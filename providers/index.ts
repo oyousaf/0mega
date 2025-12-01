@@ -1,5 +1,5 @@
 import { getCryptoPrice } from "./binance";
-import { getStockPrice } from "./polygon";
+import { getStockPrice } from "./stocks";
 import { getForexPrice } from "./forex";
 
 export async function getPrice(symbol: string, type: string): Promise<number> {
