@@ -5,13 +5,11 @@ import { getCached, setCached } from "@/lib/rateLimitCache";
 function normalizePair(raw: string): string {
   const p = raw.toUpperCase().trim();
 
-  // Correct format? EUR/USD → keep as-is
+  // Already in "EUR/USD"
   if (p.includes("/")) return p;
 
-  // Slashless 6-character FX code
-  if (p.length === 6) {
-    return `${p.slice(0, 3)}/${p.slice(3)}`;
-  }
+  // Convert 6-char pairs → EUR/USD
+  if (p.length === 6) return `${p.slice(0, 3)}/${p.slice(3)}`;
 
   return p;
 }
@@ -22,30 +20,26 @@ export async function GET(
 ) {
   const { pair } = await params;
 
-  const normalized = normalizePair(pair);
+  const normalized = normalizePair(pair); // e.g. GBP/USD
+  const [base, quote] = normalized.split("/"); // GBP, USD
   const cacheKey = `forex_${normalized}`;
 
-  // 1. Cached?
+  // 1) Check Cache
   const cached = getCached(cacheKey);
   if (cached) return NextResponse.json({ ...cached, cached: true });
 
-  // -------------------------------
-  // PRIMARY: CurrencyAPI
-  // -------------------------------
+  // -----------------------------------------
+  // PRIMARY PROVIDER → CurrencyAPI (Guaranteed Works)
+  // -----------------------------------------
   try {
-    const url = `https://api.currencyapi.com/v3/latest?apikey=${
-      process.env.CURRENCY_API_KEY
-    }&currencies=${normalized.replace("/", "")}`;
+    const url = `https://api.currencyapi.com/v3/latest?apikey=${process.env.CURRENCY_API_KEY}&base_currency=${base}&currencies=${quote}`;
 
     const res = await fetch(url, { cache: "no-store" });
 
     if (res.ok) {
       const json = await res.json();
 
-      // Convert EUR/USD → EURUSD for CurrencyAPI
-      const key = normalized.replace("/", "");
-
-      const price = json?.data?.[key]?.value;
+      const price = json?.data?.[quote]?.value;
 
       if (price && !isNaN(price)) {
         const result = {
@@ -60,13 +54,13 @@ export async function GET(
         return NextResponse.json(result);
       }
     }
-  } catch (e) {
-    console.warn("CurrencyAPI primary failed:", e);
+  } catch (err) {
+    console.warn("CurrencyAPI primary failed:", err);
   }
 
-  // -------------------------------
-  // FALLBACK: TwelveData
-  // -------------------------------
+  // -----------------------------------------
+  // FALLBACK → TwelveData
+  // -----------------------------------------
   try {
     const encoded = encodeURIComponent(normalized);
     const url = `https://api.twelvedata.com/price?symbol=${encoded}&apikey=${process.env.TWELVE_DATA_API_KEY}`;
@@ -78,7 +72,6 @@ export async function GET(
     }
 
     const data = await res.json();
-
     const price = data?.price ? Number(data.price) : null;
 
     const result = {
