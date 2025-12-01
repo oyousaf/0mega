@@ -1,4 +1,4 @@
-import { getCryptoPrice } from "./binance";
+import { getCryptoPrice } from "./crypto";
 import { getStockPrice } from "./stocks";
 import { getForexPrice } from "./forex";
 
