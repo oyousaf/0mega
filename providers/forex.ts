@@ -1,20 +1,25 @@
 export async function getForexPrice(pair: string): Promise<number> {
-  const key = process.env.FOREX_API_KEY;
+  try {
+    const formatted = encodeURIComponent(pair);
 
-  // No API key → stable deterministic mock price
-  if (!key) {
-    const p = pair.toUpperCase();
-    const seed = p.charCodeAt(0) * 23 + p.charCodeAt(1) * 7;
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/prices/forex/${formatted}`,
+      { cache: "no-store" }
+    );
 
-    // Base FX range
-    const base = 1.05 + (seed % 0.20);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch forex price for ${pair}`);
+    }
 
-    // Tiny noise to allow engine movement without flicker
-    const noise = (Math.random() - 0.5) * 0.002;
+    const data = await res.json();
 
-    return Number((base + noise).toFixed(5));
+    if (!data?.price) {
+      throw new Error(`No price returned for ${pair}`);
+    }
+
+    return Number(data.price);
+  } catch (err) {
+    console.error("getForexPrice error:", err);
+    throw err;
   }
-
-  // TEMP: Until we wire live API, return stable “mock”
-  return 1.12345;
 }

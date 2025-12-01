@@ -1,14 +1,14 @@
-export async function getCryptoPrice(symbol: string): Promise<number> {
+export async function getStockPrice(symbol: string): Promise<number> {
   const upper = symbol.toUpperCase();
 
   try {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/prices/crypto/${upper}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/prices/stocks/${upper}`,
       { cache: "no-store" }
     );
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch crypto price for ${upper}`);
+      throw new Error(`Failed to fetch price for ${upper}`);
     }
 
     const data = await res.json();
@@ -19,7 +19,7 @@ export async function getCryptoPrice(symbol: string): Promise<number> {
 
     return Number(data.price);
   } catch (err) {
-    console.error("getCryptoPrice error:", err);
+    console.error("getStockPrice error:", err);
     throw err;
   }
 }
