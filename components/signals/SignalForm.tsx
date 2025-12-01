@@ -105,7 +105,7 @@ export default function SignalForm({
       onSuccess?.();
 
       setTimeout(() => {
-        router.push("/signals");
+        router.push("/signals/active");
       }, 600);
 
       setLoading(false);
@@ -123,7 +123,7 @@ export default function SignalForm({
     showSnackbar("Signal added successfully", "success");
 
     setTimeout(() => {
-      router.push("/signals");
+      router.push("/signals/active");
     }, 600);
 
     setForm(empty);

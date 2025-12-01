@@ -1,20 +1,19 @@
 export async function getForexPrice(pair: string): Promise<number> {
-  try {
-    const formatted = encodeURIComponent(pair);
+  const formatted = pair.toUpperCase().trim();
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/prices/forex/${formatted}`,
-      { cache: "no-store" }
-    );
+  try {
+    const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/prices/forex/${formatted}`;
+
+    const res = await fetch(url, { cache: "no-store" });
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch forex price for ${pair}`);
+      throw new Error(`Failed to fetch forex price for ${formatted}`);
     }
 
     const data = await res.json();
 
-    if (!data?.price) {
-      throw new Error(`No price returned for ${pair}`);
+    if (data?.price == null || Number.isNaN(Number(data.price))) {
+      throw new Error(`No valid forex price returned for ${formatted}`);
     }
 
     return Number(data.price);
