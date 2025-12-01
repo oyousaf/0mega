@@ -243,6 +243,13 @@ export default function SignalClient({
           </button>
 
           <button
+            onClick={() => router.push("/signals/active")}
+            className="px-4 py-2 border border-omega-gold text-omega-gold rounded-md hover:bg-omega-gold/10 transition"
+          >
+            Active Signals
+          </button>
+
+          <button
             onClick={() => router.push("/signals/new")}
             className="px-4 py-2 bg-omega-gold text-omega-green font-semibold rounded-md hover:bg-omega-dark-gold transition"
           >

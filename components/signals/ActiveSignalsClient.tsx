@@ -76,17 +76,17 @@ export default function ActiveSignalsClient({
 
         <div className="flex gap-3">
           <button
-            onClick={() => router.push("/signals/all")}
-            className="px-4 py-2 border border-omega-gold text-omega-gold rounded-md hover:bg-omega-gold/10 transition"
-          >
-            All Signals
-          </button>
-
-          <button
             onClick={() => router.push("/")}
             className="px-4 py-2 border border-omega-gold text-omega-gold rounded-md hover:bg-omega-gold/10 transition"
           >
             Dashboard
+          </button>
+
+          <button
+            onClick={() => router.push("/signals/all")}
+            className="px-4 py-2 border border-omega-gold text-omega-gold rounded-md hover:bg-omega-gold/10 transition"
+          >
+            All Signals
           </button>
 
           <button
