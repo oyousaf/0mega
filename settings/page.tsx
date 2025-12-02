@@ -1,12 +1,11 @@
 "use client";
 
-import { FiBell, FiCpu, FiMail, FiSun, FiMoon } from "react-icons/fi";
+import { FiBell, FiMail, FiSun, FiMoon } from "react-icons/fi";
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import { useLocalSettings } from "@/hooks/useLocalSettings";
 
 export default function SettingsPage() {
   const { settings, save, ready } = useLocalSettings();
-
   if (!ready) return null;
 
   return (
@@ -26,7 +25,7 @@ export default function SettingsPage() {
         <NotificationsPanel />
 
         {/* Tone */}
-        <div className="mt-6">
+        <div className="pt-4">
           <label className="block text-neutral-300 font-medium mb-2">
             Alert Tone
           </label>
@@ -44,7 +43,7 @@ export default function SettingsPage() {
       </section>
 
       {/* -------------------------------------------------- */}
-      {/* Messaging Channels */}
+      {/* Messaging */}
       {/* -------------------------------------------------- */}
       <section className="p-6 rounded-xl border border-neutral-800 bg-neutral-900 space-y-4">
         <div className="flex items-center gap-2 text-omega-gold">
@@ -57,9 +56,9 @@ export default function SettingsPage() {
           <span className="text-neutral-300">Email Alerts</span>
           <input
             type="checkbox"
+            className="h-5 w-5 accent-omega-gold"
             checked={settings.email_enabled}
             onChange={() => save({ email_enabled: !settings.email_enabled })}
-            className="h-5 w-5"
           />
         </div>
 
@@ -68,11 +67,11 @@ export default function SettingsPage() {
           <span className="text-neutral-300">Telegram Alerts</span>
           <input
             type="checkbox"
+            className="h-5 w-5 accent-omega-gold"
             checked={settings.telegram_enabled}
             onChange={() =>
               save({ telegram_enabled: !settings.telegram_enabled })
             }
-            className="h-5 w-5"
           />
         </div>
       </section>
