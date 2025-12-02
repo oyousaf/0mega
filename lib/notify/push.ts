@@ -1,18 +1,27 @@
 import webpush from "web-push";
+import { pool } from "@/lib/neon";
 
 webpush.setVapidDetails(
-  "mailto:o_yousaf@live.co.uk",
+  process.env.VAPID_PUBLIC_EMAIL!,
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 );
 
-export async function sendPush(sub: any, title: string, body: string) {
+export async function sendPushNotification(title: string, body: string) {
   try {
-    await webpush.sendNotification(
-      sub,
-      JSON.stringify({ title, body })
-    );
+    const { rows: subs } = await pool.query(`SELECT id, sub FROM push_subs`);
+    const payload = JSON.stringify({ title, body });
+
+    for (let row of subs) {
+      try {
+        await webpush.sendNotification(row.sub, payload);
+      } catch (err) {
+        // Delete stale subscription
+        await pool.query(`DELETE FROM push_subs WHERE id = $1`, [row.id]);
+        console.error("Removed stale push subscription:", row.id);
+      }
+    }
   } catch (err) {
-    console.error("Push error:", err);
+    console.error("Push send failure:", err);
   }
 }
