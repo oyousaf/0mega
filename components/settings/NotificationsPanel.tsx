@@ -1,53 +1,78 @@
 "use client";
 
-import { useState } from "react";
 import { registerPush } from "@/lib/notify/registerPush";
+import { useLocalSettings } from "@/hooks/useLocalSettings";
 
 export default function NotificationsPanel() {
-  const [webStatus, setWebStatus] = useState("");
-  const [pushStatus, setPushStatus] = useState("");
+  const { settings, save, ready } = useLocalSettings();
 
-  async function enableWeb() {
+  if (!ready) return null;
+
+  async function toggleWeb() {
     const permission = await Notification.requestPermission();
-    setWebStatus(permission);
+    save({ web_enabled: permission === "granted" });
   }
 
-  async function enablePush() {
+  async function togglePush() {
     const result = await registerPush();
-    setPushStatus(result);
+    save({ push_enabled: result === "registered" });
   }
 
   return (
-    <div className="p-6 rounded-xl border border-neutral-800 bg-neutral-900">
-      <h2 className="text-xl font-semibold text-omega-gold">
-        Notifications
-      </h2>
-
-      <div className="mt-4">
+    <div className="p-5 rounded-xl bg-omega-green border border-neutral-800 space-y-6">
+      {/* Web ---------------------------------------------- */}
+      <div className="flex items-center justify-between">
+        <span className="text-neutral-300 font-medium">Web Notifications</span>
         <button
-          onClick={enableWeb}
-          className="px-4 py-2 rounded bg-omega-green text-black"
+          onClick={toggleWeb}
+          className={`px-4 py-2 rounded font-semibold ${
+            settings.web_enabled
+              ? "bg-omega-gold text-black"
+              : "bg-neutral-800 text-neutral-400"
+          }`}
         >
-          Enable Web Notifications
+          {settings.web_enabled ? "Enabled" : "Enable"}
         </button>
-        <p className="text-sm text-neutral-400 mt-2">
-          Web status: {webStatus || "Pending"}
-        </p>
       </div>
 
-      <div className="mt-6">
+      {/* Push --------------------------------------------- */}
+      <div className="flex items-center justify-between">
+        <span className="text-neutral-300 font-medium">Push Notifications</span>
         <button
-          onClick={enablePush}
-          className="px-4 py-2 rounded bg-omega-gold text-black"
+          onClick={togglePush}
+          className={`px-4 py-2 rounded font-semibold ${
+            settings.push_enabled
+              ? "bg-omega-gold text-black"
+              : "bg-neutral-800 text-neutral-400"
+          }`}
         >
-          Enable Push (Service Worker)
+          {settings.push_enabled ? "Enabled" : "Enable"}
         </button>
-        <p className="text-sm text-neutral-400 mt-2">
-          Push status: {pushStatus || "Pending"}
-        </p>
       </div>
 
-      <audio id="omegaTone" src="/tones/tone1.mp3" preload="auto" />
+      {/* Email -------------------------------------------- */}
+      <div className="flex items-center justify-between bg-neutral-800 p-3 rounded-lg">
+        <span className="text-neutral-300">Email Alerts</span>
+        <input
+          type="checkbox"
+          checked={settings.email_enabled}
+          onChange={() => save({ email_enabled: !settings.email_enabled })}
+          className="h-5 w-5 accent-omega-gold"
+        />
+      </div>
+
+      {/* Telegram ----------------------------------------- */}
+      <div className="flex items-center justify-between bg-neutral-800 p-3 rounded-lg">
+        <span className="text-neutral-300">Telegram Alerts</span>
+        <input
+          type="checkbox"
+          checked={settings.telegram_enabled}
+          onChange={() =>
+            save({ telegram_enabled: !settings.telegram_enabled })
+          }
+          className="h-5 w-5 accent-omega-gold"
+        />
+      </div>
     </div>
   );
 }
