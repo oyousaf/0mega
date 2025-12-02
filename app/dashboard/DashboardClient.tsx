@@ -7,16 +7,19 @@ import {
   MenuItem,
   Select,
   SelectChangeEvent,
+  Modal,
 } from "@mui/material";
 
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
+import { FiSettings } from "react-icons/fi";
 
 import { computeMetrics } from "@/lib/metrics";
 import RecentSignals from "@/components/dashboard/RecentSignals";
 import { Signal } from "@/app/types/signal";
+import NotificationsPanel from "@/components/settings/NotificationsPanel";
 
 // Client-only chart
 const PerformanceChart = dynamic(
@@ -125,12 +128,14 @@ export default function DashboardClient({
   const [symbolFilter, setSymbolFilter] = useState("all");
   const [marketFilter, setMarketFilter] = useState("all");
 
+  // Settings Modal
+  const [openSettings, setOpenSettings] = useState(false);
+
   // Metrics
   const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
 
   /* -------------------------------------------------------
      Auto-refresh
-     Uses your normalise() pipeline on server.
   ------------------------------------------------------- */
   useEffect(() => {
     const refresh = async () => {
@@ -197,131 +202,171 @@ export default function DashboardClient({
      RENDER
   ------------------------------------------------------- */
   return (
-    <motion.main
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      className="max-w-7xl mx-auto text-center p-6 space-y-8"
-    >
-      <motion.h1
-        className="text-3xl font-semibold text-omega-gold"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        𝛀mega Dashboard
-      </motion.h1>
-
-      {/* Filters */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Select
-            fullWidth
-            value={range}
-            onChange={(e: SelectChangeEvent) =>
-              setRange(e.target.value as "hour" | "day" | "week")
-            }
-            sx={selectStyle}
-            MenuProps={menuProps}
-          >
-            <MenuItem value="hour">Hourly</MenuItem>
-            <MenuItem value="day">Daily</MenuItem>
-            <MenuItem value="week">Weekly</MenuItem>
-          </Select>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Select
-            fullWidth
-            value={symbolFilter}
-            onChange={(e) => setSymbolFilter(e.target.value)}
-            sx={selectStyle}
-            MenuProps={menuProps}
-          >
-            <MenuItem value="all">All Symbols</MenuItem>
-            {symbolList.map((sym) => (
-              <MenuItem key={sym} value={sym}>
-                {sym}
-              </MenuItem>
-            ))}
-          </Select>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Select
-            fullWidth
-            value={marketFilter}
-            onChange={(e) => setMarketFilter(e.target.value)}
-            sx={selectStyle}
-            MenuProps={menuProps}
-          >
-            <MenuItem value="all">All Markets</MenuItem>
-            <MenuItem value="forex">FOREX</MenuItem>
-            <MenuItem value="crypto">CRYPTO</MenuItem>
-            <MenuItem value="stock">STOCKS</MenuItem>
-          </Select>
-        </Grid>
-      </Grid>
-
-      {/* Chart */}
-      <AnimatePresence mode="wait">
+    <>
+      {/* Settings Modal */}
+      <Modal open={openSettings} onClose={() => setOpenSettings(false)}>
         <motion.div
-          key={JSON.stringify(chartData)}
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          transition={{ duration: 0.25 }}
+          className="absolute top-1/2 left-1/2 w-[90%] max-w-lg -translate-x-1/2 -translate-y-1/2 bg-neutral-900 border border-neutral-700 rounded-xl p-6 shadow-xl"
+        >
+          <h2 className="text-2xl font-semibold text-omega-gold mb-4">
+            Settings
+          </h2>
+          <NotificationsPanel />
+
+          <div className="text-right mt-6">
+            <Button
+              onClick={() => setOpenSettings(false)}
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 600,
+              }}
+            >
+              Close
+            </Button>
+          </div>
+        </motion.div>
+      </Modal>
+
+      {/* MAIN CONTENT */}
+      <motion.main
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-7xl mx-auto text-center p-6 space-y-8"
+      >
+        <motion.h1
+          className="text-3xl font-semibold text-omega-gold"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.3 }}
         >
-          <PerformanceChart data={chartData} />
-        </motion.div>
-      </AnimatePresence>
+          𝛀mega Dashboard
+        </motion.h1>
 
-      {/* Recent Signals */}
-      <RecentSignals signals={recentSignals} />
+        {/* ---------------- Top Right Action Bar ---------------- */}
+        <Box className="flex justify-end items-center gap-3 mt-4 pr-2">
+          <Link href="/signals/active">
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 600,
+              }}
+            >
+              📡 Active
+            </Button>
+          </Link>
 
-      {/* ---------------- Nav Buttons ---------------- */}
-      <Box className="flex justify-center gap-4 mt-4">
-        {/* View Active Signals */}
-        <Link href="/signals/active">
-          <Button
-            variant="contained"
-            sx={{
-              backgroundColor: "var(--omega-gold)",
-              color: "var(--omega-green)",
-              fontWeight: 600,
-            }}
+          <Link href="/signals/all">
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 600,
+              }}
+            >
+              📁 All
+            </Button>
+          </Link>
+
+          <Link href="/signals/new">
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 600,
+              }}
+            >
+              ➕ New
+            </Button>
+          </Link>
+
+          {/* Settings Cog (opens modal) */}
+          <motion.button
+            onClick={() => setOpenSettings(true)}
+            whileHover={{ rotate: 90, scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 250 }}
+            className="p-2 rounded-full bg-omega-dark-gold text-omega-green"
           >
-            📡 View Active Signals
-          </Button>
-        </Link>
+            <FiSettings size={22} />
+          </motion.button>
+        </Box>
 
-        {/* View ALL Signals */}
-        <Link href="/signals/all">
-          <Button
-            variant="contained"
-            sx={{
-              backgroundColor: "var(--omega-gold)",
-              color: "var(--omega-green)",
-              fontWeight: 600,
-            }}
-          >
-            📁 View All Signals
-          </Button>
-        </Link>
+        {/* ---------------- Filters ---------------- */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Select
+              fullWidth
+              value={range}
+              onChange={(e: SelectChangeEvent) =>
+                setRange(e.target.value as "hour" | "day" | "week")
+              }
+              sx={selectStyle}
+              MenuProps={menuProps}
+            >
+              <MenuItem value="hour">Hourly</MenuItem>
+              <MenuItem value="day">Daily</MenuItem>
+              <MenuItem value="week">Weekly</MenuItem>
+            </Select>
+          </Grid>
 
-        {/* Add Signal */}
-        <Link href="/signals/new">
-          <Button
-            variant="contained"
-            sx={{
-              backgroundColor: "var(--omega-gold)",
-              color: "var(--omega-green)",
-              fontWeight: 600,
-            }}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Select
+              fullWidth
+              value={symbolFilter}
+              onChange={(e) => setSymbolFilter(e.target.value)}
+              sx={selectStyle}
+              MenuProps={menuProps}
+            >
+              <MenuItem value="all">All Symbols</MenuItem>
+              {symbolList.map((sym) => (
+                <MenuItem key={sym} value={sym}>
+                  {sym}
+                </MenuItem>
+              ))}
+            </Select>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Select
+              fullWidth
+              value={marketFilter}
+              onChange={(e) => setMarketFilter(e.target.value)}
+              sx={selectStyle}
+              MenuProps={menuProps}
+            >
+              <MenuItem value="all">All Markets</MenuItem>
+              <MenuItem value="forex">FOREX</MenuItem>
+              <MenuItem value="crypto">CRYPTO</MenuItem>
+              <MenuItem value="stock">STOCKS</MenuItem>
+            </Select>
+          </Grid>
+        </Grid>
+
+        {/* ---------------- Chart ---------------- */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={JSON.stringify(chartData)}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
           >
-            ➕ Add Signal
-          </Button>
-        </Link>
-      </Box>
-    </motion.main>
+            <PerformanceChart data={chartData} />
+          </motion.div>
+        </AnimatePresence>
+
+        {/* ---------------- Recent Signals ---------------- */}
+        <RecentSignals signals={recentSignals} />
+      </motion.main>
+    </>
   );
 }
