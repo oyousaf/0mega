@@ -8,7 +8,7 @@ export async function sendEmail(subject: string, body: string) {
 
   try {
     await resend.emails.send({
-      from: "Omega <noreply@omega.app>",
+      from: "Omega <omega@legxcysol.dev>",
       to: process.env.NOTIFY_EMAIL_TO,
       subject,
       html: `<p>${body}</p>`,
