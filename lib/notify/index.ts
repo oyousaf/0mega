@@ -1,8 +1,3 @@
-import { sendBrowserNotification } from "./browser";
-import { sendPushNotification } from "./push";
-import { sendEmail } from "./email";
-import { sendTelegram } from "./telegram";
-
 export interface NotifyOptions {
   title: string;
   body: string;
@@ -23,11 +18,29 @@ export async function notify({ title, body, channels }: NotifyOptions) {
   };
 
   try {
-    if (use.web) sendBrowserNotification(title, body);
-    if (use.push) await sendPushNotification(title, body);
-    if (use.email) await sendEmail(title, body);
-    if (use.telegram)
+    // Web = client-side only
+    if (use.web) {
+      const { sendBrowserNotification } = await import("./browser");
+      sendBrowserNotification(title, body);
+    }
+
+    // Push = server-only
+    if (use.push) {
+      const { sendPushNotification } = await import("./push");
+      await sendPushNotification(title, body);
+    }
+
+    // Email = server-only
+    if (use.email) {
+      const { sendEmail } = await import("./email");
+      await sendEmail(title, body);
+    }
+
+    // Telegram = server-only
+    if (use.telegram) {
+      const { sendTelegram } = await import("./telegram");
       await sendTelegram(`*${title}*\n${body}`);
+    }
   } catch (err) {
     console.error("Notify error:", err);
   }

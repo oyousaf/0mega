@@ -1,3 +1,5 @@
+"use client";
+
 export async function registerPush() {
   try {
     if (!("serviceWorker" in navigator)) return "unsupported";
@@ -35,6 +37,5 @@ export async function registerPush() {
 function urlBase64ToUint8Array(base64: string) {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const input = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(input);
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  return Uint8Array.from([...atob(input)].map((c) => c.charCodeAt(0)));
 }

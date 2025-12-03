@@ -1,3 +1,5 @@
+"use server";
+
 import webpush from "web-push";
 import { pool } from "@/lib/neon";
 
@@ -12,13 +14,11 @@ export async function sendPushNotification(title: string, body: string) {
     const { rows: subs } = await pool.query(`SELECT id, sub FROM push_subs`);
     const payload = JSON.stringify({ title, body });
 
-    for (let row of subs) {
+    for (const row of subs) {
       try {
         await webpush.sendNotification(row.sub, payload);
-      } catch (err) {
-        // Delete stale subscription
+      } catch {
         await pool.query(`DELETE FROM push_subs WHERE id = $1`, [row.id]);
-        console.error("Removed stale push subscription:", row.id);
       }
     }
   } catch (err) {

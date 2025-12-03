@@ -1,3 +1,5 @@
+"use client";
+
 export function sendBrowserNotification(title: string, body: string) {
   if (typeof window === "undefined") return;
 
