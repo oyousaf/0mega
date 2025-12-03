@@ -10,37 +10,36 @@ export interface NotifyOptions {
 }
 
 export async function notify({ title, body, channels }: NotifyOptions) {
+  const isNode = typeof window === "undefined";
+
   const use = {
-    web: channels?.web ?? false,
-    push: channels?.push ?? false,
-    email: channels?.email ?? false,
-    telegram: channels?.telegram ?? false,
+    web: channels?.web ?? (isNode ? false : true),
+    push: channels?.push ?? true,
+    email: channels?.email ?? true,
+    telegram: channels?.telegram ?? true,
   };
 
   try {
-    // Web = client-side only
     if (use.web) {
       const { sendBrowserNotification } = await import("./browser");
       sendBrowserNotification(title, body);
     }
 
-    // Push = server-only
     if (use.push) {
       const { sendPushNotification } = await import("./push");
       await sendPushNotification(title, body);
     }
 
-    // Email = server-only
     if (use.email) {
       const { sendEmail } = await import("./email");
       await sendEmail(title, body);
     }
 
-    // Telegram = server-only
     if (use.telegram) {
       const { sendTelegram } = await import("./telegram");
       await sendTelegram(`*${title}*\n${body}`);
     }
+
   } catch (err) {
     console.error("Notify error:", err);
   }
