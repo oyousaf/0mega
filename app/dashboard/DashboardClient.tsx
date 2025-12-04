@@ -284,12 +284,12 @@ export default function DashboardClient({
           </Grid>
         </Grid>
 
-
         {lastUpdated && (
           <p className="text-omega-gold opacity-70 text-sm">
             Last updated at {lastUpdated}
           </p>
         )}
+
         <PerformanceChart data={chartData} />
         <SymbolLeaderboard metrics={metrics} />
         <RecentSignals signals={recentSignals} />
