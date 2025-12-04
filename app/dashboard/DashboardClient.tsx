@@ -22,6 +22,7 @@ import { Signal } from "@/app/types/signal";
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
 import SymbolLeaderboard from "@/components/dashboard/SymbolLeaderboard";
+import StrategyLeaderboard from "../analytics/StrategyLeaderboard";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -388,6 +389,7 @@ export default function DashboardClient({
         </Box>
 
         <PerformanceChart data={chartData} />
+        <StrategyLeaderboard signals={initialSignals} />
         <SymbolLeaderboard metrics={metrics} />
         <RecentSignals signals={recentSignals} />
       </motion.main>

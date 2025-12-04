@@ -58,7 +58,7 @@ export default function SymbolLeaderboard({
             mb={2}
             sx={{ color: "var(--omega-gold)" }}
           >
-            🔥 Symbol Performance Leaderboard
+            🔥 Symbol Performance
           </Typography>
 
           <Box sx={{ overflowX: "auto" }}>
