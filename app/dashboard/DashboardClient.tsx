@@ -248,8 +248,8 @@ export default function DashboardClient({
           ))}
         </Box>
 
-        {/* Filters (range + symbol only now) */}
-        <Grid container spacing={3} sx={{ mb: 1, mt: 1 }}>
+        {/* Filters */}
+        <Grid container spacing={3} sx={{ mb: 3, mt: 1 }}>
           <Grid size={{ xs: 12, sm: 6 }}>
             <Select
               fullWidth
