@@ -15,18 +15,16 @@ import {
 
 type Order = "asc" | "desc";
 
-interface StrategySummary {
-  strategy: string;
+interface SymbolSummary {
+  symbol: string;
   trades: number;
   wins: number;
   losses: number;
   winRate: number;
-  pnl: number;
-  rr: number;
 }
 
 interface HeadCell {
-  key: keyof StrategySummary;
+  key: keyof SymbolSummary;
   label: string;
   numeric?: boolean;
 }
@@ -44,63 +42,42 @@ const omega = {
   glow: "0 0 12px rgba(212,175,55,0.55)",
 };
 
-// ---------- Compute Strategy Summary ----------
-function computeStrategies(signals: Signal[]): StrategySummary[] {
-  const map = new Map<string, StrategySummary>();
+// ---------- Compute Symbol Summary ----------
+function computeSymbols(signals: Signal[]): SymbolSummary[] {
+  const map = new Map<string, SymbolSummary>();
 
   for (const s of signals) {
-    const strat = s.strategy || "Unknown";
+    const sym = s.symbol || "Unknown";
 
-    if (!map.has(strat)) {
-      map.set(strat, {
-        strategy: strat,
+    if (!map.has(sym)) {
+      map.set(sym, {
+        symbol: sym,
         trades: 0,
         wins: 0,
         losses: 0,
         winRate: 0,
-        pnl: 0,
-        rr: 0,
       });
     }
 
-    const row = map.get(strat)!;
+    const row = map.get(sym)!;
     row.trades++;
 
-    // --- Win / Loss ---
     if (s.tp2_hit || s.tp1_hit) row.wins++;
     if (s.sl_hit) row.losses++;
-
-    // --- PnL ---
-    if (s.entry_price !== null && s.exit_price !== null) {
-      const delta = ((s.exit_price - s.entry_price) / s.entry_price) * 100;
-      row.pnl += delta;
-    }
-
-    // --- R:R ---
-    if (s.entry_price !== null && s.sl !== null && s.tp1 !== null) {
-      const risk = Math.abs(s.entry_price - s.sl);
-      const reward = Math.abs(s.tp1 - s.entry_price);
-      if (risk > 0) row.rr += reward / risk;
-    }
   }
 
   return [...map.values()].map((r) => ({
     ...r,
     winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
-    rr: r.trades ? r.rr / r.trades : 0,
   }));
 }
 
 // ---------- Component ----------
-export default function StrategyLeaderboard({
-  signals,
-}: {
-  signals: Signal[];
-}) {
+export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
   const [order, setOrder] = useState<Order>("desc");
-  const [orderBy, setOrderBy] = useState<keyof StrategySummary>("winRate");
+  const [orderBy, setOrderBy] = useState<keyof SymbolSummary>("winRate");
 
-  const data = useMemo(() => computeStrategies(signals), [signals]);
+  const data = useMemo(() => computeSymbols(signals), [signals]);
 
   const sorted = useMemo(() => {
     return [...data].sort((a, b) => {
@@ -113,14 +90,12 @@ export default function StrategyLeaderboard({
   }, [data, order, orderBy]);
 
   const headCells: HeadCell[] = [
-    { key: "strategy", label: "Strategy" },
+    { key: "symbol", label: "Symbol" },
     { key: "trades", label: "Trades", numeric: true },
     { key: "winRate", label: "Win Rate %", numeric: true },
-    { key: "pnl", label: "Total P&L %", numeric: true },
-    { key: "rr", label: "Avg R:R", numeric: true },
   ];
 
-  const handleSort = (key: keyof StrategySummary) => {
+  const handleSort = (key: keyof SymbolSummary) => {
     if (orderBy === key) {
       setOrder(order === "asc" ? "desc" : "asc");
     } else {
@@ -141,7 +116,7 @@ export default function StrategyLeaderboard({
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
-        🔥 Strategy Performance
+        📊 Symbol Performance
       </h2>
 
       <Table>
@@ -166,7 +141,7 @@ export default function StrategyLeaderboard({
                     active={isActive}
                     direction={isActive ? order : "asc"}
                     onClick={() => handleSort(h.key)}
-                    IconComponent={(props) => (
+                    IconComponent={() => (
                       <motion.span
                         animate={{
                           rotate: isActive && order === "desc" ? 180 : 0,
@@ -182,14 +157,7 @@ export default function StrategyLeaderboard({
                       "&:hover": { color: omega.text },
                     }}
                   >
-                    <motion.span
-                      animate={{
-                        color: isActive ? omega.text : omega.dim,
-                      }}
-                      transition={{ duration: 0.25 }}
-                    >
-                      {h.label}
-                    </motion.span>
+                    {h.label}
                   </TableSortLabel>
                 </TableCell>
               );
@@ -201,7 +169,7 @@ export default function StrategyLeaderboard({
           <AnimatePresence initial={false}>
             {sorted.map((row, i) => (
               <motion.tr
-                key={row.strategy}
+                key={row.symbol}
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
@@ -217,7 +185,7 @@ export default function StrategyLeaderboard({
                 >
                   <div className="flex items-center gap-3">
                     <span className="opacity-60">{i + 1}.</span>
-                    {row.strategy}
+                    {row.symbol}
                     {i === 0 && (
                       <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
                         TOP
@@ -246,28 +214,6 @@ export default function StrategyLeaderboard({
                   }}
                 >
                   {row.winRate.toFixed(1)}%
-                </TableCell>
-
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: row.pnl >= 0 ? omega.win : omega.loss,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.pnl.toFixed(2)}%
-                </TableCell>
-
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: omega.text,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.rr.toFixed(2)}
                 </TableCell>
               </motion.tr>
             ))}

@@ -21,7 +21,7 @@ import RecentSignals from "@/components/dashboard/RecentSignals";
 import { Signal } from "@/app/types/signal";
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
-import SymbolLeaderboard from "@/components/dashboard/SymbolLeaderboard";
+import SymbolLeaderboard from "@/app/analytics/SymbolLeaderboard";
 import StrategyLeaderboard from "../analytics/StrategyLeaderboard";
 
 const PerformanceChart = dynamic(
@@ -410,8 +410,8 @@ export default function DashboardClient({
           </div>
         </motion.div>
 
-        <StrategyLeaderboard signals={initialSignals} />
-        <SymbolLeaderboard metrics={metrics} />
+        <StrategyLeaderboard signals={allSignals} />
+        <SymbolLeaderboard signals={allSignals} />
         <RecentSignals signals={recentSignals} />
 
         {/* --- NAV BUTTONS --- */}
