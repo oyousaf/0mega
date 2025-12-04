@@ -248,7 +248,7 @@ export default function DashboardClient({
 
         <MetricsCards metrics={metrics} />
 
-        {/* ---- FILTERS + TOGGLES ON ONE LINE ---- */}
+        {/* ---- FILTERS + TOGGLES ---- */}
         <Grid
           container
           spacing={3}
@@ -256,7 +256,7 @@ export default function DashboardClient({
           justifyContent="center"
           sx={{ mb: 2 }}
         >
-          <Grid item xs={12} md={3}>
+          <Grid>
             <Select
               fullWidth
               value={range}
@@ -272,7 +272,7 @@ export default function DashboardClient({
             </Select>
           </Grid>
 
-          <Grid item xs={12} md={3}>
+          <Grid>
             <Select
               fullWidth
               value={symbolFilter}
@@ -289,7 +289,7 @@ export default function DashboardClient({
             </Select>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid>
             <Box className="flex justify-center gap-3">
               {["all", "forex", "crypto", "stock"].map((m) => (
                 <Button
