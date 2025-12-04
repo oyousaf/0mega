@@ -21,16 +21,21 @@ import RecentSignals from "@/components/dashboard/RecentSignals";
 import { Signal } from "@/app/types/signal";
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 
-// Client-only chart
+import MetricsCards from "@/components/dashboard/MetricsCards";
+import SymbolLeaderboard from "@/components/dashboard/SymbolLeaderboard";
+
+/* ---------------------------------------------
+   Client-only chart
+---------------------------------------------- */
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
   { ssr: false }
 );
 
-/* -------------------------------------------------------
-   Time Range Formatting
-------------------------------------------------------- */
-function formatDate(date: Date, range: "hour" | "day" | "week"): string {
+/* ---------------------------------------------
+   Time Formatting
+---------------------------------------------- */
+function formatDate(date: Date, range: "hour" | "day" | "week") {
   if (range === "hour") return date.toISOString().slice(0, 13) + ":00";
   if (range === "day") return date.toISOString().split("T")[0];
 
@@ -41,13 +46,12 @@ function formatDate(date: Date, range: "hour" | "day" | "week"): string {
       .split("T")[0];
     return start;
   }
-
   return "unknown";
 }
 
-/* -------------------------------------------------------
-   Equity Curve
-------------------------------------------------------- */
+/* ---------------------------------------------
+   Equity Curve Builder
+---------------------------------------------- */
 function buildEquityCurve(signals: Signal[]) {
   let eq = 0;
   return signals.map((s) => {
@@ -57,14 +61,9 @@ function buildEquityCurve(signals: Signal[]) {
   });
 }
 
-interface DashboardClientProps {
-  initialSignals: Signal[];
-  recentSignals: Signal[];
-}
-
-/* -------------------------------------------------------
-   Dropdown styling (Omega style)
-------------------------------------------------------- */
+/* ---------------------------------------------
+   Styled Selects (Omega UI)
+---------------------------------------------- */
 const selectStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
@@ -114,13 +113,16 @@ const menuProps = {
   },
 };
 
-/* -------------------------------------------------------
-   MAIN
-------------------------------------------------------- */
+/* ---------------------------------------------
+   MAIN COMPONENT
+---------------------------------------------- */
 export default function DashboardClient({
   initialSignals,
   recentSignals,
-}: DashboardClientProps) {
+}: {
+  initialSignals: Signal[];
+  recentSignals: Signal[];
+}) {
   const [allSignals, setAllSignals] = useState(initialSignals);
 
   // Filters
@@ -128,15 +130,15 @@ export default function DashboardClient({
   const [symbolFilter, setSymbolFilter] = useState("all");
   const [marketFilter, setMarketFilter] = useState("all");
 
-  // Settings Modal
+  // Settings modal
   const [openSettings, setOpenSettings] = useState(false);
 
   // Metrics
   const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
 
-  /* -------------------------------------------------------
-     Auto-refresh
-  ------------------------------------------------------- */
+  /* ---------------------------------------------
+     Auto-refresh signals
+  ---------------------------------------------- */
   useEffect(() => {
     const refresh = async () => {
       try {
@@ -155,9 +157,9 @@ export default function DashboardClient({
     return () => clearInterval(id);
   }, []);
 
-  /* -------------------------------------------------------
-     Chart Data
-  ------------------------------------------------------- */
+  /* ---------------------------------------------
+     Chart data grouping
+  ---------------------------------------------- */
   const chartData = useMemo(() => {
     const grouped: Record<
       string,
@@ -191,16 +193,16 @@ export default function DashboardClient({
     }));
   }, [allSignals, range, symbolFilter, marketFilter]);
 
-  /* -------------------------------------------------------
+  /* ---------------------------------------------
      Unique Symbols
-  ------------------------------------------------------- */
+  ---------------------------------------------- */
   const symbolList = Array.from(
     new Set(allSignals.map((s) => s.symbol))
   ).sort();
 
-  /* -------------------------------------------------------
+  /* ---------------------------------------------
      RENDER
-  ------------------------------------------------------- */
+  ---------------------------------------------- */
   return (
     <>
       {/* Settings Modal */}
@@ -237,8 +239,9 @@ export default function DashboardClient({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="max-w-7xl mx-auto text-center p-6 space-y-8"
+        className="max-w-7xl mx-auto text-center p-6 space-y-10"
       >
+        {/* Header Title */}
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
           initial={{ opacity: 0, y: 8 }}
@@ -247,8 +250,8 @@ export default function DashboardClient({
           𝛀mega Dashboard
         </motion.h1>
 
-        {/* ---------------- Top Right Action Bar ---------------- */}
-        <Box className="flex justify-end items-center gap-3 mt-4 pr-2">
+        {/* Actions */}
+        <Box className="flex justify-end items-center gap-3 mt-2 pr-2">
           <Link href="/signals/active">
             <Button
               variant="contained"
@@ -288,7 +291,6 @@ export default function DashboardClient({
             </Button>
           </Link>
 
-          {/* Settings Cog (opens modal) */}
           <motion.button
             onClick={() => setOpenSettings(true)}
             whileHover={{ rotate: 90, scale: 1.1 }}
@@ -300,7 +302,7 @@ export default function DashboardClient({
           </motion.button>
         </Box>
 
-        {/* ---------------- Filters ---------------- */}
+        {/* Filters */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 4 }}>
             <Select
@@ -351,20 +353,26 @@ export default function DashboardClient({
           </Grid>
         </Grid>
 
-        {/* ---------------- Chart ---------------- */}
+        {/* Metrics Cards */}
+        <MetricsCards metrics={metrics} />
+
+        {/* Chart */}
         <AnimatePresence mode="wait">
           <motion.div
             key={JSON.stringify(chartData)}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
+            exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
           >
             <PerformanceChart data={chartData} />
           </motion.div>
         </AnimatePresence>
 
-        {/* ---------------- Recent Signals ---------------- */}
+        {/* Leaderboard */}
+        <SymbolLeaderboard metrics={metrics} />
+
+        {/* Recent Signals */}
         <RecentSignals signals={recentSignals} />
       </motion.main>
     </>
