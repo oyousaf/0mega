@@ -14,7 +14,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
-import { FiSettings } from "react-icons/fi";
+import { FiActivity, FiFolder, FiPlusCircle, FiSettings } from "react-icons/fi";
 
 import { computeMetrics } from "@/lib/metrics";
 import RecentSignals from "@/components/dashboard/RecentSignals";
@@ -389,9 +389,110 @@ export default function DashboardClient({
         </Box>
 
         <PerformanceChart data={chartData} />
+
+        {/* --- LAST UPDATED --- */}
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="flex justify-center mt-2"
+        >
+          <div
+            className="px-4 py-1 rounded-lg text-xs font-bold tracking-widest"
+            style={{
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid var(--omega-dark-gold)",
+              color: "var(--omega-gold)",
+              boxShadow: "0 0 10px rgba(212,175,55,0.15)",
+            }}
+          >
+            LAST UPDATED: {lastUpdated}
+          </div>
+        </motion.div>
+
         <StrategyLeaderboard signals={initialSignals} />
         <SymbolLeaderboard metrics={metrics} />
         <RecentSignals signals={recentSignals} />
+
+        {/* --- NAV BUTTONS --- */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col sm:flex-row justify-center gap-3 mt-6"
+        >
+          {/* ACTIVE SIGNALS */}
+          <Link href="/signals/active" className="flex-1">
+            <Button
+              fullWidth
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 700,
+                borderRadius: "0.75rem",
+                py: 1.5,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                "&:hover": { backgroundColor: "rgba(212,175,55,0.85)" },
+              }}
+            >
+              <span className="text-lg">
+                <FiActivity />
+              </span>
+              ACTIVE SIGNALS
+            </Button>
+          </Link>
+
+          {/* ALL SIGNALS */}
+          <Link href="/signals/all" className="flex-1">
+            <Button
+              fullWidth
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 700,
+                borderRadius: "0.75rem",
+                py: 1.5,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                "&:hover": { backgroundColor: "rgba(212,175,55,0.85)" },
+              }}
+            >
+              <span className="text-lg">
+                <FiFolder />
+              </span>
+              ALL SIGNALS
+            </Button>
+          </Link>
+
+          {/* ADD NEW SIGNAL */}
+          <Link href="/signals/new" className="flex-1">
+            <Button
+              fullWidth
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+                fontWeight: 700,
+                borderRadius: "0.75rem",
+                py: 1.5,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                "&:hover": { backgroundColor: "rgba(212,175,55,0.85)" },
+              }}
+            >
+              <span className="text-lg">
+                <FiPlusCircle />
+              </span>
+              ADD NEW SIGNAL
+            </Button>
+          </Link>
+        </motion.div>
       </motion.main>
     </>
   );

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Signal } from "@/app/types/signal";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Box,
   Table,
@@ -40,6 +40,7 @@ const omega = {
   dim: "rgba(212,175,55,0.65)",
   win: "#4CAF50",
   loss: "#FF5252",
+  glow: "0 0 12px rgba(212,175,55,0.55)",
 };
 
 // ---------- Compute Strategy Summary ----------
@@ -65,23 +66,19 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
     row.trades++;
 
     // --- Win / Loss ---
-    const isWin = s.tp2_hit || s.tp1_hit;
-    const isLoss = s.sl_hit;
+    if (s.tp2_hit || s.tp1_hit) row.wins++;
+    if (s.sl_hit) row.losses++;
 
-    if (isWin) row.wins++;
-    if (isLoss) row.losses++;
-
-    // --- PnL (null safe) ---
+    // --- PnL ---
     if (s.entry_price !== null && s.exit_price !== null) {
       const delta = ((s.exit_price - s.entry_price) / s.entry_price) * 100;
       row.pnl += delta;
     }
 
-    // --- R:R (null safe) ---
+    // --- R:R ---
     if (s.entry_price !== null && s.sl !== null && s.tp1 !== null) {
       const risk = Math.abs(s.entry_price - s.sl);
       const reward = Math.abs(s.tp1 - s.entry_price);
-
       if (risk > 0) row.rr += reward / risk;
     }
   }
@@ -143,110 +140,136 @@ export default function StrategyLeaderboard({
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
-        🔥 Strategy Leaderboard
+        🔥 Strategy Performance
       </h2>
 
       <Table>
         <TableHead>
           <TableRow>
-            {headCells.map((h) => (
-              <TableCell
-                key={h.key}
-                align={h.numeric ? "right" : "left"}
-                sx={{
-                  color: omega.dim,
-                  fontWeight: 600,
-                  borderBottom: `1px solid ${omega.sep}`,
-                }}
-              >
-                <TableSortLabel
-                  active={orderBy === h.key}
-                  direction={orderBy === h.key ? order : "asc"}
-                  onClick={() => handleSort(h.key)}
+            {headCells.map((h) => {
+              const isActive = orderBy === h.key;
+
+              return (
+                <TableCell
+                  key={h.key}
+                  align={h.numeric ? "right" : "left"}
                   sx={{
-                    "& .MuiTableSortLabel-icon": {
-                      color: omega.dim + " !important",
-                    },
+                    color: isActive ? omega.text : omega.dim,
+                    fontWeight: isActive ? 700 : 600,
+                    borderBottom: `1px solid ${omega.sep}`,
+                    transition: "all 0.25s ease",
+                    textShadow: isActive ? omega.glow : "none",
                   }}
                 >
-                  {h.label}
-                </TableSortLabel>
-              </TableCell>
-            ))}
+                  <TableSortLabel
+                    active={isActive}
+                    direction={isActive ? order : "asc"}
+                    onClick={() => handleSort(h.key)}
+                    IconComponent={(props) => (
+                      <motion.span
+                        animate={{
+                          rotate: isActive && order === "desc" ? 180 : 0,
+                        }}
+                        transition={{ duration: 0.25 }}
+                        style={{ display: "inline-block" }}
+                      >
+                        ▼
+                      </motion.span>
+                    )}
+                    sx={{
+                      color: isActive ? omega.text : omega.dim,
+                      "&:hover": { color: omega.text },
+                    }}
+                  >
+                    <motion.span
+                      animate={{
+                        color: isActive ? omega.text : omega.dim,
+                      }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      {h.label}
+                    </motion.span>
+                  </TableSortLabel>
+                </TableCell>
+              );
+            })}
           </TableRow>
         </TableHead>
 
         <TableBody>
-          {sorted.map((row, i) => (
-            <motion.tr
-              key={row.strategy}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <TableCell
-                sx={{
-                  color: omega.text,
-                  background: omega.row,
-                  borderBottom: `1px solid ${omega.sep}`,
-                }}
+          <AnimatePresence initial={false}>
+            {sorted.map((row, i) => (
+              <motion.tr
+                key={row.strategy}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.03 }}
               >
-                <div className="flex items-center gap-3">
-                  <span className="opacity-60">{i + 1}.</span>
-                  {row.strategy}
-                  {i === 0 && (
-                    <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
-                      TOP
-                    </span>
-                  )}
-                </div>
-              </TableCell>
+                <TableCell
+                  sx={{
+                    color: omega.text,
+                    background: omega.row,
+                    borderBottom: `1px solid ${omega.sep}`,
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="opacity-60">{i + 1}.</span>
+                    {row.strategy}
+                    {i === 0 && (
+                      <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
+                        TOP
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
 
-              <TableCell
-                align="right"
-                sx={{
-                  color: omega.text,
-                  background: omega.row,
-                  borderBottom: `1px solid ${omega.sep}`,
-                }}
-              >
-                {row.trades}
-              </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: omega.text,
+                    background: omega.row,
+                    borderBottom: `1px solid ${omega.sep}`,
+                  }}
+                >
+                  {row.trades}
+                </TableCell>
 
-              <TableCell
-                align="right"
-                sx={{
-                  color: row.winRate >= 50 ? omega.win : omega.loss,
-                  background: omega.row,
-                  borderBottom: `1px solid ${omega.sep}`,
-                }}
-              >
-                {row.winRate.toFixed(1)}%
-              </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: row.winRate >= 50 ? omega.win : omega.loss,
+                    background: omega.row,
+                    borderBottom: `1px solid ${omega.sep}`,
+                  }}
+                >
+                  {row.winRate.toFixed(1)}%
+                </TableCell>
 
-              <TableCell
-                align="right"
-                sx={{
-                  color: row.pnl >= 0 ? omega.win : omega.loss,
-                  background: omega.row,
-                  borderBottom: `1px solid ${omega.sep}`,
-                }}
-              >
-                {row.pnl.toFixed(2)}%
-              </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: row.pnl >= 0 ? omega.win : omega.loss,
+                    background: omega.row,
+                    borderBottom: `1px solid ${omega.sep}`,
+                  }}
+                >
+                  {row.pnl.toFixed(2)}%
+                </TableCell>
 
-              <TableCell
-                align="right"
-                sx={{
-                  color: omega.text,
-                  background: omega.row,
-                  borderBottom: `1px solid ${omega.sep}`,
-                }}
-              >
-                {row.rr.toFixed(2)}
-              </TableCell>
-            </motion.tr>
-          ))}
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: omega.text,
+                    background: omega.row,
+                    borderBottom: `1px solid ${omega.sep}`,
+                  }}
+                >
+                  {row.rr.toFixed(2)}
+                </TableCell>
+              </motion.tr>
+            ))}
+          </AnimatePresence>
         </TableBody>
       </Table>
     </Box>
