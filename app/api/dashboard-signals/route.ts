@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
+import { normalizeSignalRow } from "@/lib/signal/normalise";
 
 export async function GET() {
   try {
-    const { rows: signals } = await pool.query(
-      `SELECT * FROM signals ORDER BY created_at DESC`
-    );
+    const { rows } = await pool.query(`
+      SELECT * FROM signals
+      ORDER BY created_at DESC
+    `);
 
-    return NextResponse.json({ signals });
+    const normalised = rows.map((row) => normalizeSignalRow(row));
+
+    return NextResponse.json({ signals: normalised });
   } catch (err) {
     console.error("Dashboard refresh error:", err);
     return NextResponse.json({ signals: [] });
