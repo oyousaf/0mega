@@ -26,7 +26,7 @@ export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
     >
       <Box sx={{ width: "100%" }}>
         <Card
@@ -45,7 +45,6 @@ export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
               📈 Performance Chart
             </Typography>
 
-            {/* Fix container collapsing */}
             <Box sx={{ width: "100%" }}>
               <ResponsiveContainer width="100%" height={350}>
                 <LineChart data={data}>
@@ -60,21 +59,17 @@ export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
                     tick={{ fill: "var(--omega-gold)" }}
                   />
 
-                  {/* Left Y Axis */}
                   <YAxis
                     yAxisId="left"
                     stroke="var(--omega-gold)"
                     tick={{ fill: "var(--omega-gold)" }}
-                    domain={[0, "dataMax + 5"]}
                   />
 
-                  {/* Right Y Axis */}
                   <YAxis
                     yAxisId="right"
                     orientation="right"
                     stroke="var(--omega-gold)"
                     tick={{ fill: "var(--omega-gold)" }}
-                    domain={["dataMin - 2", "dataMax + 2"]}
                   />
 
                   <Legend
@@ -93,40 +88,40 @@ export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
                     }}
                   />
 
-                  {/* Win Rate */}
                   <Line
                     yAxisId="left"
-                    type="natural"
+                    type="monotone"
                     dataKey="winRate"
                     name="Win Rate %"
                     stroke="var(--omega-gold)"
                     strokeWidth={3}
                     dot={false}
-                    animationDuration={800}
+                    isAnimationActive={true}
+                    animationDuration={900}
                   />
 
-                  {/* Total Trades */}
                   <Line
                     yAxisId="left"
-                    type="natural"
+                    type="monotone"
                     dataKey="totalTrades"
                     name="Total Trades"
                     stroke="var(--omega-dark-gold)"
                     strokeWidth={3}
                     dot={false}
-                    animationDuration={800}
+                    isAnimationActive={true}
+                    animationDuration={900}
                   />
 
-                  {/* Equity Curve */}
                   <Line
                     yAxisId="right"
-                    type="natural"
+                    type="monotone"
                     dataKey="equity"
                     name="Equity Curve"
                     stroke="#6CFFB5"
                     strokeWidth={3}
                     dot={false}
-                    animationDuration={800}
+                    isAnimationActive={true}
+                    animationDuration={900}
                   />
                 </LineChart>
               </ResponsiveContainer>

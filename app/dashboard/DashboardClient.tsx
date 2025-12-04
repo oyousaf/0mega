@@ -10,7 +10,7 @@ import {
   Modal,
 } from "@mui/material";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
@@ -24,17 +24,11 @@ import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
 import SymbolLeaderboard from "@/components/dashboard/SymbolLeaderboard";
 
-/* ---------------------------------------------
-   Client-only chart
----------------------------------------------- */
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
   { ssr: false }
 );
 
-/* ---------------------------------------------
-   Time Formatting
----------------------------------------------- */
 function formatDate(date: Date, range: "hour" | "day" | "week") {
   if (range === "hour") return date.toISOString().slice(0, 13) + ":00";
   if (range === "day") return date.toISOString().split("T")[0];
@@ -49,9 +43,6 @@ function formatDate(date: Date, range: "hour" | "day" | "week") {
   return "unknown";
 }
 
-/* ---------------------------------------------
-   Equity Curve Builder
----------------------------------------------- */
 function buildEquityCurve(signals: Signal[]) {
   let eq = 0;
   return signals.map((s) => {
@@ -61,9 +52,6 @@ function buildEquityCurve(signals: Signal[]) {
   });
 }
 
-/* ---------------------------------------------
-   Styled Selects (Omega UI)
----------------------------------------------- */
 const selectStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
@@ -71,25 +59,11 @@ const selectStyle = {
   color: "var(--omega-gold)",
   fontWeight: 600,
 
-  "& .MuiSelect-select": {
-    color: "var(--omega-gold)",
-  },
-
-  "& .MuiSvgIcon-root": {
-    color: "var(--omega-gold)",
-  },
-
-  "& .MuiOutlinedInput-notchedOutline": {
-    borderColor: "var(--omega-dark-gold)",
-  },
-
-  "&:hover .MuiOutlinedInput-notchedOutline": {
-    borderColor: "var(--omega-gold)",
-  },
-
-  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-    borderColor: "var(--omega-gold)",
-  },
+  "& .MuiSelect-select": { color: "var(--omega-gold)" },
+  "& .MuiSvgIcon-root": { color: "var(--omega-gold)" },
+  "& .MuiOutlinedInput-notchedOutline": { borderColor: "var(--omega-dark-gold)" },
+  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "var(--omega-gold)" },
+  "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "var(--omega-gold)" },
 };
 
 const menuProps = {
@@ -99,23 +73,13 @@ const menuProps = {
       border: "1px solid var(--omega-dark-gold)",
       borderRadius: "0.75rem",
       color: "var(--omega-gold)",
-      "& .MuiMenuItem-root": {
-        color: "var(--omega-gold)",
-        fontWeight: 600,
-      },
-      "& .MuiMenuItem-root.Mui-selected": {
-        backgroundColor: "rgba(212,175,55,0.15)",
-      },
-      "& .MuiMenuItem-root:hover": {
-        backgroundColor: "rgba(212,175,55,0.25)",
-      },
+      "& .MuiMenuItem-root": { color: "var(--omega-gold)", fontWeight: 600 },
+      "& .MuiMenuItem-root.Mui-selected": { backgroundColor: "rgba(212,175,55,0.15)" },
+      "& .MuiMenuItem-root:hover": { backgroundColor: "rgba(212,175,55,0.25)" },
     },
   },
 };
 
-/* ---------------------------------------------
-   MAIN COMPONENT
----------------------------------------------- */
 export default function DashboardClient({
   initialSignals,
   recentSignals,
@@ -125,20 +89,14 @@ export default function DashboardClient({
 }) {
   const [allSignals, setAllSignals] = useState(initialSignals);
 
-  // Filters
   const [range, setRange] = useState<"hour" | "day" | "week">("day");
   const [symbolFilter, setSymbolFilter] = useState("all");
   const [marketFilter, setMarketFilter] = useState("all");
 
-  // Settings modal
   const [openSettings, setOpenSettings] = useState(false);
-
-  // Metrics
   const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
+  const [lastUpdated, setLastUpdated] = useState("");
 
-  /* ---------------------------------------------
-     Auto-refresh signals
-  ---------------------------------------------- */
   useEffect(() => {
     const refresh = async () => {
       try {
@@ -148,6 +106,14 @@ export default function DashboardClient({
         if (Array.isArray(data.signals)) {
           setAllSignals(data.signals);
           setMetrics(computeMetrics(data.signals));
+
+          const now = new Date();
+          setLastUpdated(
+            now.toLocaleTimeString("en-GB", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          );
         }
       } catch {}
     };
@@ -157,14 +123,8 @@ export default function DashboardClient({
     return () => clearInterval(id);
   }, []);
 
-  /* ---------------------------------------------
-     Chart data grouping
-  ---------------------------------------------- */
   const chartData = useMemo(() => {
-    const grouped: Record<
-      string,
-      { wins: number; total: number; trades: Signal[] }
-    > = {};
+    const grouped: Record<string, { wins: number; total: number }> = {};
 
     const filtered = allSignals.filter((s) => {
       if (symbolFilter !== "all" && s.symbol !== symbolFilter) return false;
@@ -174,38 +134,25 @@ export default function DashboardClient({
 
     filtered.forEach((s) => {
       const key = formatDate(new Date(s.created_at), range);
-
-      if (!grouped[key]) grouped[key] = { wins: 0, total: 0, trades: [] };
-
+      if (!grouped[key]) grouped[key] = { wins: 0, total: 0 };
       grouped[key].total++;
-      grouped[key].trades.push(s);
-
       if (s.status.toLowerCase().includes("tp")) grouped[key].wins++;
     });
 
-    const equityCurve = buildEquityCurve(filtered);
+    const equity = buildEquityCurve(filtered);
 
     return Object.entries(grouped).map(([date, info], i) => ({
       date,
       winRate: Math.round((info.wins / info.total) * 100),
       totalTrades: info.total,
-      equity: equityCurve[i] ?? 0,
+      equity: equity[i] ?? 0,
     }));
   }, [allSignals, range, symbolFilter, marketFilter]);
 
-  /* ---------------------------------------------
-     Unique Symbols
-  ---------------------------------------------- */
-  const symbolList = Array.from(
-    new Set(allSignals.map((s) => s.symbol))
-  ).sort();
+  const symbolList = Array.from(new Set(allSignals.map((s) => s.symbol))).sort();
 
-  /* ---------------------------------------------
-     RENDER
-  ---------------------------------------------- */
   return (
     <>
-      {/* Settings Modal */}
       <Modal open={openSettings} onClose={() => setOpenSettings(false)}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -218,7 +165,6 @@ export default function DashboardClient({
             Settings
           </h2>
           <NotificationsPanel />
-
           <div className="text-right mt-6">
             <Button
               onClick={() => setOpenSettings(false)}
@@ -234,14 +180,12 @@ export default function DashboardClient({
         </motion.div>
       </Modal>
 
-      {/* MAIN CONTENT */}
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="max-w-7xl mx-auto text-center p-6 space-y-10"
       >
-        {/* Header Title */}
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
           initial={{ opacity: 0, y: 8 }}
@@ -250,43 +194,21 @@ export default function DashboardClient({
           𝛀mega Dashboard
         </motion.h1>
 
-        {/* Actions */}
         <Box className="flex justify-end items-center gap-3 mt-2 pr-2">
           <Link href="/signals/active">
-            <Button
-              variant="contained"
-              sx={{
-                backgroundColor: "var(--omega-gold)",
-                color: "var(--omega-green)",
-                fontWeight: 600,
-              }}
-            >
+            <Button sx={{ backgroundColor: "var(--omega-gold)", color: "var(--omega-green)" }}>
               📡 Active
             </Button>
           </Link>
 
           <Link href="/signals/all">
-            <Button
-              variant="contained"
-              sx={{
-                backgroundColor: "var(--omega-gold)",
-                color: "var(--omega-green)",
-                fontWeight: 600,
-              }}
-            >
+            <Button sx={{ backgroundColor: "var(--omega-gold)", color: "var(--omega-green)" }}>
               📁 All
             </Button>
           </Link>
 
           <Link href="/signals/new">
-            <Button
-              variant="contained"
-              sx={{
-                backgroundColor: "var(--omega-gold)",
-                color: "var(--omega-green)",
-                fontWeight: 600,
-              }}
-            >
+            <Button sx={{ backgroundColor: "var(--omega-gold)", color: "var(--omega-green)" }}>
               ➕ New
             </Button>
           </Link>
@@ -302,9 +224,33 @@ export default function DashboardClient({
           </motion.button>
         </Box>
 
-        {/* Filters */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid size={{ xs: 12, sm: 4 }}>
+        <MetricsCards metrics={metrics} />
+
+        {/* Gold market toggles (this replaces market dropdown entirely) */}
+        <Box className="flex justify-center gap-4 mt-4">
+          {["all", "forex", "crypto", "stock"].map((m) => (
+            <Button
+              key={m}
+              onClick={() => setMarketFilter(m)}
+              sx={{
+                backgroundColor:
+                  marketFilter === m ? "var(--omega-gold)" : "transparent",
+                color:
+                  marketFilter === m ? "var(--omega-green)" : "var(--omega-gold)",
+                border: "1px solid var(--omega-gold)",
+                fontWeight: 600,
+                px: 3,
+                textTransform: "uppercase",
+              }}
+            >
+              {m}
+            </Button>
+          ))}
+        </Box>
+
+        {/* Filters (range + symbol only now) */}
+        <Grid container spacing={3} sx={{ mb: 1, mt: 1 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Select
               fullWidth
               value={range}
@@ -320,7 +266,7 @@ export default function DashboardClient({
             </Select>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 4 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Select
               fullWidth
               value={symbolFilter}
@@ -336,43 +282,16 @@ export default function DashboardClient({
               ))}
             </Select>
           </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Select
-              fullWidth
-              value={marketFilter}
-              onChange={(e) => setMarketFilter(e.target.value)}
-              sx={selectStyle}
-              MenuProps={menuProps}
-            >
-              <MenuItem value="all">All Markets</MenuItem>
-              <MenuItem value="forex">FOREX</MenuItem>
-              <MenuItem value="crypto">CRYPTO</MenuItem>
-              <MenuItem value="stock">STOCKS</MenuItem>
-            </Select>
-          </Grid>
         </Grid>
 
-        {/* Metrics Cards */}
-        <MetricsCards metrics={metrics} />
 
-        {/* Chart */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={JSON.stringify(chartData)}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
-          >
-            <PerformanceChart data={chartData} />
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Leaderboard */}
+        {lastUpdated && (
+          <p className="text-omega-gold opacity-70 text-sm">
+            Last updated at {lastUpdated}
+          </p>
+        )}
+        <PerformanceChart data={chartData} />
         <SymbolLeaderboard metrics={metrics} />
-
-        {/* Recent Signals */}
         <RecentSignals signals={recentSignals} />
       </motion.main>
     </>
