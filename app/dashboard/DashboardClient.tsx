@@ -20,7 +20,6 @@ import { computeMetrics } from "@/lib/metrics";
 import RecentSignals from "@/components/dashboard/RecentSignals";
 import { Signal } from "@/app/types/signal";
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
-
 import MetricsCards from "@/components/dashboard/MetricsCards";
 import SymbolLeaderboard from "@/components/dashboard/SymbolLeaderboard";
 
@@ -58,12 +57,17 @@ const selectStyle = {
   borderRadius: "0.75rem",
   color: "var(--omega-gold)",
   fontWeight: 600,
-
   "& .MuiSelect-select": { color: "var(--omega-gold)" },
   "& .MuiSvgIcon-root": { color: "var(--omega-gold)" },
-  "& .MuiOutlinedInput-notchedOutline": { borderColor: "var(--omega-dark-gold)" },
-  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "var(--omega-gold)" },
-  "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "var(--omega-gold)" },
+  "& .MuiOutlinedInput-notchedOutline": {
+    borderColor: "var(--omega-dark-gold)",
+  },
+  "&:hover .MuiOutlinedInput-notchedOutline": {
+    borderColor: "var(--omega-gold)",
+  },
+  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+    borderColor: "var(--omega-gold)",
+  },
 };
 
 const menuProps = {
@@ -74,7 +78,9 @@ const menuProps = {
       borderRadius: "0.75rem",
       color: "var(--omega-gold)",
       "& .MuiMenuItem-root": { color: "var(--omega-gold)", fontWeight: 600 },
-      "& .MuiMenuItem-root.Mui-selected": { backgroundColor: "rgba(212,175,55,0.15)" },
+      "& .MuiMenuItem-root.Mui-selected": {
+        backgroundColor: "rgba(212,175,55,0.15)",
+      },
       "& .MuiMenuItem-root:hover": { backgroundColor: "rgba(212,175,55,0.25)" },
     },
   },
@@ -149,7 +155,9 @@ export default function DashboardClient({
     }));
   }, [allSignals, range, symbolFilter, marketFilter]);
 
-  const symbolList = Array.from(new Set(allSignals.map((s) => s.symbol))).sort();
+  const symbolList = Array.from(
+    new Set(allSignals.map((s) => s.symbol))
+  ).sort();
 
   return (
     <>
@@ -171,7 +179,6 @@ export default function DashboardClient({
               sx={{
                 backgroundColor: "var(--omega-gold)",
                 color: "var(--omega-green)",
-                fontWeight: 600,
               }}
             >
               Close
@@ -196,19 +203,34 @@ export default function DashboardClient({
 
         <Box className="flex justify-end items-center gap-3 mt-2 pr-2">
           <Link href="/signals/active">
-            <Button sx={{ backgroundColor: "var(--omega-gold)", color: "var(--omega-green)" }}>
+            <Button
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+              }}
+            >
               📡 Active
             </Button>
           </Link>
 
           <Link href="/signals/all">
-            <Button sx={{ backgroundColor: "var(--omega-gold)", color: "var(--omega-green)" }}>
+            <Button
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+              }}
+            >
               📁 All
             </Button>
           </Link>
 
           <Link href="/signals/new">
-            <Button sx={{ backgroundColor: "var(--omega-gold)", color: "var(--omega-green)" }}>
+            <Button
+              sx={{
+                backgroundColor: "var(--omega-gold)",
+                color: "var(--omega-green)",
+              }}
+            >
               ➕ New
             </Button>
           </Link>
@@ -226,31 +248,15 @@ export default function DashboardClient({
 
         <MetricsCards metrics={metrics} />
 
-        {/* Gold market toggles (this replaces market dropdown entirely) */}
-        <Box className="flex justify-center gap-4 mt-4">
-          {["all", "forex", "crypto", "stock"].map((m) => (
-            <Button
-              key={m}
-              onClick={() => setMarketFilter(m)}
-              sx={{
-                backgroundColor:
-                  marketFilter === m ? "var(--omega-gold)" : "transparent",
-                color:
-                  marketFilter === m ? "var(--omega-green)" : "var(--omega-gold)",
-                border: "1px solid var(--omega-gold)",
-                fontWeight: 600,
-                px: 3,
-                textTransform: "uppercase",
-              }}
-            >
-              {m}
-            </Button>
-          ))}
-        </Box>
-
-        {/* Filters */}
-        <Grid container spacing={3} sx={{ mb: 3, mt: 1 }}>
-          <Grid size={{ xs: 12, sm: 6 }}>
+        {/* ---- FILTERS + TOGGLES ON ONE LINE ---- */}
+        <Grid
+          container
+          spacing={3}
+          alignItems="center"
+          justifyContent="center"
+          sx={{ mb: 2 }}
+        >
+          <Grid item xs={12} md={3}>
             <Select
               fullWidth
               value={range}
@@ -266,7 +272,7 @@ export default function DashboardClient({
             </Select>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid item xs={12} md={3}>
             <Select
               fullWidth
               value={symbolFilter}
@@ -281,6 +287,31 @@ export default function DashboardClient({
                 </MenuItem>
               ))}
             </Select>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Box className="flex justify-center gap-3">
+              {["all", "forex", "crypto", "stock"].map((m) => (
+                <Button
+                  key={m}
+                  onClick={() => setMarketFilter(m)}
+                  sx={{
+                    backgroundColor:
+                      marketFilter === m ? "var(--omega-gold)" : "transparent",
+                    color:
+                      marketFilter === m
+                        ? "var(--omega-green)"
+                        : "var(--omega-gold)",
+                    border: "1px solid var(--omega-gold)",
+                    fontWeight: 600,
+                    px: 3,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {m}
+                </Button>
+              ))}
+            </Box>
           </Grid>
         </Grid>
 
