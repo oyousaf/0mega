@@ -143,7 +143,7 @@ export default function StrategyLeaderboard({
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
-        Strategy Leaderboard
+        🔥 Strategy Leaderboard
       </h2>
 
       <Table>
