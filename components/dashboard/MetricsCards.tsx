@@ -1,13 +1,40 @@
 "use client";
 
 import { Card, CardContent, Typography, Grid } from "@mui/material";
-import { motion } from "framer-motion";
+import { motion, easeOut, useInView } from "framer-motion";
+import { useRef } from "react";
 import { DashboardMetrics } from "@/lib/metrics";
 
-interface Props {
-  metrics: DashboardMetrics;
-}
+/* -------------------------------------------------------
+   MOTION VARIANTS
+------------------------------------------------------- */
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.1,
+      ease: easeOut,
+    },
+  },
+};
 
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.4,
+      ease: easeOut,
+    },
+  },
+};
+
+/* -------------------------------------------------------
+   STYLE
+------------------------------------------------------- */
 const cardStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
@@ -16,6 +43,10 @@ const cardStyle = {
   padding: "1rem",
   textAlign: "center",
 };
+
+interface Props {
+  metrics: DashboardMetrics;
+}
 
 function MetricBox({
   title,
@@ -27,17 +58,14 @@ function MetricBox({
   suffix?: string;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-    >
+    <motion.div variants={itemVariants}>
       <Card sx={cardStyle}>
         <CardContent>
-          <Typography variant="body2" sx={{ opacity: 0.7 }}>
+          <Typography variant="body2" sx={{ opacity: 0.65 }}>
             {title}
           </Typography>
-          <Typography variant="h5" fontWeight={"bold"}>
+
+          <Typography variant="h5" fontWeight="bold">
             {value}
             {suffix}
           </Typography>
@@ -47,30 +75,42 @@ function MetricBox({
   );
 }
 
+/* -------------------------------------------------------
+   MAIN
+------------------------------------------------------- */
 export default function MetricsCards({ metrics }: Props) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-50px" });
+
   return (
-    <Grid
-      container
-      spacing={3}
-      justifyContent="center"
-      alignItems="center"
-      className="text-center"
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={isInView ? "show" : "hidden"}
+      variants={containerVariants}
+      className="w-full"
     >
-      <Grid>
-        <MetricBox title="Win Rate" value={metrics.winRate} suffix="%" />
-      </Grid>
+      <Grid container spacing={3} justifyContent="center" alignItems="center">
+        <Grid>
+          <MetricBox title="Win Rate" value={metrics.winRate} suffix="%" />
+        </Grid>
 
-      <Grid>
-        <MetricBox title="Expectancy (R)" value={metrics.expectancy} />
-      </Grid>
+        <Grid>
+          <MetricBox title="Expectancy (R)" value={metrics.expectancy} />
+        </Grid>
 
-      <Grid>
-        <MetricBox title="Profit Factor" value={metrics.profitFactor} />
-      </Grid>
+        <Grid>
+          <MetricBox title="Profit Factor" value={metrics.profitFactor} />
+        </Grid>
 
-      <Grid>
-        <MetricBox title="Halaal Ratio" value={metrics.halaalRatio} suffix="%" />
+        <Grid>
+          <MetricBox
+            title="Halaal Ratio"
+            value={metrics.halaalRatio}
+            suffix="%"
+          />
+        </Grid>
       </Grid>
-    </Grid>
+    </motion.div>
   );
 }

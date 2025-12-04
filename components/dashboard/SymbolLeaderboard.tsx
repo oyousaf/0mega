@@ -41,7 +41,7 @@ export default function SymbolLeaderboard({
       >
         <CardContent>
           <Typography variant="h6" fontWeight="bold" mb={2}>
-            🔥 Symbol Performance Leaderboard
+            🔥 Symbol Performance
           </Typography>
 
           <Table>
