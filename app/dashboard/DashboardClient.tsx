@@ -248,73 +248,88 @@ export default function DashboardClient({
 
         <MetricsCards metrics={metrics} />
 
-        {/* ---- FILTERS + TOGGLES ---- */}
-        <Grid
-          container
-          spacing={3}
-          alignItems="center"
-          justifyContent="center"
-          sx={{ mb: 2 }}
+        {/* Filters */}
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            mt: 2,
+            mb: 1,
+          }}
         >
-          <Grid>
-            <Select
-              fullWidth
-              value={range}
-              onChange={(e: SelectChangeEvent) =>
-                setRange(e.target.value as "hour" | "day" | "week")
-              }
-              sx={selectStyle}
-              MenuProps={menuProps}
-            >
-              <MenuItem value="hour">Hourly</MenuItem>
-              <MenuItem value="day">Daily</MenuItem>
-              <MenuItem value="week">Weekly</MenuItem>
-            </Select>
-          </Grid>
+          {/* Range */}
+          <Select
+            size="small"
+            value={range}
+            onChange={(e: SelectChangeEvent) =>
+              setRange(e.target.value as "hour" | "day" | "week")
+            }
+            sx={{
+              minWidth: 140,
+              height: 38,
+              ...selectStyle,
+              "& .MuiSelect-select": { padding: "6px 10px" },
+            }}
+            MenuProps={menuProps}
+          >
+            <MenuItem value="hour">Hourly</MenuItem>
+            <MenuItem value="day">Daily</MenuItem>
+            <MenuItem value="week">Weekly</MenuItem>
+          </Select>
 
-          <Grid>
-            <Select
-              fullWidth
-              value={symbolFilter}
-              onChange={(e) => setSymbolFilter(e.target.value)}
-              sx={selectStyle}
-              MenuProps={menuProps}
-            >
-              <MenuItem value="all">All Symbols</MenuItem>
-              {symbolList.map((sym) => (
-                <MenuItem key={sym} value={sym}>
-                  {sym}
-                </MenuItem>
-              ))}
-            </Select>
-          </Grid>
+          {/* Symbol */}
+          <Select
+            size="small"
+            value={symbolFilter}
+            onChange={(e) => setSymbolFilter(e.target.value)}
+            sx={{
+              minWidth: 140,
+              height: 38,
+              ...selectStyle,
+              "& .MuiSelect-select": { padding: "6px 10px" },
+            }}
+            MenuProps={menuProps}
+          >
+            <MenuItem value="all">All Symbols</MenuItem>
+            {symbolList.map((sym) => (
+              <MenuItem key={sym} value={sym}>
+                {sym}
+              </MenuItem>
+            ))}
+          </Select>
 
-          <Grid>
-            <Box className="flex justify-center gap-3">
-              {["all", "forex", "crypto", "stock"].map((m) => (
-                <Button
-                  key={m}
-                  onClick={() => setMarketFilter(m)}
-                  sx={{
-                    backgroundColor:
-                      marketFilter === m ? "var(--omega-gold)" : "transparent",
-                    color:
-                      marketFilter === m
-                        ? "var(--omega-green)"
-                        : "var(--omega-gold)",
-                    border: "1px solid var(--omega-gold)",
-                    fontWeight: 600,
-                    px: 3,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {m}
-                </Button>
-              ))}
-            </Box>
-          </Grid>
-        </Grid>
+          {/* Market Pills */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            {["all", "forex", "crypto", "stock"].map((m) => (
+              <Button
+                key={m}
+                onClick={() => setMarketFilter(m)}
+                sx={{
+                  height: 36,
+                  px: 2,
+                  borderRadius: "20px",
+                  textTransform: "uppercase",
+                  fontSize: "0.75rem",
+                  border: "1px solid var(--omega-gold)",
+                  backgroundColor:
+                    marketFilter === m ? "var(--omega-gold)" : "transparent",
+                  color:
+                    marketFilter === m
+                      ? "var(--omega-green)"
+                      : "var(--omega-gold)",
+                  fontWeight: 600,
+                }}
+              >
+                {m}
+              </Button>
+            ))}
+          </Box>
+        </Box>
 
+        {/* Last updated */}
         {lastUpdated && (
           <p className="text-omega-gold opacity-70 text-sm">
             Last updated at {lastUpdated}
