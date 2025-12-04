@@ -410,8 +410,8 @@ export default function DashboardClient({
           </div>
         </motion.div>
 
-        <StrategyLeaderboard signals={initialSignals} />
-        <SymbolLeaderboard signals={initialSignals} />
+        <StrategyLeaderboard signals={allSignals} />
+        <SymbolLeaderboard signals={allSignals} />
         <RecentSignals signals={recentSignals} />
 
         {/* --- NAV BUTTONS --- */}
