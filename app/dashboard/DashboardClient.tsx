@@ -24,6 +24,7 @@ import MetricsCards from "@/components/dashboard/MetricsCards";
 import SymbolLeaderboard from "@/app/analytics/SymbolLeaderboard";
 import StrategyLeaderboard from "../analytics/StrategyLeaderboard";
 import { buildEquityCurve } from "@/lib/analytics/equityCurve";
+import StrategyMiniCards from "../analytics/StrategyMiniCards";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -391,6 +392,7 @@ export default function DashboardClient({
           </div>
         </motion.div>
 
+        <StrategyMiniCards signals={allSignals} />
         <StrategyLeaderboard signals={allSignals} />
         <SymbolLeaderboard signals={allSignals} />
         <RecentSignals signals={recentSignals} />
