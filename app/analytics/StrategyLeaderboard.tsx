@@ -12,6 +12,7 @@ import {
   TableCell,
   TableSortLabel,
 } from "@mui/material";
+import { omegaAnalytics as omega } from "./theme";
 
 type Order = "asc" | "desc";
 
@@ -31,20 +32,6 @@ interface HeadCell {
   numeric?: boolean;
 }
 
-// Omega Theme Tokens
-const omega = {
-  bg: "var(--omega-green)",
-  row: "rgba(0,0,0,0.18)",
-  rowHover: "rgba(212,175,55,0.12)",
-  sep: "var(--omega-dark-gold)",
-  text: "var(--omega-gold)",
-  dim: "rgba(212,175,55,0.65)",
-  win: "#4CAF50",
-  loss: "#FF5252",
-  glow: "0 0 12px rgba(212,175,55,0.55)",
-};
-
-// ---------- Compute Strategy Summary ----------
 function computeStrategies(signals: Signal[]): StrategySummary[] {
   const map = new Map<string, StrategySummary>();
 
@@ -66,17 +53,14 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
     const row = map.get(strat)!;
     row.trades++;
 
-    // --- Win / Loss ---
     if (s.tp2_hit || s.tp1_hit) row.wins++;
     if (s.sl_hit) row.losses++;
 
-    // --- PnL ---
     if (s.entry_price !== null && s.exit_price !== null) {
       const delta = ((s.exit_price - s.entry_price) / s.entry_price) * 100;
       row.pnl += delta;
     }
 
-    // --- R:R ---
     if (s.entry_price !== null && s.sl !== null && s.tp1 !== null) {
       const risk = Math.abs(s.entry_price - s.sl);
       const reward = Math.abs(s.tp1 - s.entry_price);
@@ -91,7 +75,6 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
   }));
 }
 
-// ---------- Component ----------
 export default function StrategyLeaderboard({
   signals,
 }: {
@@ -166,7 +149,7 @@ export default function StrategyLeaderboard({
                     active={isActive}
                     direction={isActive ? order : "asc"}
                     onClick={() => handleSort(h.key)}
-                    IconComponent={(props) => (
+                    IconComponent={() => (
                       <motion.span
                         animate={{
                           rotate: isActive && order === "desc" ? 180 : 0,
@@ -182,14 +165,7 @@ export default function StrategyLeaderboard({
                       "&:hover": { color: omega.text },
                     }}
                   >
-                    <motion.span
-                      animate={{
-                        color: isActive ? omega.text : omega.dim,
-                      }}
-                      transition={{ duration: 0.25 }}
-                    >
-                      {h.label}
-                    </motion.span>
+                    {h.label}
                   </TableSortLabel>
                 </TableCell>
               );

@@ -12,6 +12,7 @@ import {
   TableCell,
   TableSortLabel,
 } from "@mui/material";
+import { omegaAnalytics as omega } from "./theme";
 
 type Order = "asc" | "desc";
 
@@ -29,20 +30,6 @@ interface HeadCell {
   numeric?: boolean;
 }
 
-// Omega Theme Tokens
-const omega = {
-  bg: "var(--omega-green)",
-  row: "rgba(0,0,0,0.18)",
-  rowHover: "rgba(212,175,55,0.12)",
-  sep: "var(--omega-dark-gold)",
-  text: "var(--omega-gold)",
-  dim: "rgba(212,175,55,0.65)",
-  win: "#4CAF50",
-  loss: "#FF5252",
-  glow: "0 0 12px rgba(212,175,55,0.55)",
-};
-
-// ---------- Compute Symbol Summary ----------
 function computeSymbols(signals: Signal[]): SymbolSummary[] {
   const map = new Map<string, SymbolSummary>();
 
@@ -72,7 +59,6 @@ function computeSymbols(signals: Signal[]): SymbolSummary[] {
   }));
 }
 
-// ---------- Component ----------
 export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
   const [order, setOrder] = useState<Order>("desc");
   const [orderBy, setOrderBy] = useState<keyof SymbolSummary>("winRate");
@@ -154,7 +140,16 @@ export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
                     )}
                     sx={{
                       color: isActive ? omega.text : omega.dim,
-                      "&:hover": { color: omega.text },
+                      "& .MuiTableSortLabel-label": {
+                        color: isActive ? omega.text : "rgba(212,175,55,0.55)",
+                        fontWeight: isActive ? 700 : 600,
+                      },
+                      "&:hover .MuiTableSortLabel-label": {
+                        color: omega.text,
+                      },
+                      "& .MuiTableSortLabel-icon": {
+                        color: omega.text,
+                      },
                     }}
                   >
                     {h.label}
