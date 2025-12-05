@@ -46,7 +46,7 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
     >
       <Box
         sx={{
-          background: omega.bg,
+          background: omega.cardBg,
           border: omega.cardBorder,
           boxShadow: omega.cardShadow,
           borderRadius: "1rem",
