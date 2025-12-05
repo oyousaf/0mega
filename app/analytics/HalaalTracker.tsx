@@ -23,7 +23,7 @@ export default function HalaalTracker({ signals }: { signals: Signal[] }) {
     >
       <Box
         sx={{
-          background: omega.cardBg,
+          background: omega.bg,
           border: omega.cardBorder,
           boxShadow: omega.cardShadow,
           borderRadius: "1rem",
@@ -62,7 +62,7 @@ export default function HalaalTracker({ signals }: { signals: Signal[] }) {
             transition={{ duration: 0.3 }}
             style={{
               background: badgeColor,
-              color: "#0d1f1a",
+              color: omega.bg,
               fontWeight: 700,
               padding: "0.4rem 1rem",
               borderRadius: "0.6rem",
