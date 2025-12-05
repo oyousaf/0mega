@@ -8,127 +8,73 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Legend,
 } from "recharts";
-
-import { Card, CardContent, Typography, Box } from "@mui/material";
 import { motion } from "framer-motion";
 
-interface ChartPoint {
-  date: string;
-  winRate: number;
-  totalTrades: number;
-  equity: number;
+interface Props {
+  data: {
+    date: string;
+    cumulative: number;
+  }[];
 }
 
-export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
+const omega = {
+  gold: "var(--omega-gold)",
+  green: "var(--omega-green)",
+  grid: "rgba(212,175,55,0.15)",
+};
+
+export default function PerformanceChart({ data }: Props) {
+  const formatted = data.map((d) => ({
+    date: new Date(d.date).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+    }),
+    cumulative: d.cumulative,
+  }));
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
+      transition={{ duration: 0.45 }}
+      className="w-full h-[340px] rounded-xl p-4"
+      style={{
+        background: "var(--omega-green)",
+        border: "1px solid var(--omega-dark-gold)",
+        boxShadow: "0 0 12px rgba(212,175,55,0.15)",
+      }}
     >
-      <Box sx={{ width: "100%" }}>
-        <Card
-          sx={{
-            backgroundColor: "var(--omega-green)",
-            border: "1px solid var(--omega-dark-gold)",
-            borderRadius: "1rem",
-            padding: "1rem",
-            color: "var(--omega-gold)",
-            boxShadow:
-              "0 0 20px rgba(212,175,55,0.15), inset 0 0 6px rgba(212,175,55,0.25)",
-          }}
-        >
-          <CardContent>
-            <Typography variant="h6" mb={2} fontWeight="bold">
-              📈 Performance Chart
-            </Typography>
+      <h2 className="text-xl font-semibold text-omega-gold mb-3">
+        📈 Equity Curve
+      </h2>
 
-            <Box sx={{ width: "100%" }}>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={data}>
-                  <CartesianGrid
-                    stroke="rgba(212,175,55,0.20)"
-                    strokeDasharray="3"
-                  />
-
-                  <XAxis
-                    dataKey="date"
-                    stroke="var(--omega-gold)"
-                    tick={{ fill: "var(--omega-gold)" }}
-                  />
-
-                  <YAxis
-                    yAxisId="left"
-                    stroke="var(--omega-gold)"
-                    tick={{ fill: "var(--omega-gold)" }}
-                  />
-
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    stroke="var(--omega-gold)"
-                    tick={{ fill: "var(--omega-gold)" }}
-                  />
-
-                  <Legend
-                    wrapperStyle={{
-                      color: "var(--omega-gold)",
-                      marginTop: "10px",
-                    }}
-                  />
-
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--omega-dark-gold)",
-                      color: "var(--omega-green)",
-                      border: "1px solid var(--omega-gold)",
-                      borderRadius: "0.5rem",
-                    }}
-                  />
-
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="winRate"
-                    name="Win Rate %"
-                    stroke="var(--omega-gold)"
-                    strokeWidth={3}
-                    dot={false}
-                    isAnimationActive={true}
-                    animationDuration={900}
-                  />
-
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="totalTrades"
-                    name="Total Trades"
-                    stroke="var(--omega-dark-gold)"
-                    strokeWidth={3}
-                    dot={false}
-                    isAnimationActive={true}
-                    animationDuration={900}
-                  />
-
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="equity"
-                    name="Equity Curve"
-                    stroke="#6CFFB5"
-                    strokeWidth={3}
-                    dot={false}
-                    isAnimationActive={true}
-                    animationDuration={900}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </Box>
-          </CardContent>
-        </Card>
-      </Box>
+      <ResponsiveContainer width="100%" height="85%">
+        <LineChart data={formatted}>
+          <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
+          <XAxis dataKey="date" stroke={omega.gold} />
+          <YAxis stroke={omega.gold} />
+          <Tooltip
+            contentStyle={{
+              background: "var(--omega-green)",
+              border: "1px solid var(--omega-dark-gold)",
+              color: omega.gold,
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="cumulative"
+            stroke={omega.gold}
+            strokeWidth={2.5}
+            dot={false}
+            activeDot={{
+              r: 6,
+              stroke: omega.gold,
+              strokeWidth: 2,
+            }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </motion.div>
   );
 }

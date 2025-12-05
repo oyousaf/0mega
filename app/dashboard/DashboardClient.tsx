@@ -23,6 +23,7 @@ import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
 import SymbolLeaderboard from "@/app/analytics/SymbolLeaderboard";
 import StrategyLeaderboard from "../analytics/StrategyLeaderboard";
+import { buildEquityCurve } from "@/lib/analytics/equityCurve";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -41,15 +42,6 @@ function formatDate(date: Date, range: "hour" | "day" | "week") {
     return start;
   }
   return "unknown";
-}
-
-function buildEquityCurve(signals: Signal[]) {
-  let eq = 0;
-  return signals.map((s) => {
-    const win = s.status.toLowerCase().includes("tp");
-    eq += win ? 1 : -1;
-    return eq;
-  });
 }
 
 const selectStyle = {
@@ -130,31 +122,20 @@ export default function DashboardClient({
     return () => clearInterval(id);
   }, []);
 
-  const chartData = useMemo(() => {
-    const grouped: Record<string, { wins: number; total: number }> = {};
-
+  const equityData = useMemo(() => {
     const filtered = allSignals.filter((s) => {
       if (symbolFilter !== "all" && s.symbol !== symbolFilter) return false;
       if (marketFilter !== "all" && s.type !== marketFilter) return false;
       return true;
     });
 
-    filtered.forEach((s) => {
-      const key = formatDate(new Date(s.created_at), range);
-      if (!grouped[key]) grouped[key] = { wins: 0, total: 0 };
-      grouped[key].total++;
-      if (s.status.toLowerCase().includes("tp")) grouped[key].wins++;
-    });
+    const curve = buildEquityCurve(filtered);
 
-    const equity = buildEquityCurve(filtered);
-
-    return Object.entries(grouped).map(([date, info], i) => ({
-      date,
-      winRate: Math.round((info.wins / info.total) * 100),
-      totalTrades: info.total,
-      equity: equity[i] ?? 0,
+    return curve.map((p) => ({
+      date: p.date.toISOString(),
+      cumulative: p.cumulative,
     }));
-  }, [allSignals, range, symbolFilter, marketFilter]);
+  }, [allSignals, symbolFilter, marketFilter]);
 
   const symbolList = Array.from(
     new Set(allSignals.map((s) => s.symbol))
@@ -388,7 +369,7 @@ export default function DashboardClient({
           </Box>
         </Box>
 
-        <PerformanceChart data={chartData} />
+        <PerformanceChart data={equityData} />
 
         {/* --- LAST UPDATED --- */}
         <motion.div
