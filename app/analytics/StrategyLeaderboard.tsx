@@ -13,6 +13,7 @@ import {
   TableSortLabel,
 } from "@mui/material";
 import { omegaAnalytics as omega } from "./theme";
+import StrategyDetailPanel from "./StrategyDetailPanel";
 
 type Order = "asc" | "desc";
 
@@ -82,6 +83,7 @@ export default function StrategyLeaderboard({
 }) {
   const [order, setOrder] = useState<Order>("desc");
   const [orderBy, setOrderBy] = useState<keyof StrategySummary>("winRate");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const data = useMemo(() => computeStrategies(signals), [signals]);
 
@@ -176,76 +178,95 @@ export default function StrategyLeaderboard({
         <TableBody>
           <AnimatePresence initial={false}>
             {sorted.map((row, i) => (
-              <motion.tr
-                key={row.strategy}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.03 }}
-                whileHover={{ backgroundColor: omega.rowHover }}
-              >
-                <TableCell
-                  sx={{
-                    color: omega.text,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
+              <>
+                {/* MAIN ROW */}
+                <motion.tr
+                  key={row.strategy}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, delay: i * 0.03 }}
+                  whileHover={{ backgroundColor: omega.rowHover }}
+                  onClick={() =>
+                    setExpanded(expanded === row.strategy ? null : row.strategy)
+                  }
+                  style={{ cursor: "pointer" }}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="opacity-60">{i + 1}.</span>
-                    {row.strategy}
-                    {i === 0 && (
-                      <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
-                        TOP
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
+                  <TableCell
+                    sx={{
+                      color: omega.text,
+                      background: omega.row,
+                      borderBottom: `1px solid ${omega.sep}`,
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="opacity-60">{i + 1}.</span>
+                      {row.strategy}
+                      {i === 0 && (
+                        <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
+                          TOP
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
 
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: omega.text,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.trades}
-                </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color: omega.text,
+                      background: omega.row,
+                      borderBottom: `1px solid ${omega.sep}`,
+                    }}
+                  >
+                    {row.trades}
+                  </TableCell>
 
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: row.winRate >= 50 ? omega.win : omega.loss,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.winRate.toFixed(1)}%
-                </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color: row.winRate >= 50 ? omega.win : omega.loss,
+                      background: omega.row,
+                      borderBottom: `1px solid ${omega.sep}`,
+                    }}
+                  >
+                    {row.winRate.toFixed(1)}%
+                  </TableCell>
 
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: row.pnl >= 0 ? omega.win : omega.loss,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.pnl.toFixed(2)}%
-                </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color: row.pnl >= 0 ? omega.win : omega.loss,
+                      background: omega.row,
+                      borderBottom: `1px solid ${omega.sep}`,
+                    }}
+                  >
+                    {row.pnl.toFixed(2)}%
+                  </TableCell>
 
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: omega.text,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.rr.toFixed(2)}
-                </TableCell>
-              </motion.tr>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      color: omega.text,
+                      background: omega.row,
+                      borderBottom: `1px solid ${omega.sep}`,
+                    }}
+                  >
+                    {row.rr.toFixed(2)}
+                  </TableCell>
+                </motion.tr>
+
+                {/* EXPANDED PANEL */}
+                {expanded === row.strategy && (
+                  <TableRow key={row.strategy + "-expanded"}>
+                    <TableCell colSpan={5} sx={{ padding: 0 }}>
+                      <StrategyDetailPanel
+                        strategy={row.strategy}
+                        signals={signals}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             ))}
           </AnimatePresence>
         </TableBody>
