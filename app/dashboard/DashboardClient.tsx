@@ -25,6 +25,7 @@ import SymbolLeaderboard from "@/app/analytics/SymbolLeaderboard";
 import StrategyLeaderboard from "../analytics/StrategyLeaderboard";
 import { buildEquityCurve } from "@/lib/analytics/equityCurve";
 import StrategyMiniCards from "../analytics/StrategyMiniCards";
+import HalaalTracker from "../analytics/HalaalTracker";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -395,6 +396,10 @@ export default function DashboardClient({
         <StrategyMiniCards signals={allSignals} />
         <StrategyLeaderboard signals={allSignals} />
         <SymbolLeaderboard signals={allSignals} />
+
+        {/* --- HALAAL TRACKER --- */}
+        <HalaalTracker signals={allSignals} />
+
         <RecentSignals signals={recentSignals} />
 
         {/* --- NAV BUTTONS --- */}
