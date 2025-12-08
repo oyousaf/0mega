@@ -76,11 +76,7 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
   }));
 }
 
-export default function StrategyLeaderboard({
-  signals,
-}: {
-  signals: Signal[];
-}) {
+export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) {
   const [order, setOrder] = useState<Order>("desc");
   const [orderBy, setOrderBy] = useState<keyof StrategySummary>("winRate");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -123,13 +119,23 @@ export default function StrategyLeaderboard({
         border: `1px solid ${omega.sep}`,
         boxShadow: "0 0 14px rgba(212,175,55,0.18)",
         marginTop: "2rem",
+        overflowX: "auto",
+        scrollbarWidth: "none",
+        "&::-webkit-scrollbar": { display: "none" },
+        minWidth: 0,
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
         🔥 Strategy Performance
       </h2>
 
-      <Table>
+      <Table
+        sx={{
+          minWidth: 0,
+          width: "100%",
+          tableLayout: "fixed",
+        }}
+      >
         <TableHead>
           <TableRow>
             {headCells.map((h) => {
@@ -145,6 +151,9 @@ export default function StrategyLeaderboard({
                     borderBottom: `1px solid ${omega.sep}`,
                     transition: "all 0.25s ease",
                     textShadow: isActive ? omega.glow : "none",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
                   <TableSortLabel
@@ -177,31 +186,38 @@ export default function StrategyLeaderboard({
 
         <TableBody>
           <AnimatePresence initial={false}>
-            {sorted.map((row, i) => (
+            {sorted.map((row, idx) => (
               <Fragment key={row.strategy}>
-                {/* MAIN ROW */}
                 <motion.tr
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, delay: i * 0.03 }}
+                  transition={{ duration: 0.25, delay: idx * 0.03 }}
                   whileHover={{ backgroundColor: omega.rowHover }}
                   onClick={() =>
                     setExpanded(expanded === row.strategy ? null : row.strategy)
                   }
                   style={{ cursor: "pointer" }}
                 >
+                  {/* STRATEGY NAME CELL */}
                   <TableCell
                     sx={{
                       color: omega.text,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: 120,
                     }}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="opacity-60">{i + 1}.</span>
-                      {row.strategy}
-                      {i === 0 && (
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="opacity-60">{idx + 1}.</span>
+                      <span className="truncate max-w-20 block">
+                        {row.strategy}
+                      </span>
+
+                      {idx === 0 && (
                         <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
                           TOP
                         </span>
@@ -209,45 +225,53 @@ export default function StrategyLeaderboard({
                     </div>
                   </TableCell>
 
+                  {/* TRADES */}
                   <TableCell
                     align="right"
                     sx={{
                       color: omega.text,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.trades}
                   </TableCell>
 
+                  {/* WINRATE */}
                   <TableCell
                     align="right"
                     sx={{
                       color: row.winRate >= 50 ? omega.win : omega.loss,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.winRate.toFixed(1)}%
                   </TableCell>
 
+                  {/* PNL */}
                   <TableCell
                     align="right"
                     sx={{
                       color: row.pnl >= 0 ? omega.win : omega.loss,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.pnl.toFixed(2)}%
                   </TableCell>
 
+                  {/* RR */}
                   <TableCell
                     align="right"
                     sx={{
                       color: omega.text,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.rr.toFixed(2)}
