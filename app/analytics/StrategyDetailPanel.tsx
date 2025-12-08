@@ -115,7 +115,11 @@ export default function StrategyDetailPanel({
         {/* SPARKLINE */}
         <div
           className="w-full h-16 mb-4"
-          style={{ minWidth: 0, minHeight: 0 }}
+          style={{
+            minWidth: 0,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
         >
           <ResponsiveContainer
             width="100%"
@@ -150,9 +154,13 @@ export default function StrategyDetailPanel({
             >
               <span style={{ color: omega.dim }}>{i + 1}.</span>
 
+              {/* Safe symbol width */}
               <span
-                className="truncate max-w-[90px]"
-                style={{ color: omega.text }}
+                className="truncate"
+                style={{
+                  maxWidth: "85px",
+                  color: omega.text,
+                }}
               >
                 {s.symbol}
               </span>

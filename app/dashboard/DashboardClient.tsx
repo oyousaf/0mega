@@ -224,6 +224,7 @@ export default function DashboardClient({
         <Box
           sx={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "center",
             gap: 2,
@@ -233,11 +234,28 @@ export default function DashboardClient({
             background: "var(--omega-green)",
             border: "1px solid var(--omega-dark-gold)",
             boxShadow: "0 0 12px rgba(212,175,55,0.15)",
-            flexWrap: "wrap",
+
+            // FIX: mobile column layout
+            "@media (max-width: 480px)": {
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: 1.5,
+            },
           }}
         >
           {/* RANGE SELECT */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+
+              "@media (max-width: 480px)": {
+                width: "100%",
+                justifyContent: "space-between",
+              },
+            }}
+          >
             <span className="text-omega-gold text-sm font-semibold opacity-90">
               Range
             </span>
@@ -255,6 +273,7 @@ export default function DashboardClient({
                 color: "var(--omega-gold)",
                 border: "1px solid var(--omega-dark-gold)",
                 "& .MuiSelect-select": { paddingY: "6px" },
+                flexShrink: 1, // FIX
               }}
               MenuProps={menuProps}
             >
@@ -264,23 +283,32 @@ export default function DashboardClient({
             </Select>
           </Box>
 
-          {/* SEPARATOR */}
+          {/* MARKET FILTER */}
           <Box
             sx={{
-              width: "1px",
-              height: 30,
-              background: "rgba(212,175,55,0.25)",
-              mx: 0.5,
-            }}
-          />
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
 
-          {/* MARKET FILTER */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              "@media (max-width: 480px)": {
+                width: "100%",
+                flexDirection: "column",
+                alignItems: "stretch",
+                gap: 1,
+              },
+            }}
+          >
             <span className="text-omega-gold text-sm font-semibold opacity-90">
               Market
             </span>
 
-            <Box sx={{ display: "flex", gap: 1 }}>
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                flexWrap: "wrap", // FIX: allow buttons to wrap
+              }}
+            >
               {[
                 { key: "all", label: "ALL" },
                 { key: "forex", label: "FX" },
@@ -311,6 +339,7 @@ export default function DashboardClient({
                           ? "var(--omega-gold)"
                           : "rgba(212,175,55,0.15)",
                     },
+                    whiteSpace: "nowrap", // stop squashing
                   }}
                 >
                   {m.label}
@@ -319,18 +348,19 @@ export default function DashboardClient({
             </Box>
           </Box>
 
-          {/* SEPARATOR */}
+          {/* SYMBOL SELECT */}
           <Box
             sx={{
-              width: "1px",
-              height: 30,
-              background: "rgba(212,175,55,0.25)",
-              mx: 0.5,
-            }}
-          />
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
 
-          {/* SYMBOL SELECT */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              "@media (max-width: 480px)": {
+                width: "100%",
+                justifyContent: "space-between",
+              },
+            }}
+          >
             <span className="text-omega-gold text-sm font-semibold opacity-90">
               Symbol
             </span>
@@ -346,6 +376,7 @@ export default function DashboardClient({
                 color: "var(--omega-gold)",
                 border: "1px solid var(--omega-dark-gold)",
                 "& .MuiSelect-select": { paddingY: "6px" },
+                flexShrink: 1, // FIX
               }}
               MenuProps={menuProps}
             >
