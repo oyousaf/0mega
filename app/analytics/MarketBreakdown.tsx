@@ -56,7 +56,11 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
         </h2>
 
         <div style={{ width: "100%", height: "70%", minHeight: 1 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            initialDimension={{ width: 320, height: 200 }}
+          >
             <BarChart data={data} barSize={32}>
               <XAxis
                 dataKey="market"

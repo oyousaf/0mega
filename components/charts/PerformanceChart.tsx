@@ -49,7 +49,11 @@ export default function PerformanceChart({ data }: Props) {
       </h2>
 
       <div style={{ width: "100%", height: "85%", minHeight: 1 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer
+          width="100%"
+          height="100%"
+          initialDimension={{ width: 320, height: 200 }}
+        >
           <LineChart data={formatted}>
             <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
             <XAxis dataKey="date" stroke={omega.gold} />
