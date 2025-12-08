@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCached, setCached } from "@/lib/rateLimitCache";
 
-/** Normalise EURUSD → EUR/USD */
+/** Normalise pair */
 function normalizePair(raw: string): string {
   const p = raw.toUpperCase().trim();
   if (p.includes("/")) return p;
@@ -24,7 +24,7 @@ export async function GET(
   if (cached) return NextResponse.json({ ...cached, cached: true });
 
   // -------------------------------------------------------
-  // PRIMARY → Frankfurter (unlimited daily ECB spot rates)
+  // PRIMARY → Frankfurter
   // -------------------------------------------------------
   try {
     const url = `https://api.frankfurter.app/latest?from=${base}&to=${quote}`;
