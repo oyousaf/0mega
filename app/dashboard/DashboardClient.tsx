@@ -27,6 +27,7 @@ import { buildEquityCurve } from "@/lib/analytics/equityCurve";
 import StrategyMiniCards from "../analytics/StrategyMiniCards";
 import HalaalTracker from "../analytics/HalaalTracker";
 import MarketBreakdown from "../analytics/MarketBreakdown";
+import ChartWrapper from "@/components/layout/ChartWrapper";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -177,7 +178,12 @@ export default function DashboardClient({
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="max-w-7xl mx-auto text-center p-6 flex flex-col gap-10"
-        style={{ minHeight: 0 }}
+        style={{
+          minHeight: 0,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
       >
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
@@ -249,6 +255,7 @@ export default function DashboardClient({
             boxShadow: "0 0 12px rgba(212,175,55,0.15)",
             flexWrap: "wrap",
             minHeight: 0,
+            minWidth: 0,
           }}
         >
           {/* TIME RANGE */}
@@ -374,7 +381,9 @@ export default function DashboardClient({
           </Box>
         </Box>
 
-        <PerformanceChart data={equityData} />
+        <ChartWrapper height={300}>
+          <PerformanceChart data={equityData} />
+        </ChartWrapper>
 
         {/* --- LAST UPDATED --- */}
         <motion.div
@@ -402,7 +411,9 @@ export default function DashboardClient({
 
         <HalaalTracker signals={allSignals} />
 
-        <MarketBreakdown signals={allSignals} />
+        <ChartWrapper height={300}>
+          <MarketBreakdown signals={allSignals} />
+        </ChartWrapper>
 
         <RecentSignals signals={recentSignals} />
 

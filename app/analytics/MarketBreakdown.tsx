@@ -14,9 +14,6 @@ import {
   Cell,
 } from "recharts";
 
-// -----------------------------------------
-// Compute Market Summary
-// -----------------------------------------
 function computeMarketBreakdown(signals: Signal[]) {
   const markets = ["crypto", "forex", "stock"] as const;
 
@@ -24,13 +21,10 @@ function computeMarketBreakdown(signals: Signal[]) {
     const rows = signals.filter((s) => s.type === m);
     const total = rows.length;
     const wins = rows.filter((s) => s.tp1_hit || s.tp2_hit).length;
-
-    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
-
     return {
       market: m.toUpperCase(),
       total,
-      winRate,
+      winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
     };
   });
 }
@@ -40,9 +34,10 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.35 }}
+      style={{ width: "100%", height: "100%" }}
     >
       <Box
         sx={{
@@ -51,16 +46,16 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
           boxShadow: omega.cardShadow,
           borderRadius: "1rem",
           padding: "1.5rem",
-          marginTop: "2rem",
           color: omega.text,
+          width: "100%",
+          height: "100%",
         }}
       >
         <h2 className="text-xl font-semibold text-omega-gold mb-3">
           📈 Market Breakdown
         </h2>
 
-        {/* CHART WRAPPER */}
-        <div style={{ width: "100%", height: 260, minHeight: 0 }}>
+        <div style={{ width: "100%", height: "70%", minHeight: 1 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} barSize={32}>
               <XAxis
@@ -85,27 +80,20 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
               />
               <Bar dataKey="winRate">
                 {data.map((entry) => {
-                  const green = "#4CAF50";
-                  const amber = "#FFC107";
-                  const red = "#FF5252";
-
                   const colour =
                     entry.winRate >= 60
-                      ? green
+                      ? "#4CAF50"
                       : entry.winRate >= 40
-                      ? amber
-                      : red;
+                      ? "#FFC107"
+                      : "#FF5252";
 
-                  return (
-                    <Cell key={entry.market} fill={colour} />
-                  );
+                  return <Cell key={entry.market} fill={colour} />;
                 })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* FOOTER METRICS */}
         <div className="flex justify-center gap-6 mt-4 text-sm opacity-80">
           {data.map((d) => (
             <div key={d.market} className="text-center">

@@ -12,10 +12,7 @@ import {
 import { motion } from "framer-motion";
 
 interface Props {
-  data: {
-    date: string;
-    cumulative: number;
-  }[];
+  data: { date: string; cumulative: number }[];
 }
 
 const omega = {
@@ -35,24 +32,23 @@ export default function PerformanceChart({ data }: Props) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
-      className="w-full rounded-xl p-4"
+      transition={{ duration: 0.35 }}
       style={{
-        height: "340px", // Ensure fixed chart area height
-        minHeight: 0,
+        width: "100%",
+        height: "100%",
         background: "var(--omega-green)",
         border: "1px solid var(--omega-dark-gold)",
-        boxShadow: "0 0 12px rgba(212,175,55,0.15)",
+        borderRadius: "0.75rem",
+        padding: "1rem",
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-3">
         📈 Equity Curve
       </h2>
 
-      {/* FIXED: Chart now always has a measurable container */}
-      <div style={{ width: "100%", height: "85%", minHeight: 0 }}>
+      <div style={{ width: "100%", height: "85%", minHeight: 1 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={formatted}>
             <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
