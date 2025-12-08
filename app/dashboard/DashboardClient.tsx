@@ -151,7 +151,7 @@ export default function DashboardClient({
         </motion.div>
       </Modal>
 
-      {/* ROOT DASHBOARD — now BLOCK, not FLEX */}
+      {/* ROOT DASHBOARD */}
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -220,7 +220,7 @@ export default function DashboardClient({
         {/* METRICS CARDS */}
         <MetricsCards metrics={metrics} />
 
-        {/* FILTER BAR (Safe) */}
+        {/* FILTER BAR */}
         <Box
           sx={{
             display: "flex",
