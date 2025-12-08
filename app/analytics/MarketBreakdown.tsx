@@ -55,7 +55,7 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
           📈 Market Breakdown
         </h2>
 
-        <div style={{ width: "100%", height: 260 }}>
+        <div style={{ width: "100%", height: 150 }}>
           <ResponsiveContainer
             width="100%"
             height="100%"
