@@ -52,7 +52,7 @@ export async function GET(
   }
 
   // -------------------------------------------------------
-  // FALLBACK → TwelveData (real-time)
+  // FALLBACK → TwelveData
   // -------------------------------------------------------
   try {
     const symbol = encodeURIComponent(normalized);
