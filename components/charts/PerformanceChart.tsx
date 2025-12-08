@@ -48,7 +48,7 @@ export default function PerformanceChart({ data }: Props) {
         📈 Equity Curve
       </h2>
 
-      <div style={{ width: "100%", height: "85%", minHeight: 1 }}>
+      <div style={{ width: "100%", height: "85%" }}>
         <ResponsiveContainer
           width="100%"
           height="100%"
