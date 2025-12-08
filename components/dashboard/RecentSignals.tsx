@@ -49,7 +49,7 @@ export default function RecentSignals({ signals }: { signals: Signal[] }) {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25 }}
-                  className="flex justify-between items-center p-2 rounded-lg border border-[var(--omega-dark-gold)]"
+                  className="flex justify-between items-center p-2 rounded-lg border border-omega-dark-gold"
                 >
                   <div className="flex flex-col">
                     <Typography fontWeight={600}>{sig.symbol}</Typography>
