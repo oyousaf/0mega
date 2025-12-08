@@ -61,7 +61,6 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
           cursor: "pointer",
           "&:hover": {
             boxShadow: "0 0 20px rgba(212,175,55,0.25)",
-            transform: "translateY(-3px)",
             transition: "0.25s",
           },
         }}
