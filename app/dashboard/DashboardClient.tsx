@@ -3,7 +3,6 @@
 import {
   Box,
   Button,
-  Grid,
   MenuItem,
   Select,
   SelectChangeEvent,
@@ -27,44 +26,7 @@ import { buildEquityCurve } from "@/lib/analytics/equityCurve";
 import StrategyMiniCards from "../analytics/StrategyMiniCards";
 import HalaalTracker from "../analytics/HalaalTracker";
 import MarketBreakdown from "../analytics/MarketBreakdown";
-
-const PerformanceChart = dynamic(
-  () => import("@/components/charts/PerformanceChart"),
-  { ssr: false }
-);
-
-function formatDate(date: Date, range: "hour" | "day" | "week") {
-  if (range === "hour") return date.toISOString().slice(0, 13) + ":00";
-  if (range === "day") return date.toISOString().split("T")[0];
-
-  if (range === "week") {
-    const d = new Date(date);
-    const start = new Date(d.setDate(d.getDate() - d.getDay() + 1))
-      .toISOString()
-      .split("T")[0];
-    return start;
-  }
-  return "unknown";
-}
-
-const selectStyle = {
-  backgroundColor: "var(--omega-green)",
-  border: "1px solid var(--omega-dark-gold)",
-  borderRadius: "0.75rem",
-  color: "var(--omega-gold)",
-  fontWeight: 600,
-  "& .MuiSelect-select": { color: "var(--omega-gold)" },
-  "& .MuiSvgIcon-root": { color: "var(--omega-gold)" },
-  "& .MuiOutlinedInput-notchedOutline": {
-    borderColor: "var(--omega-dark-gold)",
-  },
-  "&:hover .MuiOutlinedInput-notchedOutline": {
-    borderColor: "var(--omega-gold)",
-  },
-  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-    borderColor: "var(--omega-gold)",
-  },
-};
+import ChartWrapper from "@/components/layout/ChartWrapper";
 
 const menuProps = {
   PaperProps: {
@@ -81,6 +43,11 @@ const menuProps = {
     },
   },
 };
+
+const PerformanceChart = dynamic(
+  () => import("@/components/charts/PerformanceChart"),
+  { ssr: false }
+);
 
 export default function DashboardClient({
   initialSignals,
@@ -99,6 +66,9 @@ export default function DashboardClient({
   const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
   const [lastUpdated, setLastUpdated] = useState("");
 
+  // ----------------------------------------------------
+  // AUTO REFRESH
+  // ----------------------------------------------------
   useEffect(() => {
     const refresh = async () => {
       try {
@@ -125,6 +95,9 @@ export default function DashboardClient({
     return () => clearInterval(id);
   }, []);
 
+  // ----------------------------------------------------
+  // EQUITY CURVE
+  // ----------------------------------------------------
   const equityData = useMemo(() => {
     const filtered = allSignals.filter((s) => {
       if (symbolFilter !== "all" && s.symbol !== symbolFilter) return false;
@@ -144,8 +117,12 @@ export default function DashboardClient({
     new Set(allSignals.map((s) => s.symbol))
   ).sort();
 
+  // ----------------------------------------------------
+  // RENDER
+  // ----------------------------------------------------
   return (
     <>
+      {/* SETTINGS MODAL */}
       <Modal open={openSettings} onClose={() => setOpenSettings(false)}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -157,7 +134,9 @@ export default function DashboardClient({
           <h2 className="text-2xl font-semibold text-omega-gold mb-4">
             Settings
           </h2>
+
           <NotificationsPanel />
+
           <div className="text-right mt-6">
             <Button
               onClick={() => setOpenSettings(false)}
@@ -172,12 +151,18 @@ export default function DashboardClient({
         </motion.div>
       </Modal>
 
+      {/* ROOT DASHBOARD — now BLOCK, not FLEX */}
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="max-w-7xl mx-auto text-center p-6 space-y-10"
+        className="max-w-7xl mx-auto text-center p-6 space-y-10 block"
+        style={{
+          display: "block",
+          width: "100%",
+        }}
       >
+        {/* HEADER */}
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
           initial={{ opacity: 0, y: 8 }}
@@ -186,6 +171,7 @@ export default function DashboardClient({
           𝛀mega Dashboard
         </motion.h1>
 
+        {/* TOP NAV BUTTONS */}
         <Box className="flex justify-end items-center gap-3 mt-2 pr-2">
           <Link href="/signals/active">
             <Button
@@ -231,9 +217,10 @@ export default function DashboardClient({
           </motion.button>
         </Box>
 
+        {/* METRICS CARDS */}
         <MetricsCards metrics={metrics} />
 
-        {/* --- Filters--- */}
+        {/* FILTER BAR (Safe) */}
         <Box
           sx={{
             display: "flex",
@@ -249,7 +236,7 @@ export default function DashboardClient({
             flexWrap: "wrap",
           }}
         >
-          {/* TIME RANGE */}
+          {/* RANGE SELECT */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <span className="text-omega-gold text-sm font-semibold opacity-90">
               Range
@@ -277,7 +264,7 @@ export default function DashboardClient({
             </Select>
           </Box>
 
-          {/* Separator */}
+          {/* SEPARATOR */}
           <Box
             sx={{
               width: "1px",
@@ -287,7 +274,7 @@ export default function DashboardClient({
             }}
           />
 
-          {/* MARKET */}
+          {/* MARKET FILTER */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <span className="text-omega-gold text-sm font-semibold opacity-90">
               Market
@@ -332,7 +319,7 @@ export default function DashboardClient({
             </Box>
           </Box>
 
-          {/* Separator */}
+          {/* SEPARATOR */}
           <Box
             sx={{
               width: "1px",
@@ -342,7 +329,7 @@ export default function DashboardClient({
             }}
           />
 
-          {/* SYMBOL SELECT  */}
+          {/* SYMBOL SELECT */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <span className="text-omega-gold text-sm font-semibold opacity-90">
               Symbol
@@ -372,9 +359,12 @@ export default function DashboardClient({
           </Box>
         </Box>
 
-        <PerformanceChart data={equityData} />
+        {/* EQUITY CHART */}
+        <ChartWrapper height={300}>
+          <PerformanceChart data={equityData} />
+        </ChartWrapper>
 
-        {/* --- LAST UPDATED --- */}
+        {/* LAST UPDATED */}
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -394,24 +384,28 @@ export default function DashboardClient({
           </div>
         </motion.div>
 
+        {/* ANALYTICS CARDS */}
         <StrategyMiniCards signals={allSignals} />
         <StrategyLeaderboard signals={allSignals} />
         <SymbolLeaderboard signals={allSignals} />
 
         <HalaalTracker signals={allSignals} />
 
-        <MarketBreakdown signals={allSignals} />
+        {/* MARKET BREAKDOWN */}
+        <ChartWrapper height={300}>
+          <MarketBreakdown signals={allSignals} />
+        </ChartWrapper>
 
+        {/* RECENT SIGNALS */}
         <RecentSignals signals={recentSignals} />
 
-        {/* --- NAV BUTTONS --- */}
+        {/* NAV BUTTONS */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
           className="flex flex-col sm:flex-row justify-center gap-3 mt-6"
         >
-          {/* ACTIVE SIGNALS */}
           <Link href="/signals/active" className="flex-1">
             <Button
               fullWidth
@@ -435,7 +429,6 @@ export default function DashboardClient({
             </Button>
           </Link>
 
-          {/* ALL SIGNALS */}
           <Link href="/signals/all" className="flex-1">
             <Button
               fullWidth
@@ -459,7 +452,6 @@ export default function DashboardClient({
             </Button>
           </Link>
 
-          {/* ADD NEW SIGNAL */}
           <Link href="/signals/new" className="flex-1">
             <Button
               fullWidth
