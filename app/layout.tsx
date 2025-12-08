@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Suspense } from "react";
-import Loading from "./loading";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,11 +49,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="min-h-0 min-w-0">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-0 min-w-0`}
       >
-        <Suspense fallback={<Loading />}>{children}</Suspense>
+        {children}
       </body>
     </html>
   );

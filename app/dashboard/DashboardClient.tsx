@@ -176,7 +176,8 @@ export default function DashboardClient({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="max-w-7xl mx-auto text-center p-6 space-y-10"
+        className="max-w-7xl mx-auto text-center p-6 flex flex-col gap-10"
+        style={{ minHeight: 0 }}
       >
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
@@ -247,6 +248,7 @@ export default function DashboardClient({
             border: "1px solid var(--omega-dark-gold)",
             boxShadow: "0 0 12px rgba(212,175,55,0.15)",
             flexWrap: "wrap",
+            minHeight: 0,
           }}
         >
           {/* TIME RANGE */}

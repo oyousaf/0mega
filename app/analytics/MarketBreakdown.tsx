@@ -59,8 +59,9 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
           📈 Market Breakdown
         </h2>
 
-        <div style={{ width: "100%", height: 260 }}>
-          <ResponsiveContainer>
+        {/* CHART WRAPPER */}
+        <div style={{ width: "100%", height: 260, minHeight: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} barSize={32}>
               <XAxis
                 dataKey="market"
@@ -83,7 +84,7 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
                 }}
               />
               <Bar dataKey="winRate">
-                {data.map((entry, i) => {
+                {data.map((entry) => {
                   const green = "#4CAF50";
                   const amber = "#FFC107";
                   const red = "#FF5252";
@@ -95,7 +96,9 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
                       ? amber
                       : red;
 
-                  return <Cell key={i} fill={colour} />;
+                  return (
+                    <Cell key={entry.market} fill={colour} />
+                  );
                 })}
               </Bar>
             </BarChart>

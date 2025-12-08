@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { Signal } from "@/app/types/signal";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -178,10 +178,9 @@ export default function StrategyLeaderboard({
         <TableBody>
           <AnimatePresence initial={false}>
             {sorted.map((row, i) => (
-              <>
+              <Fragment key={row.strategy}>
                 {/* MAIN ROW */}
                 <motion.tr
-                  key={row.strategy}
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
@@ -256,17 +255,25 @@ export default function StrategyLeaderboard({
                 </motion.tr>
 
                 {/* EXPANDED PANEL */}
-                {expanded === row.strategy && (
-                  <TableRow key={row.strategy + "-expanded"}>
-                    <TableCell colSpan={5} sx={{ padding: 0 }}>
-                      <StrategyDetailPanel
-                        strategy={row.strategy}
-                        signals={signals}
-                      />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </>
+                <AnimatePresence>
+                  {expanded === row.strategy && (
+                    <motion.tr
+                      key={row.strategy + "-expanded"}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <TableCell colSpan={5} sx={{ padding: 0 }}>
+                        <StrategyDetailPanel
+                          strategy={row.strategy}
+                          signals={signals}
+                        />
+                      </TableCell>
+                    </motion.tr>
+                  )}
+                </AnimatePresence>
+              </Fragment>
             ))}
           </AnimatePresence>
         </TableBody>
