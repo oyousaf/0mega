@@ -38,7 +38,6 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
 
   for (const s of signals) {
     const strat = s.strategy || "Unknown";
-
     if (!map.has(strat)) {
       map.set(strat, {
         strategy: strat,
@@ -62,7 +61,7 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
       row.pnl += delta;
     }
 
-    if (s.entry_price !== null && s.sl !== null && s.tp1 !== null) {
+    if (s.entry_price && s.sl && s.tp1) {
       const risk = Math.abs(s.entry_price - s.sl);
       const reward = Math.abs(s.tp1 - s.entry_price);
       if (risk > 0) row.rr += reward / risk;
@@ -78,7 +77,8 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
 
 export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) {
   const [order, setOrder] = useState<Order>("desc");
-  const [orderBy, setOrderBy] = useState<keyof StrategySummary>("winRate");
+  const [orderBy, setOrderBy] =
+    useState<keyof StrategySummary>("winRate");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const data = useMemo(() => computeStrategies(signals), [signals]);
@@ -122,7 +122,6 @@ export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) 
         overflowX: "auto",
         scrollbarWidth: "none",
         "&::-webkit-scrollbar": { display: "none" },
-        minWidth: 0,
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
@@ -131,7 +130,7 @@ export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) 
 
       <Table
         sx={{
-          minWidth: 0,
+          minWidth: 700,
           width: "100%",
           tableLayout: "fixed",
         }}
@@ -140,7 +139,6 @@ export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) 
           <TableRow>
             {headCells.map((h) => {
               const isActive = orderBy === h.key;
-
               return (
                 <TableCell
                   key={h.key}
@@ -163,7 +161,8 @@ export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) 
                     IconComponent={() => (
                       <motion.span
                         animate={{
-                          rotate: isActive && order === "desc" ? 180 : 0,
+                          rotate:
+                            isActive && order === "desc" ? 180 : 0,
                         }}
                         transition={{ duration: 0.25 }}
                         style={{ display: "inline-block" }}
@@ -192,28 +191,34 @@ export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) 
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, delay: idx * 0.03 }}
+                  transition={{
+                    duration: 0.25,
+                    delay: idx * 0.03,
+                  }}
                   whileHover={{ backgroundColor: omega.rowHover }}
                   onClick={() =>
-                    setExpanded(expanded === row.strategy ? null : row.strategy)
+                    setExpanded(
+                      expanded === row.strategy
+                        ? null
+                        : row.strategy
+                    )
                   }
                   style={{ cursor: "pointer" }}
                 >
-                  {/* STRATEGY NAME CELL */}
                   <TableCell
                     sx={{
                       color: omega.text,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
+                      maxWidth: 120,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
-                      maxWidth: 120,
                     }}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="opacity-60">{idx + 1}.</span>
-                      <span className="truncate max-w-20 block">
+                      <span className="truncate max-w-24 block">
                         {row.strategy}
                       </span>
 
@@ -225,67 +230,68 @@ export default function StrategyLeaderboard({ signals }: { signals: Signal[] }) 
                     </div>
                   </TableCell>
 
-                  {/* TRADES */}
                   <TableCell
                     align="right"
                     sx={{
                       color: omega.text,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
-                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.trades}
                   </TableCell>
 
-                  {/* WINRATE */}
                   <TableCell
                     align="right"
                     sx={{
-                      color: row.winRate >= 50 ? omega.win : omega.loss,
+                      color:
+                        row.winRate >= 50
+                          ? omega.win
+                          : omega.loss,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
-                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.winRate.toFixed(1)}%
                   </TableCell>
 
-                  {/* PNL */}
                   <TableCell
                     align="right"
                     sx={{
-                      color: row.pnl >= 0 ? omega.win : omega.loss,
+                      color:
+                        row.pnl >= 0 ? omega.win : omega.loss,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
-                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.pnl.toFixed(2)}%
                   </TableCell>
 
-                  {/* RR */}
                   <TableCell
                     align="right"
                     sx={{
                       color: omega.text,
                       background: omega.row,
                       borderBottom: `1px solid ${omega.sep}`,
-                      whiteSpace: "nowrap",
                     }}
                   >
                     {row.rr.toFixed(2)}
                   </TableCell>
                 </motion.tr>
 
-                {/* EXPANDED PANEL */}
                 <AnimatePresence>
                   {expanded === row.strategy && (
                     <motion.tr
                       key={row.strategy + "-expanded"}
                       initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
+                      animate={{
+                        opacity: 1,
+                        height: "auto",
+                      }}
+                      exit={{
+                        opacity: 0,
+                        height: 0,
+                      }}
                       transition={{ duration: 0.25 }}
                     >
                       <TableCell colSpan={5} sx={{ padding: 0 }}>

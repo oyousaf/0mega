@@ -3,26 +3,23 @@
 import { Card, CardContent, Typography, Box, Chip } from "@mui/material";
 import { motion } from "framer-motion";
 import Link from "next/link";
-
 import { Signal } from "@/app/types/signal";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
 
-/** Colour logic for Chip */
-function statusColour(status: string) {
-  const s = status.toLowerCase();
-
-  if (s.includes("tp")) return "#56AE57";
-  if (s.includes("sl")) return "#C23B22";
-  if (s.includes("exp")) return "#D99A00";
+function statusColour(s: string) {
+  const x = s.toLowerCase();
+  if (x.includes("tp")) return "#56AE57";
+  if (x.includes("sl")) return "#C23B22";
+  if (x.includes("exp")) return "#D99A00";
   return "#789FCC";
 }
 
 export default function RecentSignals({ signals }: { signals: Signal[] }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
+      transition={{ duration: 0.32 }}
     >
       <Card
         sx={{
@@ -32,8 +29,8 @@ export default function RecentSignals({ signals }: { signals: Signal[] }) {
           color: "var(--omega-gold)",
         }}
       >
-        <CardContent>
-          <Typography variant="h6" fontWeight="bold" mb={2}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight="bold" mb={1.5}>
             🕒 Recent Signals
           </Typography>
 
@@ -42,16 +39,16 @@ export default function RecentSignals({ signals }: { signals: Signal[] }) {
               No recent signals found.
             </Typography>
           ) : (
-            <Box className="space-y-3">
+            <Box className="space-y-2.5">
               {signals.map((sig) => (
                 <motion.div
                   key={sig.id}
-                  initial={{ opacity: 0, x: -10 }}
+                  initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.25 }}
+                  transition={{ duration: 0.22 }}
                   className="flex justify-between items-center p-2 rounded-lg border border-omega-dark-gold"
                 >
-                  <div className="flex flex-col">
+                  <div className="flex flex-col leading-tight">
                     <Typography fontWeight={600}>{sig.symbol}</Typography>
                     <Typography variant="caption" sx={{ opacity: 0.7 }}>
                       {formatTimestamp(sig.created_at)}
@@ -59,7 +56,7 @@ export default function RecentSignals({ signals }: { signals: Signal[] }) {
                   </div>
 
                   <Chip
-                    label={sig.status}
+                    label={sig.status.toUpperCase()}
                     size="small"
                     sx={{
                       backgroundColor: statusColour(sig.status),
@@ -72,7 +69,7 @@ export default function RecentSignals({ signals }: { signals: Signal[] }) {
             </Box>
           )}
 
-          <Box className="flex justify-end mt-3">
+          <Box className="flex justify-end mt-2.5">
             <Link href="/signals">
               <Typography
                 variant="body2"

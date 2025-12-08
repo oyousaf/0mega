@@ -19,7 +19,6 @@ export default function StrategyMiniCards({ signals }: Props) {
   const avgRR = (() => {
     let sum = 0;
     let count = 0;
-
     for (const s of signals) {
       if (s.entry_price && s.sl && s.tp1) {
         const risk = Math.abs(s.entry_price - s.sl);
@@ -34,7 +33,7 @@ export default function StrategyMiniCards({ signals }: Props) {
   })();
 
   const cards = [
-    { label: "TOTAL TRADES", value: total },
+    { label: "TOTAL", value: total },
     { label: "WIN RATE", value: winRate.toFixed(1) + "%" },
     { label: "WINS", value: wins },
     { label: "LOSSES", value: losses },
@@ -42,28 +41,28 @@ export default function StrategyMiniCards({ signals }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 my-4">
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 my-3">
       {cards.map((c, i) => (
         <motion.div
           key={c.label}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05, duration: 0.35 }}
+          transition={{ delay: i * 0.05, duration: 0.3 }}
           style={{
             background: omega.bg,
             border: omega.cardBorder,
-            borderRadius: "0.75rem",
-            padding: "1rem",
+            borderRadius: "0.6rem",
+            padding: "0.75rem",
             textAlign: "center",
             boxShadow: omega.cardShadow,
           }}
         >
           <div
             style={{
-              fontSize: "0.75rem",
+              fontSize: "0.7rem",
               opacity: 0.65,
               color: omega.text,
-              marginBottom: "4px",
+              marginBottom: "3px",
             }}
           >
             {c.label}
@@ -71,7 +70,7 @@ export default function StrategyMiniCards({ signals }: Props) {
 
           <div
             style={{
-              fontSize: "1.3rem",
+              fontSize: "1.15rem",
               fontWeight: 700,
               color: omega.text,
               textShadow: omega.glow,
