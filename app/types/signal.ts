@@ -5,6 +5,7 @@ export interface Signal {
   symbol: string;
   strategy: string;
   type: "stock" | "crypto" | "forex";
+  direction: "BUY" | "SELL";
   halaal: boolean;
 
   // --- Pricing ---

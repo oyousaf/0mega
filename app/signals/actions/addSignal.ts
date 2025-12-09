@@ -1,7 +1,7 @@
 "use server";
 
 import { pool } from "@/lib/neon";
-import { validateSignal } from "./validateSignal";
+import { validateSignal } from "@/lib/screening/validateSignal";
 
 export async function addSignal(payload: any) {
   // Validate incoming payload
@@ -12,7 +12,7 @@ export async function addSignal(payload: any) {
 
   const data = validation.data!;
 
-  // Normalise fields
+  // Prepare clean fields
   const clean = {
     symbol: data.symbol.trim(),
     strategy: data.strategy?.trim() || "",
@@ -22,6 +22,7 @@ export async function addSignal(payload: any) {
     sl: data.sl ?? null,
     notes: typeof data.notes === "string" ? data.notes.trim() : "",
     type: data.type,
+    direction: data.direction,
     halaal: Boolean(data.halaal),
   };
 
@@ -29,8 +30,8 @@ export async function addSignal(payload: any) {
     const result = await pool.query(
       `
       INSERT INTO signals 
-      (symbol, strategy, entry_price, tp1, tp2, sl, notes, type, halaal, status, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ACTIVE', NOW(), NOW())
+      (symbol, strategy, entry_price, tp1, tp2, sl, notes, type, direction, halaal, status, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ACTIVE',NOW(),NOW())
       RETURNING *;
       `,
       [
@@ -42,6 +43,7 @@ export async function addSignal(payload: any) {
         clean.sl,
         clean.notes,
         clean.type,
+        clean.direction,
         clean.halaal,
       ]
     );

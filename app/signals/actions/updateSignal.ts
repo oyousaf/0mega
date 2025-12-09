@@ -2,7 +2,7 @@
 
 import { pool } from "@/lib/neon";
 import { revalidatePath } from "next/cache";
-import { validateSignal } from "./validateSignal";
+import { validateSignal } from "@/lib/screening/validateSignal";
 
 export async function updateSignal(id: number, payload: any) {
   if (!id || isNaN(id)) {
