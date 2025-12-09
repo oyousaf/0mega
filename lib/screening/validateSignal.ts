@@ -1,11 +1,23 @@
 import { z } from "zod";
 
-// Helpers
-function normalizeSymbol(raw: string) {
-  const s = raw.trim().toUpperCase();
-  return s.endsWith("USD") ? s : s + "USD";
+// Symbol normaliser
+function normalizeSymbol(raw: string, type: string) {
+  const v = raw.trim().toUpperCase();
+
+  if (type === "stock") return v;
+
+  if (/^[A-Z]{6,}$/.test(v)) return v;
+
+  if (type === "crypto") {
+    const parts = v.split(/[-/]/);
+    if (parts.length === 2) return parts[0] + parts[1];
+    return v + "USDT";
+  }
+
+  return v + "USD";
 }
 
+// Clean strings
 function cleanString(v: any) {
   if (typeof v !== "string") return "";
   return v.replace(/[^\w\s.\-_]/g, "").trim();
@@ -27,7 +39,6 @@ const baseSchema = z.object({
 
 export function validateSignal(payload: any) {
   const parsed = baseSchema.safeParse(payload);
-
   if (!parsed.success) {
     return {
       valid: false,
@@ -38,20 +49,15 @@ export function validateSignal(payload: any) {
 
   const data = parsed.data;
 
-  // Extract values
   let { entry_price, tp1, tp2, sl } = data;
-
-  // Guard for undefined/null
   if (tp1 == null || tp2 == null || sl == null) {
     return { valid: false, error: "tp1, tp2 and sl are required", data: null };
   }
 
-  // Narrowed types
   tp1 = tp1 as number;
   tp2 = tp2 as number;
   sl = sl as number;
 
-  // BUY/SELL structure rules
   if (data.direction === "BUY") {
     const ok = sl < entry_price && tp1 > entry_price && tp2 > tp1;
     if (!ok) {
@@ -74,13 +80,12 @@ export function validateSignal(payload: any) {
     }
   }
 
-  // Return clean output
   return {
     valid: true,
     error: null,
     data: {
       ...data,
-      symbol: normalizeSymbol(data.symbol),
+      symbol: normalizeSymbol(data.symbol, data.type),
       strategy: cleanString(data.strategy),
       notes: cleanString(data.notes),
       halaal: true,
