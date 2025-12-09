@@ -26,19 +26,17 @@ interface Props {
 export default function SignalCard({ signal, onEdit, onDelete }: Props) {
   const STATUS = formatStatusLabel(signal.status);
 
-  const statusColor =
-    STATUS.includes("TP2")
-      ? "#37C86E"
-      : STATUS.includes("TP1")
-      ? "#56AE57"
-      : STATUS.includes("SL")
-      ? "#C23B22"
-      : STATUS.includes("EXP")
-      ? "#A77F35"
-      : "#789FCC";
+  const statusColor = STATUS.includes("TP2")
+    ? "#37C86E"
+    : STATUS.includes("TP1")
+    ? "#56AE57"
+    : STATUS.includes("SL")
+    ? "#C23B22"
+    : STATUS.includes("EXP")
+    ? "#A77F35"
+    : "#789FCC";
 
-  const hasNotes =
-    signal.notes?.trim && signal.notes.trim().length > 0;
+  const hasNotes = signal.notes?.trim && signal.notes.trim().length > 0;
 
   return (
     <motion.div
@@ -119,22 +117,43 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
               )}
             </Typography>
 
-            {/* STATUS CHIP */}
-            <motion.div
-              key={STATUS + "_chip"}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.25 }}
-            >
-              <Chip
-                label={STATUS}
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              {/* DIRECTION BADGE */}
+              <Typography
                 sx={{
-                  backgroundColor: statusColor,
-                  color: "#fff",
+                  fontSize: "0.75rem",
                   fontWeight: 700,
+                  px: 1.1,
+                  py: 0.4,
+                  borderRadius: "6px",
+                  border: "1px solid",
+                  color: signal.direction === "BUY" ? "#37C86E" : "#C23B22",
+                  borderColor:
+                    signal.direction === "BUY" ? "#37C86E" : "#C23B22",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
                 }}
-              />
-            </motion.div>
+              >
+                {signal.direction}
+              </Typography>
+
+              {/* STATUS CHIP */}
+              <motion.div
+                key={STATUS + "_chip"}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.25 }}
+              >
+                <Chip
+                  label={STATUS}
+                  sx={{
+                    backgroundColor: statusColor,
+                    color: "#fff",
+                    fontWeight: 700,
+                  }}
+                />
+              </motion.div>
+            </Box>
           </Box>
 
           {/* PRICE */}
@@ -165,10 +184,18 @@ export default function SignalCard({ signal, onEdit, onDelete }: Props) {
               opacity: 0.9,
             }}
           >
-            <Typography><strong>Entry:</strong> {signal.entry_price}</Typography>
-            <Typography><strong>TP1:</strong> {signal.tp1}</Typography>
-            <Typography><strong>TP2:</strong> {signal.tp2}</Typography>
-            <Typography><strong>SL:</strong> {signal.sl}</Typography>
+            <Typography>
+              <strong>Entry:</strong> {signal.entry_price}
+            </Typography>
+            <Typography>
+              <strong>TP1:</strong> {signal.tp1}
+            </Typography>
+            <Typography>
+              <strong>TP2:</strong> {signal.tp2}
+            </Typography>
+            <Typography>
+              <strong>SL:</strong> {signal.sl}
+            </Typography>
           </Box>
 
           {/* NOTES */}

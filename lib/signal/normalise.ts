@@ -1,17 +1,14 @@
-import { prettyStatus, AllowedStatus } from "./status";
+import { prettyStatus } from "./status";
 import { Signal } from "@/app/types/signal";
 
-/**
- * Safely convert any DB row into a fully normalised Signal object.
- * Lightweight, no Zod, no external validation.
- */
-export function normalizeSignalRow(row: any) {
+export function normalizeSignalRow(row: any): Signal {
   return {
     id: row.id,
 
     symbol: row.symbol,
     strategy: row.strategy,
     type: row.type,
+    direction: row.direction,
     halaal: row.halaal,
 
     entry_price: row.entry_price,
@@ -27,7 +24,8 @@ export function normalizeSignalRow(row: any) {
     sl_hit: row.sl_hit ?? false,
 
     notes: row.notes,
-    status: row.status,
+
+    status: prettyStatus(row.status),
 
     created_at:
       row.created_at instanceof Date
@@ -40,4 +38,3 @@ export function normalizeSignalRow(row: any) {
         : row.updated_at,
   };
 }
-

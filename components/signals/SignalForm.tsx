@@ -41,10 +41,10 @@ export default function SignalForm({
     sl: "",
     notes: "",
     type: "stock",
+    direction: "BUY",
     halaal: true,
   };
 
-  // Normalises incoming null/undefined to empty string for React inputs
   const normalize = (v: any) => (v === null || v === undefined ? "" : v);
 
   const [form, setForm] = useState<any>({
@@ -84,57 +84,49 @@ export default function SignalForm({
   };
 
   async function handleSubmit(e: any) {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
 
-  const clean: Partial<Signal> = {
-    symbol: form.symbol.trim(),
-    strategy: form.strategy?.trim() || "",
-    entry_price: num(form.entry_price),
-    tp1: num(form.tp1),
-    tp2: num(form.tp2),
-    sl: num(form.sl),
-    notes: typeof form.notes === "string" ? form.notes.trim() : "",
-    type: form.type,
-    halaal: Boolean(form.halaal),
-  };
+    const clean: Partial<Signal> = {
+      symbol: form.symbol.trim(),
+      strategy: form.strategy?.trim() || "",
+      entry_price: num(form.entry_price),
+      tp1: num(form.tp1),
+      tp2: num(form.tp2),
+      sl: num(form.sl),
+      notes: typeof form.notes === "string" ? form.notes.trim() : "",
+      type: form.type,
+      direction: form.direction,
+      halaal: Boolean(form.halaal),
+    };
 
-  try {
-    if (onSubmit) {
-      await onSubmit(clean);
-      onSuccess?.();
+    try {
+      if (onSubmit) {
+        await onSubmit(clean);
+        onSuccess?.();
+        setTimeout(() => router.push("/signals/active"), 600);
+        setLoading(false);
+        return;
+      }
 
-      setTimeout(() => {
-        router.push("/signals/active");
-      }, 600);
+      const res = await fetch("/api/signals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clean),
+      });
 
-      setLoading(false);
-      return;
+      if (!res.ok) throw new Error("Failed to add signal");
+
+      showSnackbar("Signal added successfully", "success");
+      setTimeout(() => router.push("/signals/active"), 600);
+      setForm(empty);
+    } catch (err) {
+      console.error(err);
+      showSnackbar("Something went wrong", "error");
     }
 
-    const res = await fetch("/api/signals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(clean),
-    });
-
-    if (!res.ok) throw new Error("Failed to add signal");
-
-    showSnackbar("Signal added successfully", "success");
-
-    setTimeout(() => {
-      router.push("/signals/active");
-    }, 600);
-
-    setForm(empty);
-  } catch (err) {
-    console.error(err);
-    showSnackbar("Something went wrong", "error");
+    setLoading(false);
   }
-
-  setLoading(false);
-}
-
 
   const inputStyles = {
     "& .MuiFilledInput-root": {
@@ -144,37 +136,22 @@ export default function SignalForm({
       color: "var(--omega-gold)",
       border: "1px solid var(--omega-gold)",
       "&:before, &:after": { display: "none" },
-
-      "&:hover": {
-        borderColor: "var(--omega-dark-gold)",
-      },
-      "&.Mui-focused": {
-        borderColor: "var(--omega-dark-gold)",
-      },
+      "&:hover": { borderColor: "var(--omega-dark-gold)" },
+      "&.Mui-focused": { borderColor: "var(--omega-dark-gold)" },
     },
-
-    "& .MuiFilledInput-input": {
-      color: "var(--omega-gold)",
-    },
-
+    "& .MuiFilledInput-input": { color: "var(--omega-gold)" },
     "& .MuiInputLabel-root": {
       color: "var(--omega-gold)",
       fontWeight: 600,
     },
-    "& .Mui-focused .MuiInputLabel-root": {
-      color: "var(--omega-gold)",
-    },
+    "& .Mui-focused .MuiInputLabel-root": { color: "var(--omega-gold)" },
   };
 
   const selectMenuItem = {
     color: "var(--omega-gold)",
     fontWeight: 600,
-    "&.Mui-selected": {
-      backgroundColor: "rgba(255, 215, 0, 0.18)",
-    },
-    "&:hover": {
-      backgroundColor: "rgba(255, 215, 0, 0.1)",
-    },
+    "&.Mui-selected": { backgroundColor: "rgba(255, 215, 0, 0.18)" },
+    "&:hover": { backgroundColor: "rgba(255, 215, 0, 0.1)" },
   };
 
   return (
@@ -236,6 +213,7 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
+        {/* ASSET TYPE */}
         <FormControl fullWidth variant="filled" sx={inputStyles}>
           <InputLabel>Type</InputLabel>
           <Select
@@ -262,15 +240,37 @@ export default function SignalForm({
           </Select>
         </FormControl>
 
+        {/* TRADE DIRECTION */}
+        <FormControl fullWidth variant="filled" sx={inputStyles}>
+          <InputLabel>Direction</InputLabel>
+          <Select
+            value={form.direction}
+            onChange={(e) => setForm({ ...form, direction: e.target.value })}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  backgroundColor: "var(--omega-green)",
+                  border: "1px solid var(--omega-dark-gold)",
+                },
+              },
+            }}
+          >
+            <MenuItem value="BUY" sx={selectMenuItem}>
+              Buy
+            </MenuItem>
+            <MenuItem value="SELL" sx={selectMenuItem}>
+              Sell
+            </MenuItem>
+          </Select>
+        </FormControl>
+
         <FormControlLabel
           control={
             <Switch
               checked={form.halaal}
               onChange={(e) => setForm({ ...form, halaal: e.target.checked })}
               sx={{
-                "& .MuiSwitch-thumb": {
-                  backgroundColor: "var(--omega-gold)",
-                },
+                "& .MuiSwitch-thumb": { backgroundColor: "var(--omega-gold)" },
                 "& .Mui-checked .MuiSwitch-thumb": {
                   backgroundColor: "var(--omega-dark-gold)",
                 },
