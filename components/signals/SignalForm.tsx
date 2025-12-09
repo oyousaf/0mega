@@ -25,6 +25,46 @@ type Props = {
   onSuccess?: () => void;
 };
 
+// ----------------------------------------------------------
+// AUTO-INVERSION LOGIC
+// ----------------------------------------------------------
+function autoInvertLevels(
+  dir: string,
+  entry: number | null,
+  tp1: any,
+  tp2: any,
+  sl: any
+) {
+  if (!entry) return { tp1, tp2, sl };
+
+  const e = Number(entry);
+  const t1 = Number(tp1);
+  const t2 = Number(tp2);
+  const s = Number(sl);
+
+  if ([t1, t2, s].some((v) => isNaN(v))) return { tp1, tp2, sl };
+
+  const delta = Math.abs(e * 0.02);
+
+  if (dir === "BUY") {
+    return {
+      sl: Math.min(s, e - delta),
+      tp1: Math.max(t1, e + delta),
+      tp2: Math.max(t2, Math.max(t1, e + delta) + delta),
+    };
+  }
+
+  if (dir === "SELL") {
+    return {
+      sl: Math.max(s, e + delta),
+      tp1: Math.min(t1, e - delta),
+      tp2: Math.min(t2, Math.min(t1, e - delta) - delta),
+    };
+  }
+
+  return { tp1, tp2, sl };
+}
+
 export default function SignalForm({
   mode,
   initialData,
@@ -213,7 +253,7 @@ export default function SignalForm({
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
-        {/* ASSET TYPE */}
+        {/* TYPE */}
         <FormControl fullWidth variant="filled" sx={inputStyles}>
           <InputLabel>Type</InputLabel>
           <Select
@@ -240,12 +280,27 @@ export default function SignalForm({
           </Select>
         </FormControl>
 
-        {/* TRADE DIRECTION */}
+        {/* DIRECTION */}
         <FormControl fullWidth variant="filled" sx={inputStyles}>
           <InputLabel>Direction</InputLabel>
           <Select
             value={form.direction}
-            onChange={(e) => setForm({ ...form, direction: e.target.value })}
+            onChange={(e) => {
+              const newDir = e.target.value;
+              const adjusted = autoInvertLevels(
+                newDir,
+                num(form.entry_price),
+                form.tp1,
+                form.tp2,
+                form.sl
+              );
+
+              setForm({
+                ...form,
+                direction: newDir,
+                ...adjusted,
+              });
+            }}
             MenuProps={{
               PaperProps: {
                 sx: {
