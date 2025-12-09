@@ -39,6 +39,7 @@ export default async function EditSignalPage({
     strategy: raw.strategy ?? "",
     notes: raw.notes ?? "",
     type: raw.type ?? "stock",
+    direction: raw.direction ?? "BUY",  
     halaal: Boolean(raw.halaal),
     entry_price: raw.entry_price === null ? "" : String(raw.entry_price ?? ""),
     tp1: raw.tp1 === null ? "" : String(raw.tp1 ?? ""),

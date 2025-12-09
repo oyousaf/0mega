@@ -34,6 +34,7 @@ export default async function SignalDetailsPage({
     sl,
     status,
     type,
+    direction,
     halaal,
     created_at,
   } = signal;
@@ -44,6 +45,8 @@ export default async function SignalDetailsPage({
     : statusLower.includes("sl")
     ? "#C23B22"
     : "#789FCC";
+
+  const dirColor = direction === "SELL" ? "#C23B22" : "#37C86E";
 
   return (
     <main className="max-w-5xl mx-auto w-full p-6 space-y-6">
@@ -97,6 +100,19 @@ export default async function SignalDetailsPage({
 
               <Box
                 sx={{
+                  backgroundColor: dirColor,
+                  px: 1.4,
+                  py: 0.4,
+                  borderRadius: "6px",
+                  fontWeight: 700,
+                  color: "#fff",
+                }}
+              >
+                {direction}
+              </Box>
+
+              <Box
+                sx={{
                   backgroundColor: statusColor,
                   px: 1.5,
                   py: 0.5,
@@ -118,6 +134,7 @@ export default async function SignalDetailsPage({
           <Box className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Detail label="Symbol" value={symbol} />
             <Detail label="Type" value={type?.toUpperCase() ?? "N/A"} />
+            <Detail label="Direction" value={direction} />
             <Detail label="Strategy" value={strategy || "N/A"} />
             <Detail label="Entry" value={entry_price} />
             <Detail label="TP1" value={tp1} />
@@ -135,7 +152,6 @@ export default async function SignalDetailsPage({
 
           {/* Action buttons */}
           <Box className="flex gap-4 pt-3">
-            {/* Edit */}
             <Link href={`/signals/${id}/edit`}>
               <Button
                 variant="contained"
@@ -150,7 +166,6 @@ export default async function SignalDetailsPage({
               </Button>
             </Link>
 
-            {/* Delete */}
             <Link href={`/signals/${id}/delete`}>
               <Button
                 variant="outlined"
