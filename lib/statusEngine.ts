@@ -25,25 +25,26 @@ function evaluateState(signal: any, price: number): string {
   const prevPretty = prettyStatus(signal.status);
   const prev = canonicalStatus(prevPretty);
 
-  // Already fully closed → never reopen
   if (prev === "CLOSED") return "CLOSED";
+  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return prev;
 
-  // Missing fields → fallback to previous safe state
-  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) {
-    return prev;
+  const dir = signal.direction?.toUpperCase() ?? "BUY";
+
+  if (dir === "BUY") {
+    if (price >= tp2) return "TP2_HIT";
+    if (price >= tp1) return "TP1_HIT";
+    if (price <= sl) return "SL_HIT";
+    return "ACTIVE";
   }
 
-  // Already hit something → hold it until closed
-  if (isClosedStatus(prevPretty) && prev !== "CLOSED") {
-    return prev;
+  if (dir === "SELL") {
+    if (price <= tp2) return "TP2_HIT";
+    if (price <= tp1) return "TP1_HIT";
+    if (price >= sl) return "SL_HIT";
+    return "ACTIVE";
   }
 
-  // Live checks → canonical snake_case
-  if (price >= tp2) return "TP2_HIT";
-  if (price >= tp1) return "TP1_HIT";
-  if (price <= sl) return "SL_HIT";
-
-  return "ACTIVE";
+  return prev;
 }
 
 /* -----------------------------------------------------
