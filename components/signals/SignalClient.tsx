@@ -18,13 +18,12 @@ import { usePersistentStateSafe } from "@/app/utils/usePersistentState";
 import { Signal } from "@/app/types/signal";
 
 import { AllowedStatus, prettyStatus } from "@/lib/signal/status";
-
 import { normalizeSignalRow } from "@/lib/signal/normalise";
 import { formatTimestamp } from "@/app/utils/formatTimestamp";
 
-/* -----------------------------------------------------
+/* ----------------------------------------------
    LOCAL TYPES
------------------------------------------------------ */
+---------------------------------------------- */
 type ToastType = "success" | "error" | "info" | "warning";
 
 interface ToastState {
@@ -33,9 +32,9 @@ interface ToastState {
   type: ToastType;
 }
 
-/* -----------------------------------------------------
+/* ----------------------------------------------
    FILTER HELPERS
------------------------------------------------------ */
+---------------------------------------------- */
 const filterBySearch = (signal: Signal, term: string) => {
   if (!term.trim()) return true;
   term = term.toLowerCase();
@@ -43,19 +42,16 @@ const filterBySearch = (signal: Signal, term: string) => {
   return (
     signal.symbol.toLowerCase().includes(term) ||
     signal.status.toLowerCase().includes(term) ||
-    signal.type.toLowerCase().includes(term)
+    signal.type.toLowerCase().includes(term) ||
+    signal.direction.toLowerCase().includes(term)
   );
 };
 
-const filterByType = (signal: Signal, typeFilter: string) => {
-  return typeFilter === "all" ? true : signal.type === typeFilter;
-};
+const filterByType = (signal: Signal, typeFilter: string) =>
+  typeFilter === "all" ? true : signal.type === typeFilter;
 
-const filterByStatus = (signal: Signal, statusFilter: string) => {
-  return statusFilter === "all"
-    ? true
-    : prettyStatus(signal.status) === statusFilter;
-};
+const filterByStatus = (signal: Signal, statusFilter: string) =>
+  statusFilter === "all" ? true : prettyStatus(signal.status) === statusFilter;
 
 const sortSignals = (a: Signal, b: Signal, sortBy: string) => {
   if (sortBy === "updated") {
@@ -64,24 +60,32 @@ const sortSignals = (a: Signal, b: Signal, sortBy: string) => {
       new Date(a.updated_at ?? 0).getTime()
     );
   }
+
   if (sortBy === "created") {
     return (
       new Date(b.created_at ?? 0).getTime() -
       new Date(a.created_at ?? 0).getTime()
     );
   }
+
   if (sortBy === "status") {
     return prettyStatus(a.status).localeCompare(prettyStatus(b.status));
   }
+
   if (sortBy === "type") {
     return a.type.localeCompare(b.type);
   }
+
+  if (sortBy === "direction") {
+    return a.direction.localeCompare(b.direction);
+  }
+
   return 0;
 };
 
-/* -----------------------------------------------------
+/* ----------------------------------------------
    MAIN COMPONENT
------------------------------------------------------ */
+---------------------------------------------- */
 export default function SignalClient({
   initialSignals,
 }: {
@@ -89,9 +93,9 @@ export default function SignalClient({
 }) {
   const router = useRouter();
 
-  /* -----------------------------------------------------
-     STATE
-  ----------------------------------------------------- */
+  /* ----------------------------------------------
+       STATE
+  ---------------------------------------------- */
   const [signals, setSignals] = useState<Signal[]>(() =>
     initialSignals.map((s) => ({
       ...normalizeSignalRow(s),
@@ -115,11 +119,9 @@ export default function SignalClient({
 
   const uiReady = hyd1 && hyd2 && hyd3 && hyd4;
 
-  /* DELETE */
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* TOAST */
   const [toast, setToast] = useState<ToastState>({
     open: false,
     message: "",
@@ -129,9 +131,9 @@ export default function SignalClient({
   const prevStatus = useRef<Record<number, AllowedStatus>>({});
   const prevPrice = useRef<Record<number, number | null>>({});
 
-  /* -----------------------------------------------------
+  /* ----------------------------------------------
      REFRESH ENGINE
-  ----------------------------------------------------- */
+  ---------------------------------------------- */
   async function refresh() {
     try {
       const updated = await runEngineAction();
@@ -142,7 +144,6 @@ export default function SignalClient({
         lastUpdatedFormatted: formatTimestamp(s.updated_at),
       }));
 
-      // Toast system
       normalised.forEach((sig) => {
         const old = prevStatus.current[sig.id];
         const next = sig.status;
@@ -180,9 +181,9 @@ export default function SignalClient({
     return () => clearInterval(id);
   }, []);
 
-  /* -----------------------------------------------------
+  /* ----------------------------------------------
      DELETE SIGNAL
-  ----------------------------------------------------- */
+  ---------------------------------------------- */
   async function confirmDelete() {
     if (!deleteId) return;
 
@@ -201,9 +202,9 @@ export default function SignalClient({
     });
   }
 
-  /* -----------------------------------------------------
-     FILTER + SORT MEMO
-  ----------------------------------------------------- */
+  /* ----------------------------------------------
+     FILTER + SORT
+  ---------------------------------------------- */
   const visibleSignals = useMemo(() => {
     if (!uiReady) return [];
 
@@ -214,14 +215,11 @@ export default function SignalClient({
       .sort((a, b) => sortSignals(a, b, sortBy));
   }, [signals, search, filterType, filterStatus, sortBy, uiReady]);
 
-  /* -----------------------------------------------------
-     HYDRATION GATE
-  ----------------------------------------------------- */
   if (!uiReady) return null;
 
-  /* -----------------------------------------------------
+  /* ----------------------------------------------
      UI
-  ----------------------------------------------------- */
+  ---------------------------------------------- */
   return (
     <main className="max-w-7xl mx-auto w-full p-6 space-y-6">
       {/* HEADER */}
@@ -258,17 +256,15 @@ export default function SignalClient({
         </div>
       </div>
 
-      {/* FILTER BAR */}
+      {/* FILTERS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
-        {/* SEARCH */}
         <input
-          placeholder="Search symbols, status, type…"
+          placeholder="Search symbols, status, type, direction…"
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold focus:outline-none"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        {/* TYPE */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterType}
@@ -280,7 +276,6 @@ export default function SignalClient({
           <option value="forex">Forex</option>
         </select>
 
-        {/* STATUS */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={filterStatus}
@@ -295,7 +290,6 @@ export default function SignalClient({
           <option value="CLOSED">CLOSED</option>
         </select>
 
-        {/* SORT */}
         <select
           className="px-4 py-2 rounded-md bg-omega-green border border-omega-dark-gold text-omega-gold"
           value={sortBy}
@@ -305,6 +299,7 @@ export default function SignalClient({
           <option value="created">Newest First</option>
           <option value="status">Status</option>
           <option value="type">Type</option>
+          <option value="direction">Direction</option>
         </select>
       </div>
 
