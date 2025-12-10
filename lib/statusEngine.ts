@@ -1,5 +1,7 @@
 import { pool } from "@/lib/neon";
 import { getPrice } from "@/providers";
+import { getBroker } from "@/providers/execution/router";
+import { calcQty } from "@/lib/trading/positionSizing";
 
 import {
   prettyStatus,
@@ -9,9 +11,9 @@ import {
 
 const PRICE_THRESHOLD = 0.05;
 
-/* -----------------------------------------------------
-   PRICE STATE LOGIC
------------------------------------------------------ */
+/* ------------------------------------------
+   State machine
+------------------------------------------ */
 function evaluateState(signal: any, price: number): string {
   const entry = Number(signal.entry_price);
   const tp1 = Number(signal.tp1);
@@ -43,28 +45,26 @@ function evaluateState(signal: any, price: number): string {
   return prev;
 }
 
-/* -----------------------------------------------------
-   EXPIRATION LOGIC
------------------------------------------------------ */
+/* ------------------------------------------
+   Expiry
+------------------------------------------ */
 function isExpired(signal: any): boolean {
-  const created = new Date(signal.created_at).getTime();
-  const now = Date.now();
-  return (now - created) / 86400000 >= 7;
+  const created = new Date(signal.created_at);
+  const now = new Date();
+  return (now.getTime() - created.getTime()) / 86400000 >= 7;
 }
 
-/* -----------------------------------------------------
-   FINAL STATE AFTER HITS
------------------------------------------------------ */
-function applyFinalisation(raw: string): string {
+function finalise(raw: string): string {
   const s = raw.toUpperCase();
-  return ["TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"].includes(s)
-    ? "CLOSED"
-    : s;
+  if (["TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"].includes(s)) {
+    return "CLOSED";
+  }
+  return s;
 }
 
-/* -----------------------------------------------------
-   PERSIST TO DB
------------------------------------------------------ */
+/* ------------------------------------------
+   DB writes
+------------------------------------------ */
 async function updateSignalRow(id: number, canonical: string, price: number) {
   const pretty = canonical.replace(/_/g, " ");
 
@@ -74,35 +74,70 @@ async function updateSignalRow(id: number, canonical: string, price: number) {
     SET 
       status = $1,
       current_price = $2,
-      updated_at = CASE 
-        WHEN status != $1 THEN NOW()
-        ELSE updated_at
-      END
+      updated_at = NOW()
     WHERE id = $3
-    `,
+  `,
     [pretty, price, id]
   );
 }
 
-async function logEvent(signalId: number, canonical: string, price: number) {
-  try {
+/* ------------------------------------------
+   Automation execution hook
+------------------------------------------ */
+async function executeAutomation(signal: any, state: string) {
+  const broker = getBroker();
+
+  // open trade
+  if (state === "ACTIVE" && !signal.order_id) {
+    const qty = await calcQty(signal.symbol, signal.type);
+    const res = await broker.openTrade(signal.symbol, qty, signal.direction);
+
+    if (res.success) {
+      await pool.query(
+        `UPDATE signals SET order_id = $1, opened_qty = $2 WHERE id = $3`,
+        [res.orderId, qty, signal.id]
+      );
+    }
+
+    return;
+  }
+
+  // partial
+  if (state === "TP1_HIT" && signal.order_id && !signal.tp1_hit) {
+    const half = Number(signal.opened_qty) / 2;
+
+    await broker.closeTrade(signal.order_id);
     await pool.query(
       `
-        INSERT INTO signal_history (signal_id, event, price, timestamp)
-        VALUES ($1, $2, $3, NOW())
-      `,
-      [signalId, canonical.toUpperCase(), price]
+      UPDATE signals
+      SET tp1_hit = TRUE,
+          opened_qty = opened_qty - $1
+      WHERE id = $2
+    `,
+      [half, signal.id]
     );
-  } catch {}
+
+    return;
+  }
+
+  // full close
+  if (["TP2_HIT", "SL_HIT"].includes(state) && signal.order_id) {
+    await broker.closeTrade(signal.order_id);
+    await pool.query(
+      `UPDATE signals SET order_id = NULL, opened_qty = 0 WHERE id = $1`,
+      [signal.id]
+    );
+  }
 }
 
-/* -----------------------------------------------------
-   MAIN ENGINE
------------------------------------------------------ */
+/* ------------------------------------------
+   Main engine
+------------------------------------------ */
 export async function runStatusEngine(signals: any[]) {
   for (const signal of signals) {
     if (signal.processing) continue;
 
+    // lock
     await pool.query(`UPDATE signals SET processing = TRUE WHERE id = $1`, [
       signal.id,
     ]);
@@ -110,26 +145,24 @@ export async function runStatusEngine(signals: any[]) {
     try {
       const prevPretty: AllowedStatus = prettyStatus(signal.status);
       const prev = canonicalStatus(prevPretty);
-
       const oldPrice = Number(signal.current_price ?? 0);
 
       const price = await getPrice(signal.symbol, signal.type);
 
       let raw = evaluateState(signal, price);
-
       if (isExpired(signal)) raw = "EXPIRED";
 
-      const final = applyFinalisation(raw);
+      const final = finalise(raw);
 
-      const statusChanged = final !== prev;
-      const priceChanged = Math.abs(price - oldPrice) >= PRICE_THRESHOLD;
+      const changed = final !== prev;
+      const priceMoved = Math.abs(price - oldPrice) >= PRICE_THRESHOLD;
 
-      if (!statusChanged && !priceChanged) continue;
+      if (!changed && !priceMoved) continue;
 
       await updateSignalRow(signal.id, final, price);
 
-      if (statusChanged) {
-        await logEvent(signal.id, final, price);
+      if (changed) {
+        await executeAutomation(signal, final);
       }
     } finally {
       await pool.query(`UPDATE signals SET processing = FALSE WHERE id = $1`, [

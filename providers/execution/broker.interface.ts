@@ -17,6 +17,10 @@ export interface OpenTrade {
   openedAt: string;
 }
 
+/**
+ * All brokers must implement these five methods.
+ * PaperBroker, AlpacaBroker, BinanceBroker will follow this.
+ */
 export interface Broker {
   openTrade(
     symbol: string,
@@ -24,9 +28,9 @@ export interface Broker {
     side: OrderSide
   ): Promise<ExecutionResult>;
 
-  partialClose(orderId: string, qty: number): Promise<ExecutionResult>;
-
   closeTrade(orderId: string): Promise<ExecutionResult>;
+
+  partialClose(orderId: string, qty: number): Promise<ExecutionResult>;
 
   getOpenTrades(): Promise<OpenTrade[]>;
 
