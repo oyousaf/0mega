@@ -19,7 +19,7 @@ export default function OpenTradesWidget() {
 
   async function load() {
     try {
-      const res = await fetch("/api/trades/open", { cache: "no-store" });
+      const res = await fetch("/api/trading/open", { cache: "no-store" });
       if (!res.ok) return;
 
       const json = await res.json();
