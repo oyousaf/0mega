@@ -27,6 +27,7 @@ import StrategyMiniCards from "../analytics/StrategyMiniCards";
 import HalaalTracker from "../analytics/HalaalTracker";
 import MarketBreakdown from "../analytics/MarketBreakdown";
 import ChartWrapper from "@/components/layout/ChartWrapper";
+import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
 
 const menuProps = {
   PaperProps: {
@@ -220,6 +221,9 @@ export default function DashboardClient({
         {/* METRICS CARDS */}
         <MetricsCards metrics={metrics} />
 
+        {/* OPEN TRADES */}
+        <OpenTradesWidget />
+
         {/* FILTER BAR */}
         <Box
           sx={{
@@ -235,7 +239,6 @@ export default function DashboardClient({
             border: "1px solid var(--omega-dark-gold)",
             boxShadow: "0 0 12px rgba(212,175,55,0.15)",
 
-            // FIX: mobile column layout
             "@media (max-width: 480px)": {
               flexDirection: "column",
               alignItems: "stretch",
@@ -273,7 +276,7 @@ export default function DashboardClient({
                 color: "var(--omega-gold)",
                 border: "1px solid var(--omega-dark-gold)",
                 "& .MuiSelect-select": { paddingY: "6px" },
-                flexShrink: 1, // FIX
+                flexShrink: 1,
               }}
               MenuProps={menuProps}
             >
@@ -306,7 +309,7 @@ export default function DashboardClient({
               sx={{
                 display: "flex",
                 gap: 1,
-                flexWrap: "wrap", // FIX: allow buttons to wrap
+                flexWrap: "wrap",
               }}
             >
               {[
@@ -339,7 +342,7 @@ export default function DashboardClient({
                           ? "var(--omega-gold)"
                           : "rgba(212,175,55,0.15)",
                     },
-                    whiteSpace: "nowrap", // stop squashing
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {m.label}
@@ -376,7 +379,7 @@ export default function DashboardClient({
                 color: "var(--omega-gold)",
                 border: "1px solid var(--omega-dark-gold)",
                 "& .MuiSelect-select": { paddingY: "6px" },
-                flexShrink: 1, // FIX
+                flexShrink: 1,
               }}
               MenuProps={menuProps}
             >
