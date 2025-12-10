@@ -11,9 +11,9 @@ import {
 
 const PRICE_THRESHOLD = 0.05;
 
-/* ------------------------------------------
-   State machine
------------------------------------------- */
+/* -----------------------------------------------------
+   EVALUATE NEW SIGNAL STATE
+----------------------------------------------------- */
 function evaluateState(signal: any, price: number): string {
   const entry = Number(signal.entry_price);
   const tp1 = Number(signal.tp1);
@@ -22,11 +22,11 @@ function evaluateState(signal: any, price: number): string {
 
   const prevPretty = prettyStatus(signal.status);
   const prev = canonicalStatus(prevPretty);
-
   if (prev === "CLOSED") return "CLOSED";
-  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return prev;
 
   const dir = signal.direction?.toUpperCase() ?? "BUY";
+
+  if ([entry, tp1, tp2, sl].some((v) => isNaN(v))) return prev;
 
   if (dir === "BUY") {
     if (price >= tp2) return "TP2_HIT";
@@ -45,16 +45,18 @@ function evaluateState(signal: any, price: number): string {
   return prev;
 }
 
-/* ------------------------------------------
-   Expiry
------------------------------------------- */
+/* -----------------------------------------------------
+   EXPIRATION
+----------------------------------------------------- */
 function isExpired(signal: any): boolean {
   const created = new Date(signal.created_at);
-  const now = new Date();
-  return (now.getTime() - created.getTime()) / 86400000 >= 7;
+  return (Date.now() - created.getTime()) / 86400000 >= 7;
 }
 
-function finalise(raw: string): string {
+/* -----------------------------------------------------
+   FINALISATION
+----------------------------------------------------- */
+function finalizeState(raw: string): string {
   const s = raw.toUpperCase();
   if (["TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"].includes(s)) {
     return "CLOSED";
@@ -62,82 +64,44 @@ function finalise(raw: string): string {
   return s;
 }
 
-/* ------------------------------------------
-   DB writes
------------------------------------------- */
-async function updateSignalRow(id: number, canonical: string, price: number) {
+/* -----------------------------------------------------
+   DB UPDATE
+----------------------------------------------------- */
+async function updateSignal(id: number, canonical: string, price: number) {
   const pretty = canonical.replace(/_/g, " ");
-
   await pool.query(
     `
     UPDATE signals
-    SET 
-      status = $1,
-      current_price = $2,
-      updated_at = NOW()
+    SET status = $1,
+        current_price = $2,
+        updated_at = NOW()
     WHERE id = $3
-  `,
+    `,
     [pretty, price, id]
   );
 }
 
-/* ------------------------------------------
-   Automation execution hook
------------------------------------------- */
-async function executeAutomation(signal: any, state: string) {
-  const broker = getBroker();
-
-  // open trade
-  if (state === "ACTIVE" && !signal.order_id) {
-    const qty = await calcQty(signal.symbol, signal.type);
-    const res = await broker.openTrade(signal.symbol, qty, signal.direction);
-
-    if (res.success) {
-      await pool.query(
-        `UPDATE signals SET order_id = $1, opened_qty = $2 WHERE id = $3`,
-        [res.orderId, qty, signal.id]
-      );
-    }
-
-    return;
-  }
-
-  // partial
-  if (state === "TP1_HIT" && signal.order_id && !signal.tp1_hit) {
-    const half = Number(signal.opened_qty) / 2;
-
-    await broker.closeTrade(signal.order_id);
+async function logEvent(id: number, event: string, price: number) {
+  try {
     await pool.query(
       `
-      UPDATE signals
-      SET tp1_hit = TRUE,
-          opened_qty = opened_qty - $1
-      WHERE id = $2
-    `,
-      [half, signal.id]
+      INSERT INTO signal_history (signal_id, event, price, timestamp)
+      VALUES ($1, $2, $3, NOW())
+      `,
+      [id, event, price]
     );
-
-    return;
-  }
-
-  // full close
-  if (["TP2_HIT", "SL_HIT"].includes(state) && signal.order_id) {
-    await broker.closeTrade(signal.order_id);
-    await pool.query(
-      `UPDATE signals SET order_id = NULL, opened_qty = 0 WHERE id = $1`,
-      [signal.id]
-    );
-  }
+  } catch {}
 }
 
-/* ------------------------------------------
-   Main engine
------------------------------------------- */
+/* -----------------------------------------------------
+   MERGED ENGINE
+----------------------------------------------------- */
 export async function runStatusEngine(signals: any[]) {
-  for (const signal of signals) {
-    if (signal.processing) continue;
+  const broker = getBroker();
 
-    // lock
+  for (const signal of signals) {
+    if (signal.processing === true) continue;
+
     await pool.query(`UPDATE signals SET processing = TRUE WHERE id = $1`, [
       signal.id,
     ]);
@@ -145,24 +109,73 @@ export async function runStatusEngine(signals: any[]) {
     try {
       const prevPretty: AllowedStatus = prettyStatus(signal.status);
       const prev = canonicalStatus(prevPretty);
-      const oldPrice = Number(signal.current_price ?? 0);
 
+      const oldPrice = Number(signal.current_price ?? 0);
       const price = await getPrice(signal.symbol, signal.type);
 
+      // 1. state evaluation
       let raw = evaluateState(signal, price);
+
+      // 2. expired?
       if (isExpired(signal)) raw = "EXPIRED";
 
-      const final = finalise(raw);
+      // 3. finalisation
+      const next = finalizeState(raw);
 
-      const changed = final !== prev;
-      const priceMoved = Math.abs(price - oldPrice) >= PRICE_THRESHOLD;
+      const statusChanged = next !== prev;
+      const priceChanged = Math.abs(price - oldPrice) >= PRICE_THRESHOLD;
 
-      if (!changed && !priceMoved) continue;
+      // *** EXECUTION LAYER ***
+      if (statusChanged) {
+        // A) ACTIVE → open trade
+        if (next === "ACTIVE" && !signal.order_id) {
+          const qty = await calcQty(signal.symbol, signal.type);
+          const res = await broker.openTrade(signal.symbol, qty, signal.direction);
 
-      await updateSignalRow(signal.id, final, price);
+          if (res.success) {
+            await pool.query(
+              `UPDATE signals SET order_id = $1, opened_qty = $2 WHERE id = $3`,
+              [res.orderId, qty, signal.id]
+            );
+          }
+        }
 
-      if (changed) {
-        await executeAutomation(signal, final);
+        // B) TP1_HIT → partial close
+        if (next === "TP1_HIT" && signal.order_id && !signal.tp1_hit) {
+          const qty = Number(signal.opened_qty) / 2;
+          await broker.partialClose(signal.order_id, qty);
+
+          await pool.query(
+            `UPDATE signals SET tp1_hit = TRUE, opened_qty = opened_qty - $1 WHERE id = $2`,
+            [qty, signal.id]
+          );
+        }
+
+        // C) TP2_HIT → full close
+        if (next === "TP2_HIT" && signal.order_id) {
+          await broker.closeTrade(signal.order_id);
+
+          await pool.query(
+            `UPDATE signals SET order_id = NULL, opened_qty = 0 WHERE id = $1`,
+            [signal.id]
+          );
+        }
+
+        // D) SL_HIT → full close
+        if (next === "SL_HIT" && signal.order_id) {
+          await broker.closeTrade(signal.order_id);
+
+          await pool.query(
+            `UPDATE signals SET order_id = NULL, opened_qty = 0 WHERE id = $1`,
+            [signal.id]
+          );
+        }
+      }
+
+      // 4. Only update DB if something changed
+      if (statusChanged || priceChanged) {
+        await updateSignal(signal.id, next, price);
+        if (statusChanged) await logEvent(signal.id, next, price);
       }
     } finally {
       await pool.query(`UPDATE signals SET processing = FALSE WHERE id = $1`, [
