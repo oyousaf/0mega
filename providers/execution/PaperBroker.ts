@@ -4,24 +4,17 @@ import type {
   OpenTrade,
   OrderSide,
 } from "./broker.interface";
-import { getPrice } from "@/providers/index";
+import { getPrice } from "@/providers";
 
 let PAPER_BALANCE = 100_000;
 
-//
-// In-memory storage of open trades
-// Each trade is independent with its own orderId
-//
 const openTrades: OpenTrade[] = [];
 
-function generateId() {
+function id() {
   return `paper-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
 }
 
 export class PaperBroker implements Broker {
-  //
-  // OPEN TRADE (BUY or SELL)
-  //
   async openTrade(
     symbol: string,
     qty: number,
@@ -30,21 +23,16 @@ export class PaperBroker implements Broker {
     const price = await getPrice(symbol, "crypto");
     const cost = price * qty;
 
-    if (side === "BUY") {
-      // Need enough balance
-      if (cost > PAPER_BALANCE) {
-        return { success: false, message: "Insufficient paper balance" };
-      }
-      PAPER_BALANCE -= cost;
-    } else {
-      // SELL trade (short)
-      // No balance condition for synthetics unless you want margin rules
+    if (side === "BUY" && cost > PAPER_BALANCE) {
+      return { success: false, message: "Insufficient paper balance" };
     }
 
-    const id = generateId();
+    if (side === "BUY") PAPER_BALANCE -= cost;
+
+    const tradeId = id();
 
     openTrades.push({
-      id,
+      id: tradeId,
       symbol,
       side,
       entryPrice: price,
@@ -54,37 +42,52 @@ export class PaperBroker implements Broker {
 
     return {
       success: true,
-      message: `${side} trade opened`,
-      orderId: id,
+      message: "Trade opened",
+      orderId: tradeId,
       filledPrice: price,
       qty,
     };
   }
 
-  //
-  // CLOSE TRADE
-  //
-  async closeTrade(orderId: string): Promise<ExecutionResult> {
-    const idx = openTrades.findIndex((t) => t.id === orderId);
-    if (idx === -1) {
-      return { success: false, message: "Trade not found" };
-    }
+  async partialClose(orderId: string, qty: number): Promise<ExecutionResult> {
+    const t = openTrades.find((x) => x.id === orderId);
+    if (!t) return { success: false, message: "Trade not found" };
+    if (qty > t.qty)
+      return { success: false, message: "Partial qty > open qty" };
 
-    const trade = openTrades[idx];
-    const price = await getPrice(trade.symbol, "crypto");
+    const price = await getPrice(t.symbol, "crypto");
 
     // Profit calculation
     let profit = 0;
-
-    if (trade.side === "BUY") {
-      profit = (price - trade.entryPrice) * trade.qty;
-    } else {
-      profit = (trade.entryPrice - price) * trade.qty;
-    }
+    if (t.side === "BUY") profit = (price - t.entryPrice) * qty;
+    else profit = (t.entryPrice - price) * qty;
 
     PAPER_BALANCE += profit;
 
-    // Remove from open trades
+    // Reduce the remaining size
+    t.qty -= qty;
+
+    return {
+      success: true,
+      message: "Partial close executed",
+      orderId,
+      filledPrice: price,
+      qty,
+    };
+  }
+
+  async closeTrade(orderId: string): Promise<ExecutionResult> {
+    const idx = openTrades.findIndex((t) => t.id === orderId);
+    if (idx === -1) return { success: false, message: "Trade not found" };
+
+    const t = openTrades[idx];
+    const price = await getPrice(t.symbol, "crypto");
+
+    let profit = 0;
+    if (t.side === "BUY") profit = (price - t.entryPrice) * t.qty;
+    else profit = (t.entryPrice - price) * t.qty;
+
+    PAPER_BALANCE += profit;
     openTrades.splice(idx, 1);
 
     return {
@@ -92,21 +95,15 @@ export class PaperBroker implements Broker {
       message: "Trade closed",
       orderId,
       filledPrice: price,
-      qty: trade.qty,
+      qty: t.qty,
     };
   }
 
-  //
-  // GET ALL OPEN TRADES
-  //
   async getOpenTrades(): Promise<OpenTrade[]> {
     return [...openTrades];
   }
 
-  //
-  // BALANCE
-  //
-  async getBalance(): Promise<number> {
+  async getBalance() {
     return PAPER_BALANCE;
   }
 }

@@ -24,6 +24,8 @@ export interface Broker {
     side: OrderSide
   ): Promise<ExecutionResult>;
 
+  partialClose(orderId: string, qty: number): Promise<ExecutionResult>;
+
   closeTrade(orderId: string): Promise<ExecutionResult>;
 
   getOpenTrades(): Promise<OpenTrade[]>;
