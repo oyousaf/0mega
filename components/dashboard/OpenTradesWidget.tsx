@@ -2,19 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, Typography, Divider } from "@mui/material";
-
-type OpenTrade = {
-  id: string;
-  symbol: string;
-  side: "BUY" | "SELL";
-  qty: number;
-  entryPrice: number;
-  currentPrice?: number;
-  pnl?: number;
-};
+import { Trade } from "@/app/types/trade";
 
 export default function OpenTradesWidget() {
-  const [trades, setTrades] = useState<OpenTrade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [balance, setBalance] = useState(0);
 
   async function load() {
@@ -58,12 +49,12 @@ export default function OpenTradesWidget() {
         {trades.length === 0 && <Typography>No open trades</Typography>}
 
         {trades.map((t) => {
-          const pnl = t.pnl ?? 0;
+          const pnl = t.realised_pl ?? 0;
           const pnlColor = pnl >= 0 ? "#3cff9a" : "#ff6b6b";
 
           return (
             <div
-              key={t.id}
+              key={t.trade_id}
               className="flex justify-between items-center border-b border-omega-dark-gold/40 py-2"
             >
               <div>
@@ -74,11 +65,13 @@ export default function OpenTradesWidget() {
               </div>
 
               <div className="text-right">
-                <div className="text-sm">Entry: {t.entryPrice}</div>
+                <div className="text-sm">
+                  Entry Fill: {t.entry_fill_price.toFixed(2)}
+                </div>
 
-                {t.currentPrice && (
+                {!t.is_closed && (
                   <div className="font-bold" style={{ color: pnlColor }}>
-                    PnL: {pnl.toFixed(2)}
+                    Unrealised PnL: {pnl.toFixed(2)}
                   </div>
                 )}
               </div>
