@@ -3,91 +3,118 @@ import { getBroker } from "@/providers/execution/router";
 import { getPrice } from "@/providers/index";
 
 /* -------------------------------------------------------
-   MARKET DETECTOR
-   Crypto = symbol ends with "USD" or "USDT" etc.
-   Forex  = 6-char pairs like GBPUSD, EURJPY, etc.
-   Stock  = Fallback
+   MARKET DETECTION
+   Crypto → ends with USD/USDT/BTC/ETH
+   Forex  → strictly 6-letter pairs like GBPUSD, EURJPY
+   Stock  → fallback
 ------------------------------------------------------- */
 function detectMarket(symbol: string): "crypto" | "forex" | "stock" {
   const upper = symbol.toUpperCase();
 
-  // Forex: 6-letter pairs, e.g., GBPUSD, EURJPY, AUDCAD
-  if (/^[A-Z]{6}$/.test(upper)) return "forex";
-
-  // Crypto: ends with USD, USDT, BTC, ETH etc
+  // CRYPTO FIRST (BTCUSD, ETHUSD, SOLUSD, XRPUSD etc)
   if (
     upper.endsWith("USD") ||
     upper.endsWith("USDT") ||
     upper.endsWith("BTC") ||
     upper.endsWith("ETH")
-  )
+  ) {
     return "crypto";
+  }
+
+  // FOREX (must come after crypto)
+  if (/^[A-Z]{6}$/.test(upper)) {
+    return "forex";
+  }
 
   return "stock";
 }
 
+/* -------------------------------------------------------
+   SAFE ISO DATE
+------------------------------------------------------- */
+function safeISO(input: any) {
+  const d = new Date(input);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+/* -------------------------------------------------------
+   SAFE NUMBER
+------------------------------------------------------- */
+function n(val: any): number {
+  const v = Number(val);
+  return isFinite(v) ? v : 0;
+}
+
+/* -------------------------------------------------------
+   ROUTE: GET /api/trading/open
+------------------------------------------------------- */
 export async function GET() {
   try {
     const broker = getBroker();
 
-    // Provider open positions
     const rawTrades = await broker.getOpenTrades();
-    const balance = await broker.getBalance();
+    const balance = n(await broker.getBalance());
 
     const trades = await Promise.all(
       rawTrades.map(async (t) => {
-        const openedAt = t.openedAt
-          ? new Date(t.openedAt).toISOString()
-          : new Date().toISOString();
+        const openedISO = safeISO(t.openedAt);
 
-        // DETECT MARKET
-        const market = detectMarket(t.symbol);
+        const symbol = t.symbol?.toUpperCase() ?? "UNKNOWN";
+        const market = detectMarket(symbol);
 
-        // SAFE PRICE FETCHING
-        let livePrice: number = t.entryPrice; // fallback
+        let livePrice = n(t.entryPrice); // safe fallback
 
+        /* -----------------------------------------
+           SAFE PRICE FETCH
+           - Never breaks
+           - Never returns NaN
+        ------------------------------------------ */
         try {
-          const p = await getPrice(t.symbol, market);
+          const p = await getPrice(symbol, market);
+
           if (typeof p === "number" && !Number.isNaN(p)) {
             livePrice = p;
+          } else {
+            console.warn(`${market} price invalid for ${symbol}`);
           }
-        } catch {
-          console.warn(`Price fetch failed for ${t.symbol}, using entry price`);
+        } catch (e) {
+          console.warn(`Price fetch failed for ${symbol}, fallback to entry`);
         }
 
-        // Unrealised P/L
+        const entry = n(t.entryPrice);
+        const qty = n(t.qty);
+
         const pnl =
           t.side === "BUY"
-            ? (livePrice - t.entryPrice) * t.qty
-            : (t.entryPrice - livePrice) * t.qty;
+            ? (livePrice - entry) * qty
+            : (entry - livePrice) * qty;
 
         return {
           trade_id: String(t.id),
-          symbol: t.symbol,
-
+          symbol,
           side: t.side === "BUY" ? "LONG" : "SHORT",
           strategy: "Unknown",
 
-          entry_price: t.entryPrice,
-          entry_fill_price: t.entryPrice,
+          entry_price: entry,
+          entry_fill_price: entry,
 
           exit_fill_price: null,
           realised_pl: pnl,
           rr: null,
 
-          qty: t.qty,
-          opened_at: openedAt,
+          qty,
+          opened_at: openedISO,
           closed_at: null,
           is_closed: false,
 
           executions: [
             {
               exec_id: `open-${t.id}`,
-              price: t.entryPrice,
-              qty: t.qty,
+              price: entry,
+              qty,
               side: "OPEN",
-              time: openedAt,
-              broker: broker.name ?? "paper",
+              time: openedISO,
+              broker: "paper",
             },
           ],
         };
@@ -98,7 +125,7 @@ export async function GET() {
   } catch (err: any) {
     console.error("Open trades API error:", err);
     return NextResponse.json(
-      { success: false, error: err.message },
+      { success: false, error: String(err.message || err) },
       { status: 500 }
     );
   }

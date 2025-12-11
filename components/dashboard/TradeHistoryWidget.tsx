@@ -20,8 +20,11 @@ export default function TradeHistoryWidget() {
       const res = await fetch("/api/trading/history?limit=500&offset=0", {
         cache: "no-store",
       });
+
       const json = await res.json();
-      setItems(json.trades || json.history || []);
+
+      // Correct source key for your API:
+      setItems(json.history || json.trades || []);
     } catch (err) {
       console.error("Trade history load failed:", err);
     }
@@ -32,6 +35,22 @@ export default function TradeHistoryWidget() {
     const id = setInterval(load, 5000);
     return () => clearInterval(id);
   }, []);
+
+  /* ---------------------------
+      SAFE HELPERS
+  ---------------------------- */
+
+  const safeNum = (v: any) => {
+    const n = Number(v);
+    if (!isFinite(n)) return "—";
+    return n.toFixed(2);
+  };
+
+  const safeDate = (d: any) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
+  };
 
   return (
     <Card
@@ -65,29 +84,26 @@ export default function TradeHistoryWidget() {
               key={t.trade_id}
               className="border-b border-omega-dark-gold/40 py-2"
             >
-              {/* ---------------------------------------
-                  HEADER ROW
-              ---------------------------------------- */}
+              {/* ---------------- HEADER ROW ---------------- */}
               <div
                 className="flex justify-between items-center cursor-pointer"
                 onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
               >
                 <div>
                   <div className="font-bold">{t.symbol}</div>
+
                   <div className="text-sm opacity-70">
                     {t.side} • Qty {t.qty}
                   </div>
 
                   <div className="text-xs opacity-60 mt-1">
-                    Entry: £{entry.toFixed(2)}
-                    {exit !== null && <> • Exit: £{exit.toFixed(2)}</>}
+                    Entry: £{safeNum(entry)}
+                    {exit !== null && <> • Exit: £{safeNum(exit)}</>}
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-sm">
-                    {new Date(t.opened_at).toLocaleString()}
-                  </div>
+                  <div className="text-sm">{safeDate(t.opened_at)}</div>
 
                   {pl !== null && (
                     <div
@@ -95,7 +111,7 @@ export default function TradeHistoryWidget() {
                         pl >= 0 ? "text-green-400" : "text-red-400"
                       }`}
                     >
-                      £{pl.toFixed(2)}
+                      £{safeNum(pl)}
                     </div>
                   )}
 
@@ -105,9 +121,7 @@ export default function TradeHistoryWidget() {
                 </div>
               </div>
 
-              {/* ---------------------------------------
-                  EXECUTION DETAILS
-              ---------------------------------------- */}
+              {/* ---------------- EXECUTION PANEL ---------------- */}
               <Collapse in={isOpen}>
                 <div className="mt-2 ml-2 text-sm opacity-80">
                   {t.executions.length === 0 && (
@@ -120,14 +134,14 @@ export default function TradeHistoryWidget() {
                       className="flex justify-between py-1 border-b border-omega-dark-gold/20"
                     >
                       <div>
-                        {e.side} @ £{Number(e.price).toFixed(2)}
+                        {e.side} @ £{safeNum(e.price)}
                       </div>
 
                       <div className="text-right">
-                        Qty {e.qty} • {e.broker}
+                        Qty {e.qty} • {e.broker ?? "paper"}
                         <br />
                         <span className="opacity-60 text-xs">
-                          {new Date(e.time).toLocaleString()}
+                          {safeDate(e.time)}
                         </span>
                       </div>
                     </div>

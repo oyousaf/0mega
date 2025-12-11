@@ -15,7 +15,7 @@ export default function OpenTradesWidget() {
 
       const json = await res.json();
       setTrades(json.trades || []);
-      setBalance(json.balance || 0);
+      setBalance(Number(json.balance) || 0);
     } catch {}
   }
 
@@ -40,8 +40,7 @@ export default function OpenTradesWidget() {
         </Typography>
 
         <Typography sx={{ opacity: 0.7, mb: 2 }}>
-          Balance: £
-          {balance.toLocaleString("en-UK", { minimumFractionDigits: 2 })}
+          Balance: £{balance.toFixed(2)}
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
@@ -49,7 +48,7 @@ export default function OpenTradesWidget() {
         {trades.length === 0 && <Typography>No open trades</Typography>}
 
         {trades.map((t) => {
-          const pnl = t.realised_pl ?? 0;
+          const pnl = Number(t.realised_pl ?? 0);
           const pnlColor = pnl >= 0 ? "#3cff9a" : "#ff6b6b";
 
           return (
@@ -66,14 +65,12 @@ export default function OpenTradesWidget() {
 
               <div className="text-right">
                 <div className="text-sm">
-                  Entry Fill: {t.entry_fill_price.toFixed(2)}
+                  Entry: £{Number(t.entry_fill_price).toFixed(2)}
                 </div>
 
-                {!t.is_closed && (
-                  <div className="font-bold" style={{ color: pnlColor }}>
-                    Unrealised PnL: {pnl.toFixed(2)}
-                  </div>
-                )}
+                <div className="font-bold" style={{ color: pnlColor }}>
+                  Unrealised PnL: £{pnl.toFixed(2)}
+                </div>
               </div>
             </div>
           );
