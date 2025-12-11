@@ -28,6 +28,7 @@ import HalaalTracker from "../analytics/HalaalTracker";
 import MarketBreakdown from "../analytics/MarketBreakdown";
 import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
+import TradeHistoryWidget from "@/components/dashboard/TradeHistoryWidget";
 
 const menuProps = {
   PaperProps: {
@@ -223,6 +224,9 @@ export default function DashboardClient({
 
         {/* OPEN TRADES */}
         <OpenTradesWidget />
+
+        {/* OPEN TRADES */}
+        <TradeHistoryWidget />
 
         {/* FILTER BAR */}
         <Box
