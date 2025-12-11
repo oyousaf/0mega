@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, Typography, Divider } from "@mui/material";
+import {
+  Card,
+  CardContent,
+  Typography,
+  Divider,
+  Collapse,
+} from "@mui/material";
+import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 
 export default function TradeHistoryWidget() {
   const [items, setItems] = useState([]);
+  const [openRow, setOpenRow] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/trading/history", { cache: "no-store" });
@@ -36,26 +44,73 @@ export default function TradeHistoryWidget() {
 
         {items.length === 0 && <Typography>No trade activity</Typography>}
 
-        {items.map((h: any) => (
-          <div
-            key={h.id}
-            className="flex justify-between border-b border-omega-dark-gold/40 py-2"
-          >
-            <div>
-              <div className="font-bold">{h.symbol}</div>
-              <div className="text-sm opacity-70">
-                {h.action.toUpperCase()} • Qty {h.qty}
-              </div>
-            </div>
+        {items.map((t: any) => {
+          const isOpen = openRow === t.trade_id;
+          const pl = t.realised_pl !== null ? Number(t.realised_pl) : null;
 
-            <div className="text-right">
-              <div className="text-sm">
-                {new Date(h.timestamp).toLocaleString()}
+          return (
+            <div
+              key={t.trade_id}
+              className="border-b border-omega-dark-gold/40 py-2"
+            >
+              {/* Row Header */}
+              <div
+                className="flex justify-between items-center cursor-pointer"
+                onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
+              >
+                <div>
+                  <div className="font-bold">{t.symbol}</div>
+                  <div className="text-sm opacity-70">
+                    {t.trade_side} • Qty {t.trade_qty}
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-sm">
+                    {new Date(t.opened_at).toLocaleString()}
+                  </div>
+
+                  {pl !== null && (
+                    <div
+                      className={`font-bold ${
+                        pl >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      £{pl.toFixed(2)}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end mt-1">
+                    {isOpen ? <FiChevronUp /> : <FiChevronDown />}
+                  </div>
+                </div>
               </div>
-              <div className="font-bold">£{Number(h.price).toFixed(2)}</div>
+
+              {/* Executions Panel */}
+              <Collapse in={isOpen}>
+                <div className="mt-2 ml-2 text-sm opacity-80">
+                  {t.executions.length === 0 && (
+                    <div>No executions recorded</div>
+                  )}
+
+                  {t.executions.map((e: any) => (
+                    <div
+                      key={e.exec_id}
+                      className="flex justify-between py-1 border-b border-omega-dark-gold/20"
+                    >
+                      <div>
+                        {e.side} @ £{Number(e.price).toFixed(2)}
+                      </div>
+                      <div>
+                        Qty {e.qty} • {e.broker}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Collapse>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
