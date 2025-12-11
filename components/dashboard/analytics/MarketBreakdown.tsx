@@ -1,6 +1,6 @@
 "use client";
 
-import { Signal } from "@/app/types/signal";
+import { Trade } from "@/app/types/trade";
 import { omegaAnalytics as omega } from "./theme";
 import { motion } from "framer-motion";
 import { Box } from "@mui/material";
@@ -14,13 +14,57 @@ import {
   Cell,
 } from "recharts";
 
-function computeMarketBreakdown(signals: Signal[]) {
+/* ---------------------------------------------------------
+   MARKET CLASSIFICATION
+--------------------------------------------------------- */
+
+function getMarket(symbol: string): "crypto" | "forex" | "stock" | "other" {
+  if (!symbol) return "other";
+
+  const s = symbol.toUpperCase();
+
+  // Crypto pattern (BTCUSDT, ETHUSD, SOLUSDT)
+  if (s.endsWith("USDT") || s.endsWith("USD") || /^[A-Z]{3,5}BTC$/.test(s)) {
+    if (["XAUUSD", "XAGUSD"].includes(s)) return "forex"; // avoid gold misclassifying as crypto
+    return "crypto";
+  }
+
+  // Forex pattern (GBPUSD, EURUSD, USDJPY, etc.)
+  if (/^[A-Z]{6}$/.test(s)) return "forex";
+
+  // Stocks (AAPL, TSLA, NVDA, etc.)
+  if (/^[A-Z]{1,5}$/.test(s)) return "stock";
+
+  return "other";
+}
+
+/* ---------------------------------------------------------
+   BREAKDOWN CALCULATION USING REAL TRADE DATA
+--------------------------------------------------------- */
+
+function computeMarketBreakdown(trades: Trade[]) {
   const markets = ["crypto", "forex", "stock"] as const;
 
+  const buckets = {
+    crypto: [] as Trade[],
+    forex: [] as Trade[],
+    stock: [] as Trade[],
+  };
+
+  for (const t of trades) {
+    const m = getMarket(t.symbol);
+    if (m in buckets) {
+      buckets[m as keyof typeof buckets].push(t);
+    }
+  }
+
   return markets.map((m) => {
-    const rows = signals.filter((s) => s.type === m);
+    const rows = buckets[m];
+
     const total = rows.length;
-    const wins = rows.filter((s) => s.tp1_hit || s.tp2_hit).length;
+
+    const wins = rows.filter((t) => Number(t.realised_pl ?? 0) > 0).length;
+
     return {
       market: m.toUpperCase(),
       total,
@@ -29,8 +73,12 @@ function computeMarketBreakdown(signals: Signal[]) {
   });
 }
 
-export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
-  const data = computeMarketBreakdown(signals);
+/* ---------------------------------------------------------
+   COMPONENT
+--------------------------------------------------------- */
+
+export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
+  const data = computeMarketBreakdown(trades);
 
   return (
     <motion.div
@@ -68,12 +116,14 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
                 axisLine={{ stroke: omega.sep }}
                 tickLine={{ stroke: omega.sep }}
               />
+
               <YAxis
                 tick={{ fill: omega.text }}
                 axisLine={{ stroke: omega.sep }}
                 tickLine={{ stroke: omega.sep }}
                 allowDecimals={false}
               />
+
               <Tooltip
                 contentStyle={{
                   background: omega.bg,
@@ -82,16 +132,16 @@ export default function MarketBreakdown({ signals }: { signals: Signal[] }) {
                   color: omega.text,
                 }}
               />
-              <Bar dataKey="winRate">
-                {data.map((entry) => {
-                  const colour =
-                    entry.winRate >= 60
-                      ? "#4CAF50"
-                      : entry.winRate >= 40
-                      ? "#FFC107"
-                      : "#FF5252";
 
-                  return <Cell key={entry.market} fill={colour} />;
+              <Bar dataKey="winRate">
+                {data.map((d) => {
+                  const colour =
+                    d.winRate >= 60
+                      ? "#4CAF50" // strong
+                      : d.winRate >= 40
+                      ? "#FFC107" // average
+                      : "#FF5252"; // poor
+                  return <Cell key={d.market} fill={colour} />;
                 })}
               </Bar>
             </BarChart>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Signal } from "@/app/types/signal";
+import { Trade } from "@/app/types/trade";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Box,
@@ -12,6 +12,7 @@ import {
   TableCell,
   TableSortLabel,
 } from "@mui/material";
+
 import { omegaAnalytics as omega } from "./theme";
 
 type Order = "asc" | "desc";
@@ -30,11 +31,11 @@ interface HeadCell {
   numeric?: boolean;
 }
 
-function computeSymbols(signals: Signal[]): SymbolSummary[] {
+function computeSymbols(trades: Trade[]): SymbolSummary[] {
   const map = new Map<string, SymbolSummary>();
 
-  for (const s of signals) {
-    const sym = s.symbol || "Unknown";
+  for (const t of trades) {
+    const sym = t.symbol || "Unknown";
 
     if (!map.has(sym)) {
       map.set(sym, {
@@ -49,8 +50,11 @@ function computeSymbols(signals: Signal[]): SymbolSummary[] {
     const row = map.get(sym)!;
     row.trades++;
 
-    if (s.tp2_hit || s.tp1_hit) row.wins++;
-    if (s.sl_hit) row.losses++;
+    if (t.realised_pl !== null) {
+      const pl = Number(t.realised_pl);
+      if (pl > 0) row.wins++;
+      if (pl < 0) row.losses++;
+    }
   }
 
   return [...map.values()].map((r) => ({
@@ -59,21 +63,19 @@ function computeSymbols(signals: Signal[]): SymbolSummary[] {
   }));
 }
 
-export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
+export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
   const [order, setOrder] = useState<Order>("desc");
   const [orderBy, setOrderBy] = useState<keyof SymbolSummary>("winRate");
 
-  const data = useMemo(() => computeSymbols(signals), [signals]);
+  const data = useMemo(() => computeSymbols(trades), [trades]);
 
   const sorted = useMemo(() => {
     return [...data].sort((a, b) => {
       const A = a[orderBy];
       const B = b[orderBy];
-      if (A < B) return order === "asc" ? -1 : 1;
-      if (A > B) return order === "asc" ? 1 : -1;
-      return 0;
+      return order === "asc" ? (A < B ? -1 : 1) : (A > B ? -1 : 1);
     });
-  }, [data, order, orderBy]);
+  }, [data, orderBy, order]);
 
   const headCells: HeadCell[] = [
     { key: "symbol", label: "Symbol" },
@@ -102,7 +104,7 @@ export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
-        📊 Symbol Performance
+        📊 Symbol Performance (Trades)
       </h2>
 
       <Table>
@@ -119,8 +121,6 @@ export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
                     color: isActive ? omega.text : omega.dim,
                     fontWeight: isActive ? 700 : 600,
                     borderBottom: `1px solid ${omega.sep}`,
-                    transition: "all 0.25s ease",
-                    textShadow: isActive ? omega.glow : "none",
                   }}
                 >
                   <TableSortLabel
@@ -140,16 +140,6 @@ export default function SymbolLeaderboard({ signals }: { signals: Signal[] }) {
                     )}
                     sx={{
                       color: isActive ? omega.text : omega.dim,
-                      "& .MuiTableSortLabel-label": {
-                        color: isActive ? omega.text : "rgba(212,175,55,0.55)",
-                        fontWeight: isActive ? 700 : 600,
-                      },
-                      "&:hover .MuiTableSortLabel-label": {
-                        color: omega.text,
-                      },
-                      "& .MuiTableSortLabel-icon": {
-                        color: omega.text,
-                      },
                     }}
                   >
                     {h.label}

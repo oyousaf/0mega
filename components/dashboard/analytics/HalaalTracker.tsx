@@ -1,13 +1,32 @@
 "use client";
 
-import { Signal } from "@/app/types/signal";
+import { Trade } from "@/app/types/trade";
 import { omegaAnalytics as omega } from "./theme";
 import { motion } from "framer-motion";
 import { Box } from "@mui/material";
 
-export default function HalaalTracker({ signals }: { signals: Signal[] }) {
-  const total = signals.length;
-  const halal = signals.filter((s) => s.halaal === true).length;
+function isHalaalTrade(t: Trade): boolean {
+  const s = t.symbol.toUpperCase();
+
+  // Crypto fully halaal by default
+  if (s.endsWith("USDT") || s.endsWith("BTC") || s.endsWith("ETH")) return true;
+
+  // Forex: majors are acceptable in AAOIFI rulings if no swap fees (paper = OK)
+  if (/^[A-Z]{6}$/.test(s)) return true;
+
+  // Stocks case
+  if (/^[A-Z]{1,5}$/.test(s)) {
+    // You can add a Stock Shariah screen later (debt ratio, etc.)
+    return true;
+  }
+
+  return false;
+}
+
+export default function HalaalTracker({ trades }: { trades: Trade[] }) {
+  const total = trades.length;
+
+  const halal = trades.filter((t) => isHalaalTrade(t)).length;
   const nonHalal = total - halal;
 
   const percent = total > 0 ? Math.round((halal / total) * 100) : 0;
@@ -49,7 +68,7 @@ export default function HalaalTracker({ signals }: { signals: Signal[] }) {
           </div>
 
           <div>
-            <p className="opacity-70 text-sm">NON-HALAAL</p>
+            <p className="opacity-70 text-sm text-red-400">NON-HALAAL</p>
             <p className="font-bold text-lg text-red-400">{nonHalal}</p>
           </div>
         </div>
