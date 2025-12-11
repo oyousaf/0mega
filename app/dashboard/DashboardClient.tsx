@@ -272,7 +272,7 @@ export default function DashboardClient({
         </motion.div>
 
         {/* STRATEGY + SYMBOL ANALYTICS */}
-        <StrategyMiniCards signals={allSignals} />
+        <StrategyMiniCards trades={history} />
         <StrategyLeaderboard signals={allSignals} />
         <SymbolLeaderboard signals={allSignals} />
 
