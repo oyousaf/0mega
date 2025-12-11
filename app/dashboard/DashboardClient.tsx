@@ -273,7 +273,7 @@ export default function DashboardClient({
 
         {/* STRATEGY + SYMBOL ANALYTICS */}
         <StrategyMiniCards trades={history} />
-        <StrategyLeaderboard signals={allSignals} />
+        <StrategyLeaderboard trades={history} />
         <SymbolLeaderboard signals={allSignals} />
 
         <HalaalTracker signals={allSignals} />

@@ -2,16 +2,15 @@
 
 import { motion } from "framer-motion";
 import { omegaAnalytics as omega } from "./theme";
+import { Trade } from "@/app/types/trade";
 
-// Trades come from trade history API
 interface Props {
-  trades: any[];
+  trades: Trade[];
 }
 
 export default function StrategyMiniCards({ trades }: Props) {
   if (!trades.length) return null;
 
-  // Closed trades only
   const closed = trades.filter((t) => t.realised_pl !== null);
 
   const total = closed.length;
@@ -20,28 +19,13 @@ export default function StrategyMiniCards({ trades }: Props) {
 
   const winRate = total ? (wins / total) * 100 : 0;
 
-  // Compute average R:R using actual fill prices
   const avgRR = (() => {
     let sum = 0;
     let count = 0;
 
     for (const t of closed) {
-      if (!t.entry_price || !t.close_price) continue;
-
-      const entry = Number(t.entry_price);
-      const close = Number(t.close_price);
-
-      // Reward calculation based on direction
-      const reward =
-        t.trade_side === "LONG"
-          ? Math.abs(close - entry)
-          : Math.abs(entry - close);
-
-      // Risk (fallback uses entry if SL missing)
-      const risk = Math.abs(entry - (t.sl ?? entry));
-
-      if (risk > 0) {
-        sum += reward / risk;
+      if (t.rr !== null && !isNaN(t.rr)) {
+        sum += t.rr;
         count++;
       }
     }

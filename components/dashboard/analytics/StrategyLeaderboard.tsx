@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState, Fragment } from "react";
-import { Signal } from "@/app/types/signal";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Box,
   Table,
@@ -12,8 +11,10 @@ import {
   TableCell,
   TableSortLabel,
 } from "@mui/material";
-import { omegaAnalytics as omega } from "./theme";
+
+import { Trade } from "@/app/types/trade";
 import StrategyDetailPanel from "./StrategyDetailPanel";
+import { omegaAnalytics as omega } from "./theme";
 
 type Order = "asc" | "desc";
 
@@ -27,17 +28,11 @@ interface StrategySummary {
   rr: number;
 }
 
-interface HeadCell {
-  key: keyof StrategySummary;
-  label: string;
-  numeric?: boolean;
-}
-
-function computeStrategies(signals: Signal[]): StrategySummary[] {
+function computeStrategies(trades: Trade[]): StrategySummary[] {
   const map = new Map<string, StrategySummary>();
 
-  for (const s of signals) {
-    const strat = s.strategy || "Unknown";
+  for (const t of trades) {
+    const strat = t.strategy ?? "Unknown";
 
     if (!map.has(strat)) {
       map.set(strat, {
@@ -54,18 +49,23 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
     const row = map.get(strat)!;
     row.trades++;
 
-    if (s.tp2_hit || s.tp1_hit) row.wins++;
-    if (s.sl_hit) row.losses++;
+    // Wins / Losses
+    if (t.realised_pl !== null && Number(t.realised_pl) > 0) row.wins++;
+    if (t.realised_pl !== null && Number(t.realised_pl) < 0) row.losses++;
 
-    if (s.entry_price !== null && s.exit_price !== null) {
-      const delta = ((s.exit_price - s.entry_price) / s.entry_price) * 100;
-      row.pnl += delta;
+    // PnL % contribution
+    if (t.realised_pl !== null) {
+      const entry = Number(t.entry_price);
+      const qty = Number(t.qty);
+      const realised = Number(t.realised_pl);
+
+      const pct = entry > 0 ? (realised / (entry * qty)) * 100 : 0;
+      row.pnl += pct;
     }
 
-    if (s.entry_price && s.sl && s.tp1) {
-      const risk = Math.abs(s.entry_price - s.sl);
-      const reward = Math.abs(s.tp1 - s.entry_price);
-      if (risk > 0) row.rr += reward / risk;
+    // R:R accumulation
+    if (t.rr !== null) {
+      row.rr += Number(t.rr);
     }
   }
 
@@ -76,43 +76,27 @@ function computeStrategies(signals: Signal[]): StrategySummary[] {
   }));
 }
 
-export default function StrategyLeaderboard({
-  signals,
-}: {
-  signals: Signal[];
-}) {
+export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
   const [order, setOrder] = useState<Order>("desc");
   const [orderBy, setOrderBy] = useState<keyof StrategySummary>("winRate");
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const data = useMemo(() => computeStrategies(signals), [signals]);
+  const data = useMemo(() => computeStrategies(trades), [trades]);
 
   const sorted = useMemo(() => {
     return [...data].sort((a, b) => {
       const A = a[orderBy];
       const B = b[orderBy];
-      if (A < B) return order === "asc" ? -1 : 1;
-      if (A > B) return order === "asc" ? 1 : -1;
-      return 0;
+
+      if (typeof A === "number" && typeof B === "number") {
+        return order === "asc" ? A - B : B - A;
+      }
+
+      return order === "asc"
+        ? String(A).localeCompare(String(B))
+        : String(B).localeCompare(String(A));
     });
   }, [data, order, orderBy]);
-
-  const headCells: HeadCell[] = [
-    { key: "strategy", label: "Strategy" },
-    { key: "trades", label: "Trades", numeric: true },
-    { key: "winRate", label: "Win Rate %", numeric: true },
-    { key: "pnl", label: "Total P&L %", numeric: true },
-    { key: "rr", label: "Avg R:R", numeric: true },
-  ];
-
-  const handleSort = (key: keyof StrategySummary) => {
-    if (orderBy === key) {
-      setOrder(order === "asc" ? "desc" : "asc");
-    } else {
-      setOrderBy(key);
-      setOrder("desc");
-    }
-  };
 
   return (
     <Box
@@ -121,70 +105,39 @@ export default function StrategyLeaderboard({
         borderRadius: "1rem",
         padding: "1.2rem",
         border: `1px solid ${omega.sep}`,
-        boxShadow: "0 0 14px rgba(212,175,55,0.18)",
         marginTop: "2rem",
-
-        overflowX: "auto",
-        scrollbarWidth: "none",
-        "&::-webkit-scrollbar": { display: "none" },
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
         🔥 Strategy Performance
       </h2>
 
-      <Table
-        sx={{
-          minWidth: 650,
-          width: "100%",
-          tableLayout: "fixed",
-        }}
-      >
+      <Table sx={{ minWidth: 650, width: "100%", tableLayout: "fixed" }}>
         <TableHead>
           <TableRow>
-            {headCells.map((h) => {
-              const isActive = orderBy === h.key;
+            {["strategy", "trades", "winRate", "pnl", "rr"].map((key) => {
+              const k = key as keyof StrategySummary;
+              const isActive = orderBy === k;
 
               return (
                 <TableCell
-                  key={h.key}
-                  align={h.numeric ? "right" : "left"}
-                  sx={{
-                    color: isActive ? omega.text : omega.dim,
-                    fontWeight: isActive ? 700 : 600,
-                    borderBottom: `1px solid ${omega.sep}`,
-                    transition: "all 0.25s ease",
-
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-
-                    maxWidth: 100,
-                    "@media (max-width: 480px)": {
-                      maxWidth: 85,
-                    },
-                  }}
+                  key={key}
+                  align={k === "strategy" ? "left" : "right"}
+                  sx={{ color: omega.text, fontWeight: 600 }}
                 >
                   <TableSortLabel
                     active={isActive}
                     direction={isActive ? order : "asc"}
-                    onClick={() => handleSort(h.key)}
-                    IconComponent={() => (
-                      <motion.span
-                        animate={{
-                          rotate: isActive && order === "desc" ? 180 : 0,
-                        }}
-                        transition={{ duration: 0.25 }}
-                        style={{ display: "inline-block" }}
-                      >
-                        ▼
-                      </motion.span>
-                    )}
-                    sx={{
-                      color: isActive ? omega.text : omega.dim,
+                    onClick={() => {
+                      if (orderBy === k) {
+                        setOrder(order === "asc" ? "desc" : "asc");
+                      } else {
+                        setOrderBy(k);
+                        setOrder("desc");
+                      }
                     }}
                   >
-                    {h.label}
+                    {key.toUpperCase()}
                   </TableSortLabel>
                 </TableCell>
               );
@@ -193,120 +146,40 @@ export default function StrategyLeaderboard({
         </TableHead>
 
         <TableBody>
-          <AnimatePresence initial={false}>
-            {sorted.map((row, idx) => (
-              <Fragment key={row.strategy}>
+          {sorted.map((row) => (
+            <Fragment key={row.strategy}>
+              <motion.tr
+                onClick={() =>
+                  setExpanded(expanded === row.strategy ? null : row.strategy)
+                }
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                whileHover={{ background: omega.rowHover }}
+                style={{ cursor: "pointer" }}
+              >
+                <TableCell>{row.strategy}</TableCell>
+                <TableCell align="right">{row.trades}</TableCell>
+                <TableCell align="right">{row.winRate.toFixed(1)}%</TableCell>
+                <TableCell align="right">{row.pnl.toFixed(2)}%</TableCell>
+                <TableCell align="right">{row.rr.toFixed(2)}</TableCell>
+              </motion.tr>
+
+              {expanded === row.strategy && (
                 <motion.tr
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{
-                    duration: 0.25,
-                    delay: idx * 0.03,
-                  }}
-                  whileHover={{ backgroundColor: omega.rowHover }}
-                  onClick={() =>
-                    setExpanded(expanded === row.strategy ? null : row.strategy)
-                  }
-                  style={{ cursor: "pointer" }}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
                 >
-                  <TableCell
-                    sx={{
-                      color: omega.text,
-                      background: omega.row,
-                      borderBottom: `1px solid ${omega.sep}`,
-
-                      maxWidth: 110,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-
-                      "@media (max-width: 480px)": {
-                        maxWidth: 80,
-                      },
-                    }}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="opacity-60">{idx + 1}.</span>
-
-                      <span className="truncate max-w-24 block">
-                        {row.strategy}
-                      </span>
-
-                      {idx === 0 && (
-                        <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
-                          TOP
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-
-                  <TableCell
-                    align="right"
-                    sx={{
-                      color: omega.text,
-                      background: omega.row,
-                      borderBottom: `1px solid ${omega.sep}`,
-                    }}
-                  >
-                    {row.trades}
-                  </TableCell>
-
-                  <TableCell
-                    align="right"
-                    sx={{
-                      color: row.winRate >= 50 ? omega.win : omega.loss,
-                      background: omega.row,
-                      borderBottom: `1px solid ${omega.sep}`,
-                    }}
-                  >
-                    {row.winRate.toFixed(1)}%
-                  </TableCell>
-
-                  <TableCell
-                    align="right"
-                    sx={{
-                      color: row.pnl >= 0 ? omega.win : omega.loss,
-                      background: omega.row,
-                      borderBottom: `1px solid ${omega.sep}`,
-                    }}
-                  >
-                    {row.pnl.toFixed(2)}%
-                  </TableCell>
-
-                  <TableCell
-                    align="right"
-                    sx={{
-                      color: omega.text,
-                      background: omega.row,
-                      borderBottom: `1px solid ${omega.sep}`,
-                    }}
-                  >
-                    {row.rr.toFixed(2)}
+                  <TableCell colSpan={5}>
+                    <StrategyDetailPanel
+                      strategy={row.strategy}
+                      trades={trades}
+                    />
                   </TableCell>
                 </motion.tr>
-
-                <AnimatePresence>
-                  {expanded === row.strategy && (
-                    <motion.tr
-                      key={row.strategy + "-expanded"}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.25 }}
-                    >
-                      <TableCell colSpan={5} sx={{ padding: 0 }}>
-                        <StrategyDetailPanel
-                          strategy={row.strategy}
-                          signals={signals}
-                        />
-                      </TableCell>
-                    </motion.tr>
-                  )}
-                </AnimatePresence>
-              </Fragment>
-            ))}
-          </AnimatePresence>
+              )}
+            </Fragment>
+          ))}
         </TableBody>
       </Table>
     </Box>
