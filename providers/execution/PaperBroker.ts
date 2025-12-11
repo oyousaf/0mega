@@ -6,6 +6,7 @@ import type {
   OrderSide,
 } from "./broker.interface";
 import { getPrice } from "@/providers/index";
+import { detectAsset } from "@/lib/trading/detectAssetType";
 
 /* ----------------------------------------
    Balance helpers (DB-backed)
@@ -27,10 +28,9 @@ async function getBalanceDB(): Promise<number> {
 }
 
 async function setBalanceDB(balance: number) {
-  await pool.query(
-    `UPDATE paper_balance SET balance = $1 WHERE id = 1`,
-    [balance]
-  );
+  await pool.query(`UPDATE paper_balance SET balance = $1 WHERE id = 1`, [
+    balance,
+  ]);
 }
 
 /* ----------------------------------------
@@ -70,7 +70,8 @@ export class PaperBroker implements Broker {
     qty: number,
     side: OrderSide
   ): Promise<ExecutionResult> {
-    const price = await getPrice(symbol, "crypto");
+    const asset = detectAsset(symbol);
+    const price = await getPrice(symbol, asset);
     const cost = price * qty;
 
     const balance = await getBalanceDB();

@@ -1,6 +1,8 @@
 import { getBroker } from "@/providers/execution/router";
 import { calcQty } from "./positionSizing";
 import { pool } from "@/lib/neon";
+import { detectAsset } from "./detectAssetType";
+import { getPrice } from "@/providers";
 
 export async function executeForSignal(signal: any, event: string) {
   const broker = getBroker();
@@ -9,6 +11,9 @@ export async function executeForSignal(signal: any, event: string) {
   if (event === "ACTIVE" && !signal.order_id) {
     const qty = await calcQty(signal.symbol, signal.type);
 
+    const asset = detectAsset(signal.symbol);
+    await getPrice(signal.symbol, asset);
+
     const res = await broker.openTrade(signal.symbol, qty, signal.direction);
     if (!res.success) return;
 
@@ -16,6 +21,7 @@ export async function executeForSignal(signal: any, event: string) {
       `UPDATE signals SET order_id = $1, opened_qty = $2 WHERE id = $3`,
       [res.orderId, qty, signal.id]
     );
+
     return;
   }
 
@@ -30,7 +36,6 @@ export async function executeForSignal(signal: any, event: string) {
     const res = await broker.partialClose(signal.order_id, halfQty);
     if (!res.success) return;
 
-    // reduce remaining qty
     await pool.query(
       `UPDATE signals SET opened_qty = opened_qty - $1 WHERE id = $2`,
       [halfQty, signal.id]
