@@ -2,22 +2,58 @@ import { NextResponse } from "next/server";
 import { getBroker } from "@/providers/execution/router";
 import { getPrice } from "@/providers/index";
 
+/* -------------------------------------------------------
+   MARKET DETECTOR
+   Crypto = symbol ends with "USD" or "USDT" etc.
+   Forex  = 6-char pairs like GBPUSD, EURJPY, etc.
+   Stock  = Fallback
+------------------------------------------------------- */
+function detectMarket(symbol: string): "crypto" | "forex" | "stock" {
+  const upper = symbol.toUpperCase();
+
+  // Forex: 6-letter pairs, e.g., GBPUSD, EURJPY, AUDCAD
+  if (/^[A-Z]{6}$/.test(upper)) return "forex";
+
+  // Crypto: ends with USD, USDT, BTC, ETH etc
+  if (
+    upper.endsWith("USD") ||
+    upper.endsWith("USDT") ||
+    upper.endsWith("BTC") ||
+    upper.endsWith("ETH")
+  )
+    return "crypto";
+
+  return "stock";
+}
+
 export async function GET() {
   try {
     const broker = getBroker();
 
-    // Broker returns OpenTrade[] from YOUR provider
+    // Provider open positions
     const rawTrades = await broker.getOpenTrades();
     const balance = await broker.getBalance();
 
     const trades = await Promise.all(
       rawTrades.map(async (t) => {
-        // broker returns openedAt → convert to ISO
         const openedAt = t.openedAt
           ? new Date(t.openedAt).toISOString()
           : new Date().toISOString();
 
-        const livePrice = await getPrice(t.symbol, "crypto");
+        // DETECT MARKET
+        const market = detectMarket(t.symbol);
+
+        // SAFE PRICE FETCHING
+        let livePrice: number = t.entryPrice; // fallback
+
+        try {
+          const p = await getPrice(t.symbol, market);
+          if (typeof p === "number" && !Number.isNaN(p)) {
+            livePrice = p;
+          }
+        } catch {
+          console.warn(`Price fetch failed for ${t.symbol}, using entry price`);
+        }
 
         // Unrealised P/L
         const pnl =
@@ -29,9 +65,7 @@ export async function GET() {
           trade_id: String(t.id),
           symbol: t.symbol,
 
-          // BUY/SELL → LONG/SHORT
           side: t.side === "BUY" ? "LONG" : "SHORT",
-
           strategy: "Unknown",
 
           entry_price: t.entryPrice,
@@ -53,7 +87,7 @@ export async function GET() {
               qty: t.qty,
               side: "OPEN",
               time: openedAt,
-              broker: "paper",
+              broker: broker.name ?? "paper",
             },
           ],
         };
