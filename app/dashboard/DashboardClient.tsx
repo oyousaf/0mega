@@ -20,15 +20,21 @@ import RecentSignals from "@/components/dashboard/RecentSignals";
 import { Signal } from "@/app/types/signal";
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
+
+import StrategyLeaderboard from "@/components/dashboard/analytics/StrategyLeaderboard";
 import SymbolLeaderboard from "@/components/dashboard/analytics/SymbolLeaderboard";
-import StrategyLeaderboard from "../../components/dashboard/analytics/StrategyLeaderboard";
-import { buildEquityCurve } from "@/lib/analytics/equityCurve";
-import StrategyMiniCards from "../../components/dashboard/analytics/StrategyMiniCards";
-import HalaalTracker from "../../components/dashboard/analytics/HalaalTracker";
-import MarketBreakdown from "../../components/dashboard/analytics/MarketBreakdown";
+import StrategyMiniCards from "@/components/dashboard/analytics/StrategyMiniCards";
+import HalaalTracker from "@/components/dashboard/analytics/HalaalTracker";
+import MarketBreakdown from "@/components/dashboard/analytics/MarketBreakdown";
+
 import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
 import TradeHistoryWidget from "@/components/dashboard/TradeHistoryWidget";
+
+const PerformanceChart = dynamic(
+  () => import("@/components/charts/PerformanceChart"),
+  { ssr: false }
+);
 
 const menuProps = {
   PaperProps: {
@@ -45,11 +51,6 @@ const menuProps = {
     },
   },
 };
-
-const PerformanceChart = dynamic(
-  () => import("@/components/charts/PerformanceChart"),
-  { ssr: false }
-);
 
 export default function DashboardClient({
   initialSignals,
@@ -68,9 +69,28 @@ export default function DashboardClient({
   const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
   const [lastUpdated, setLastUpdated] = useState("");
 
-  // ----------------------------------------------------
-  // AUTO REFRESH
-  // ----------------------------------------------------
+  const [history, setHistory] = useState<any[]>([]);
+
+  /* ----------------------------------------------------------
+     LOAD TRADE HISTORY (SOURCE OF TRUTH FOR ANALYTICS)
+  ---------------------------------------------------------- */
+  async function loadHistory() {
+    const res = await fetch("/api/trading/history?limit=500&offset=0", {
+      cache: "no-store",
+    });
+    const json = await res.json();
+    setHistory(json.history || []);
+  }
+
+  useEffect(() => {
+    loadHistory();
+    const id = setInterval(loadHistory, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* ----------------------------------------------------------
+     SIGNAL AUTO REFRESH
+  ---------------------------------------------------------- */
   useEffect(() => {
     const refresh = async () => {
       try {
@@ -97,34 +117,36 @@ export default function DashboardClient({
     return () => clearInterval(id);
   }, []);
 
-  // ----------------------------------------------------
-  // EQUITY CURVE
-  // ----------------------------------------------------
+  /* ----------------------------------------------------------
+     EQUITY CURVE
+  ---------------------------------------------------------- */
   const equityData = useMemo(() => {
-    const filtered = allSignals.filter((s) => {
-      if (symbolFilter !== "all" && s.symbol !== symbolFilter) return false;
-      if (marketFilter !== "all" && s.type !== marketFilter) return false;
-      return true;
+    if (!history.length) return [];
+
+    const closed = history
+      .filter((t) => t.realised_pl !== null)
+      .sort(
+        (a, b) =>
+          new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime()
+      );
+
+    let cumulative = 0;
+
+    return closed.map((t) => {
+      cumulative += Number(t.realised_pl);
+      return {
+        date: new Date(t.opened_at).toISOString(),
+        cumulative,
+      };
     });
+  }, [history]);
 
-    const curve = buildEquityCurve(filtered);
-
-    return curve.map((p) => ({
-      date: p.date.toISOString(),
-      cumulative: p.cumulative,
-    }));
-  }, [allSignals, symbolFilter, marketFilter]);
-
-  const symbolList = Array.from(
-    new Set(allSignals.map((s) => s.symbol))
-  ).sort();
-
-  // ----------------------------------------------------
-  // RENDER
-  // ----------------------------------------------------
+  /* ----------------------------------------------------------
+     RENDER
+  ---------------------------------------------------------- */
   return (
     <>
-      {/* SETTINGS MODAL */}
+      {/* SETTINGS PANEL */}
       <Modal open={openSettings} onClose={() => setOpenSettings(false)}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -153,18 +175,14 @@ export default function DashboardClient({
         </motion.div>
       </Modal>
 
-      {/* ROOT DASHBOARD */}
+      {/* MAIN DASHBOARD */}
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="max-w-7xl mx-auto text-center p-6 space-y-10 block"
-        style={{
-          display: "block",
-          width: "100%",
-        }}
       >
-        {/* HEADER */}
+        {/* TITLE */}
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
           initial={{ opacity: 0, y: 8 }}
@@ -173,7 +191,7 @@ export default function DashboardClient({
           𝛀mega Dashboard
         </motion.h1>
 
-        {/* TOP NAV BUTTONS */}
+        {/* NAV BUTTONS */}
         <Box className="flex justify-end items-center gap-3 mt-2 pr-2">
           <Link href="/signals/active">
             <Button
@@ -219,187 +237,18 @@ export default function DashboardClient({
           </motion.button>
         </Box>
 
-        {/* METRICS CARDS */}
+        {/* SIGNAL METRICS */}
         <MetricsCards metrics={metrics} />
 
         {/* OPEN TRADES */}
         <OpenTradesWidget />
 
-        {/* OPEN TRADES */}
+        {/* TRADE HISTORY */}
         <TradeHistoryWidget />
-
-        {/* FILTER BAR */}
-        <Box
-          sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            mt: 2,
-            p: 1.2,
-            borderRadius: "0.75rem",
-            background: "var(--omega-green)",
-            border: "1px solid var(--omega-dark-gold)",
-            boxShadow: "0 0 12px rgba(212,175,55,0.15)",
-
-            "@media (max-width: 480px)": {
-              flexDirection: "column",
-              alignItems: "stretch",
-              gap: 1.5,
-            },
-          }}
-        >
-          {/* RANGE SELECT */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-
-              "@media (max-width: 480px)": {
-                width: "100%",
-                justifyContent: "space-between",
-              },
-            }}
-          >
-            <span className="text-omega-gold text-sm font-semibold opacity-90">
-              Range
-            </span>
-
-            <Select
-              value={range}
-              onChange={(e: SelectChangeEvent) =>
-                setRange(e.target.value as "hour" | "day" | "week")
-              }
-              sx={{
-                height: 36,
-                minWidth: 110,
-                background: "rgba(0,0,0,0.2)",
-                borderRadius: "0.6rem",
-                color: "var(--omega-gold)",
-                border: "1px solid var(--omega-dark-gold)",
-                "& .MuiSelect-select": { paddingY: "6px" },
-                flexShrink: 1,
-              }}
-              MenuProps={menuProps}
-            >
-              <MenuItem value="hour">Hourly</MenuItem>
-              <MenuItem value="day">Daily</MenuItem>
-              <MenuItem value="week">Weekly</MenuItem>
-            </Select>
-          </Box>
-
-          {/* MARKET FILTER */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-
-              "@media (max-width: 480px)": {
-                width: "100%",
-                flexDirection: "column",
-                alignItems: "stretch",
-                gap: 1,
-              },
-            }}
-          >
-            <span className="text-omega-gold text-sm font-semibold opacity-90">
-              Market
-            </span>
-
-            <Box
-              sx={{
-                display: "flex",
-                gap: 1,
-                flexWrap: "wrap",
-              }}
-            >
-              {[
-                { key: "all", label: "ALL" },
-                { key: "forex", label: "FX" },
-                { key: "crypto", label: "CRYPTO" },
-                { key: "stock", label: "STOCKS" },
-              ].map((m) => (
-                <Button
-                  key={m.key}
-                  onClick={() => setMarketFilter(m.key)}
-                  sx={{
-                    px: 2,
-                    py: 0.4,
-                    borderRadius: "0.6rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    color:
-                      marketFilter === m.key
-                        ? "var(--omega-green)"
-                        : "var(--omega-gold)",
-                    backgroundColor:
-                      marketFilter === m.key
-                        ? "var(--omega-gold)"
-                        : "rgba(0,0,0,0.25)",
-                    border: "1px solid var(--omega-dark-gold)",
-                    "&:hover": {
-                      backgroundColor:
-                        marketFilter === m.key
-                          ? "var(--omega-gold)"
-                          : "rgba(212,175,55,0.15)",
-                    },
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {m.label}
-                </Button>
-              ))}
-            </Box>
-          </Box>
-
-          {/* SYMBOL SELECT */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-
-              "@media (max-width: 480px)": {
-                width: "100%",
-                justifyContent: "space-between",
-              },
-            }}
-          >
-            <span className="text-omega-gold text-sm font-semibold opacity-90">
-              Symbol
-            </span>
-
-            <Select
-              value={symbolFilter}
-              onChange={(e) => setSymbolFilter(e.target.value)}
-              sx={{
-                height: 36,
-                minWidth: 120,
-                background: "rgba(0,0,0,0.2)",
-                borderRadius: "0.6rem",
-                color: "var(--omega-gold)",
-                border: "1px solid var(--omega-dark-gold)",
-                "& .MuiSelect-select": { paddingY: "6px" },
-                flexShrink: 1,
-              }}
-              MenuProps={menuProps}
-            >
-              <MenuItem value="all">All Symbols</MenuItem>
-              {symbolList.map((sym) => (
-                <MenuItem key={sym} value={sym}>
-                  {sym}
-                </MenuItem>
-              ))}
-            </Select>
-          </Box>
-        </Box>
 
         {/* EQUITY CHART */}
         <ChartWrapper height={300}>
-          <PerformanceChart data={equityData} />
+          <PerformanceChart data={equityData} trades={history} />
         </ChartWrapper>
 
         {/* LAST UPDATED */}
@@ -422,97 +271,19 @@ export default function DashboardClient({
           </div>
         </motion.div>
 
-        {/* ANALYTICS CARDS */}
+        {/* STRATEGY + SYMBOL ANALYTICS */}
         <StrategyMiniCards signals={allSignals} />
         <StrategyLeaderboard signals={allSignals} />
         <SymbolLeaderboard signals={allSignals} />
 
         <HalaalTracker signals={allSignals} />
 
-        {/* MARKET BREAKDOWN */}
         <ChartWrapper height={300}>
           <MarketBreakdown signals={allSignals} />
         </ChartWrapper>
 
         {/* RECENT SIGNALS */}
         <RecentSignals signals={recentSignals} />
-
-        {/* NAV BUTTONS */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="flex flex-col sm:flex-row justify-center gap-3 mt-6"
-        >
-          <Link href="/signals/active" className="flex-1">
-            <Button
-              fullWidth
-              sx={{
-                backgroundColor: "var(--omega-gold)",
-                color: "var(--omega-green)",
-                fontWeight: 700,
-                borderRadius: "0.75rem",
-                py: 1.5,
-                fontSize: "0.85rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                "&:hover": { backgroundColor: "rgba(212,175,55,0.85)" },
-              }}
-            >
-              <span className="text-lg">
-                <FiActivity />
-              </span>
-              ACTIVE SIGNALS
-            </Button>
-          </Link>
-
-          <Link href="/signals/all" className="flex-1">
-            <Button
-              fullWidth
-              sx={{
-                backgroundColor: "var(--omega-gold)",
-                color: "var(--omega-green)",
-                fontWeight: 700,
-                borderRadius: "0.75rem",
-                py: 1.5,
-                fontSize: "0.85rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                "&:hover": { backgroundColor: "rgba(212,175,55,0.85)" },
-              }}
-            >
-              <span className="text-lg">
-                <FiFolder />
-              </span>
-              ALL SIGNALS
-            </Button>
-          </Link>
-
-          <Link href="/signals/new" className="flex-1">
-            <Button
-              fullWidth
-              sx={{
-                backgroundColor: "var(--omega-gold)",
-                color: "var(--omega-green)",
-                fontWeight: 700,
-                borderRadius: "0.75rem",
-                py: 1.5,
-                fontSize: "0.85rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                "&:hover": { backgroundColor: "rgba(212,175,55,0.85)" },
-              }}
-            >
-              <span className="text-lg">
-                <FiPlusCircle />
-              </span>
-              ADD NEW SIGNAL
-            </Button>
-          </Link>
-        </motion.div>
       </motion.main>
     </>
   );

@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 
 interface Props {
   data: { date: string; cumulative: number }[];
+  trades?: any[];
 }
 
 const omega = {
