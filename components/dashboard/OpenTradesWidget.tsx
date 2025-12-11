@@ -49,7 +49,8 @@ export default function OpenTradesWidget() {
         </Typography>
 
         <Typography sx={{ opacity: 0.7, mb: 2 }}>
-          Balance: £{balance.toFixed(2)}
+          Balance: £
+          {balance.toLocaleString("en-UK", { minimumFractionDigits: 2 })}
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
