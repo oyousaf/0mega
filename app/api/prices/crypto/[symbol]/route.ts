@@ -6,43 +6,61 @@ export async function GET(
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   const { symbol } = await params;
-  const pair = symbol.toUpperCase();
 
+  let pair = symbol.toUpperCase().replace("/", "");
   const cacheKey = `crypto_${pair}`;
 
-  // 1. Attempt to serve from cache
+  // CACHE FIRST
   const cached = getCached(cacheKey);
-  if (cached) {
-    return NextResponse.json({ ...cached, cached: true });
+  if (cached) return NextResponse.json({ ...cached, cached: true });
+
+  // Symbol normalisation
+  const attempts = [pair];
+
+  // BTCUSD → try BTCUSDT
+  if (pair.endsWith("USD") && !pair.endsWith("USDT")) {
+    attempts.push(pair.replace("USD", "USDT"));
   }
 
-  try {
-    const url = `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`;
+  // BTCUSDT → try BTCUSD
+  if (pair.endsWith("USDT")) {
+    attempts.push(pair.replace("USDT", "USD"));
+  }
 
-    const res = await fetch(url, { method: "GET", cache: "no-store" });
+  for (const s of attempts) {
+    try {
+      const url = `https://api.binance.com/api/v3/ticker/price?symbol=${s}`;
+      const res = await fetch(url, { cache: "no-store" });
 
-    if (!res.ok) {
-      throw new Error(`Binance API error: ${res.status}`);
-    }
+      if (!res.ok) continue;
 
-    const data = await res.json();
+      const json = await res.json();
+      const price = Number(json.price);
 
-    const result = {
-      source: "binance_spot",
-      symbol: data.symbol,
-      price: Number(data.price),
+      if (!Number.isFinite(price)) continue;
+
+      const result = {
+        source: "binance_spot",
+        symbol: json.symbol,
+        price,
+        halaal: true,
+        cached: false,
+      };
+
+      setCached(cacheKey, result, 2000);
+      return NextResponse.json(result);
+    } catch {}
+  }
+
+  // FINAL FALLBACK (never break UI)
+  return NextResponse.json(
+    {
+      source: "crypto_fallback",
+      symbol: pair,
+      price: 0,
       halaal: true,
-      cached: false,
-    };
-
-    // 2. Cache result for 2 seconds
-    setCached(cacheKey, result, 2000);
-
-    return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message || "Unknown error" },
-      { status: 500 }
-    );
-  }
+      fallback: true,
+    },
+    { status: 200 }
+  );
 }
