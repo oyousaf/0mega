@@ -4,14 +4,10 @@ import { getPrice } from "@/providers/index";
 
 /* -------------------------------------------------------
    MARKET DETECTION
-   Crypto → ends with USD/USDT/BTC/ETH
-   Forex  → strictly 6-letter pairs like GBPUSD, EURJPY
-   Stock  → fallback
 ------------------------------------------------------- */
 function detectMarket(symbol: string): "crypto" | "forex" | "stock" {
   const upper = symbol.toUpperCase();
 
-  // CRYPTO FIRST (BTCUSD, ETHUSD, SOLUSD, XRPUSD etc)
   if (
     upper.endsWith("USD") ||
     upper.endsWith("USDT") ||
@@ -21,7 +17,6 @@ function detectMarket(symbol: string): "crypto" | "forex" | "stock" {
     return "crypto";
   }
 
-  // FOREX (must come after crypto)
   if (/^[A-Z]{6}$/.test(upper)) {
     return "forex";
   }
@@ -30,16 +25,13 @@ function detectMarket(symbol: string): "crypto" | "forex" | "stock" {
 }
 
 /* -------------------------------------------------------
-   SAFE ISO DATE
+   SAFE HELPERS
 ------------------------------------------------------- */
 function safeISO(input: any) {
   const d = new Date(input);
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 }
 
-/* -------------------------------------------------------
-   SAFE NUMBER
-------------------------------------------------------- */
 function n(val: any): number {
   const v = Number(val);
   return isFinite(v) ? v : 0;
@@ -58,26 +50,22 @@ export async function GET() {
     const trades = await Promise.all(
       rawTrades.map(async (t) => {
         const openedISO = safeISO(t.openedAt);
-
         const symbol = t.symbol?.toUpperCase() ?? "UNKNOWN";
         const market = detectMarket(symbol);
 
-        let livePrice = n(t.entryPrice); // safe fallback
+        let livePrice = n(t.entryPrice);
 
-        /* -----------------------------------------
-           SAFE PRICE FETCH
-           - Never breaks
-           - Never returns NaN
-        ------------------------------------------ */
+        // --------------------------
+        // SAFE PRICE FETCH
+        // --------------------------
         try {
-          const p = await getPrice(symbol, market);
-
-          if (typeof p === "number" && !Number.isNaN(p)) {
-            livePrice = p;
+          const price = await getPrice(symbol, market);
+          if (typeof price === "number" && !Number.isNaN(price)) {
+            livePrice = price;
           } else {
             console.warn(`${market} price invalid for ${symbol}`);
           }
-        } catch (e) {
+        } catch {
           console.warn(`Price fetch failed for ${symbol}, fallback to entry`);
         }
 
@@ -97,8 +85,8 @@ export async function GET() {
 
           entry_price: entry,
           entry_fill_price: entry,
-
           exit_fill_price: null,
+
           realised_pl: pnl,
           rr: null,
 
@@ -106,6 +94,8 @@ export async function GET() {
           opened_at: openedISO,
           closed_at: null,
           is_closed: false,
+
+          halaal: true,
 
           executions: [
             {

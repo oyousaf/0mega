@@ -1,14 +1,24 @@
+export interface TradeExecution {
+  exec_id: string;
+  price: number;
+  qty: number;
+  side: "OPEN" | "CLOSE";
+  time: string;
+  broker: string;
+}
+
 export interface Trade {
   trade_id: string;
-  symbol: string;
 
+  symbol: string;
   side: "LONG" | "SHORT";
+
   strategy: string;
 
   entry_price: number;
-  entry_fill_price: number | null;
-
+  entry_fill_price: number;
   exit_fill_price: number | null;
+
   realised_pl: number | null;
   rr: number | null;
 
@@ -18,15 +28,7 @@ export interface Trade {
   closed_at: string | null;
   is_closed: boolean;
 
-  executions: {
-    id: string;
-    signal_id: number;
-    price: number;
-    qty: number;
-    side: string;
-    time: string;
-    broker: string;
-  }[];
+  executions: TradeExecution[];
 
-  halaal?: boolean; 
+  halaal: boolean;
 }
