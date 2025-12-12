@@ -6,7 +6,7 @@ export async function GET(req: Request) {
     const limit = 500;
     const offset = 0;
 
-    // 1. Fetch trades
+    // 1. Fetch raw trades
     const { rows: trades } = await pool.query(
       `
       SELECT *
@@ -21,37 +21,43 @@ export async function GET(req: Request) {
       return NextResponse.json({ trades: [] });
     }
 
-    // 2. Fetch all executions in one query
-    const tradeIds = trades.map((t) => t.trade_id);
+    // 2. Collect trade IDs for execution lookup
+    const tradeIds = trades.map((t) => t.id);
 
     const { rows: execs } = await pool.query(
       `
-      SELECT *
+      SELECT
+        id AS exec_id,
+        trade_id,
+        price,
+        qty,
+        side,
+        timestamp,
+        broker
       FROM trade_executions
       WHERE trade_id = ANY($1)
-      ORDER BY time ASC
+      ORDER BY timestamp ASC
       `,
       [tradeIds]
     );
 
-    // 3. Group executions by trade_id
-    const grouped: Record<string, any[]> = {};
+    // 3. Group executions per trade
+    const grouped: Record<number, any[]> = {};
     for (const e of execs) {
-      const id = String(e.trade_id);
-      if (!grouped[id]) grouped[id] = [];
-      grouped[id].push({
+      if (!grouped[e.trade_id]) grouped[e.trade_id] = [];
+      grouped[e.trade_id].push({
         exec_id: e.exec_id,
         price: Number(e.price),
         qty: Number(e.qty),
         side: e.side,
-        time: e.time,
+        time: e.timestamp,
         broker: e.broker ?? "paper",
       });
     }
 
-    // 4. Attach executions to each trade
+    // 4. Build final formatted trade objects
     const result = trades.map((t) => ({
-      trade_id: String(t.trade_id),
+      trade_id: t.id,
       symbol: t.symbol,
       side: t.side,
       strategy: t.strategy ?? "Unknown",
@@ -69,7 +75,7 @@ export async function GET(req: Request) {
       closed_at: t.closed_at,
       is_closed: t.is_closed,
 
-      executions: grouped[String(t.trade_id)] ?? [],
+      executions: grouped[t.id] ?? [],
 
       halaal: t.halaal ?? true,
     }));

@@ -5,7 +5,7 @@ interface ExecutionRow {
   exec_id: number;
   exec_price: number;
   exec_qty: number;
-  exec_side: "OPEN" | "CLOSE" | string;
+  exec_side: string;
   exec_time: string | null;
   broker: string | null;
 }
@@ -13,7 +13,7 @@ interface ExecutionRow {
 interface TradeRow {
   trade_id: number;
   symbol: string;
-  trade_side: "LONG" | "SHORT" | string;
+  trade_side: string;
   entry_price: number;
   trade_qty: number;
   opened_at: string;
@@ -56,8 +56,11 @@ export async function GET(req: Request) {
         te.broker
 
       FROM paper_trades pt
+
+      /* ✅ FIXED JOIN — real FK column */
       LEFT JOIN trade_executions te
-        ON te.order_id = pt.id::text
+        ON te.trade_id = pt.id
+
       LEFT JOIN signals s
         ON s.id = te.signal_id
 
@@ -67,9 +70,9 @@ export async function GET(req: Request) {
       [limit, offset]
     );
 
-    // --------------------------
-    // GROUP BY TRADE ID
-    // --------------------------
+    /* -------------------------
+       GROUP BY TRADE
+    --------------------------*/
     const grouped = new Map<number, any>();
 
     for (const r of rows) {
@@ -101,53 +104,43 @@ export async function GET(req: Request) {
       }
     }
 
-    // --------------------------
-    // COMPUTE ANALYTICS
-    // --------------------------
-    const result: any[] = [];
+    /* -------------------------
+       COMPUTE ANALYTICS
+    --------------------------*/
+    const results: any[] = [];
 
     for (const trade of grouped.values()) {
       const executions = trade.executions;
 
-      const opens = executions.filter(
-        (e: ExecutionRow) => e.exec_side === "OPEN"
-      );
-      const closes = executions.filter(
-        (e: ExecutionRow) => e.exec_side === "CLOSE"
-      );
+      const opens = executions.filter((e: any) => e.exec_side === "OPEN");
+      const closes = executions.filter((e: any) => e.exec_side === "CLOSE");
 
-      // Weighted entry fill
       const entry_fill = opens.length
         ? opens.reduce(
-            (sum: number, e: ExecutionRow) => sum + e.exec_price * e.exec_qty,
+            (sum: number, e: any) => sum + e.exec_price * e.exec_qty,
             0
-          ) /
-          opens.reduce((sum: number, e: ExecutionRow) => sum + e.exec_qty, 0)
+          ) / opens.reduce((sum: number, e: any) => sum + e.exec_qty, 0)
         : trade.entry_price;
 
-      let exit_fill: number | null = null;
-      let realised_pl: number | null = null;
-      let closed_at: string | null = null;
-      let rr: number | null = null;
+      let exit_fill = null;
+      let realised_pl = null;
+      let closed_at = null;
+      let rr = null;
 
       if (closes.length > 0) {
         exit_fill =
           closes.reduce(
-            (sum: number, e: ExecutionRow) => sum + e.exec_price * e.exec_qty,
+            (sum: number, e: any) => sum + e.exec_price * e.exec_qty,
             0
-          ) /
-          closes.reduce((sum: number, e: ExecutionRow) => sum + e.exec_qty, 0);
+          ) / closes.reduce((sum: number, e: any) => sum + e.exec_qty, 0);
 
         closed_at = closes[closes.length - 1].exec_time ?? null;
 
-        // P/L based on direction
-        if (trade.side === "LONG") {
-          realised_pl = (exit_fill - entry_fill) * trade.qty;
-        } else {
-          realised_pl = (entry_fill - exit_fill) * trade.qty;
-        }
+        realised_pl =
+          trade.side === "LONG"
+            ? (exit_fill - entry_fill) * trade.qty
+            : (entry_fill - exit_fill) * trade.qty;
 
-        // RR
         if (trade.sl !== null) {
           const risk = Math.abs(entry_fill - trade.sl);
           const reward =
@@ -159,7 +152,7 @@ export async function GET(req: Request) {
         }
       }
 
-      result.push({
+      results.push({
         trade_id: trade.trade_id,
         symbol: trade.symbol,
         side: trade.side,
@@ -183,7 +176,7 @@ export async function GET(req: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, trades: result });
+    return NextResponse.json({ success: true, trades: results });
   } catch (err: any) {
     console.error("History API error:", err);
     return NextResponse.json(
