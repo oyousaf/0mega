@@ -9,5 +9,7 @@ export default function HomePage() {
         <DashboardClient />
       </main>
     </Suspense>
+    sda
+    da
   );
 }
