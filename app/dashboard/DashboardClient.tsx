@@ -64,21 +64,25 @@ export default function DashboardClient() {
      EQUITY CURVE
   ---------------------------------------------------------- */
   const equityData = useMemo(() => {
+    if (!history.length) return [];
+
     const closed = history
-      .filter(
-        (t) => t.realised_pl !== null && !isNaN(new Date(t.opened_at).getTime())
-      )
+      .filter((t) => t.is_closed && t.realised_pl !== null)
       .sort(
         (a, b) =>
-          new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime()
+          new Date(a.closed_at ?? a.opened_at).getTime() -
+          new Date(b.closed_at ?? b.opened_at).getTime()
       );
 
     let cumulative = 0;
 
     return closed.map((t) => {
-      cumulative += Number(t.realised_pl);
+      const pnl = Number(t.realised_pl) || 0;
+      cumulative += pnl;
+
       return {
-        date: new Date(t.opened_at).toISOString(),
+        date: new Date(t.closed_at ?? t.opened_at).toISOString(),
+        pnl,
         cumulative,
       };
     });
