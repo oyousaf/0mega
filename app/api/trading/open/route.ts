@@ -1,121 +1,84 @@
 import { NextResponse } from "next/server";
-import { getBroker } from "@/providers/execution/router";
-import { getPrice } from "@/providers/index";
+import { pool } from "@/lib/neon";
 
-/* -------------------------------------------------------
-   MARKET DETECTION
-------------------------------------------------------- */
-function detectMarket(symbol: string): "crypto" | "forex" | "stock" {
-  const upper = symbol.toUpperCase();
-
-  if (
-    upper.endsWith("USD") ||
-    upper.endsWith("USDT") ||
-    upper.endsWith("BTC") ||
-    upper.endsWith("ETH")
-  ) {
-    return "crypto";
-  }
-
-  if (/^[A-Z]{6}$/.test(upper)) {
-    return "forex";
-  }
-
-  return "stock";
-}
-
-/* -------------------------------------------------------
-   SAFE HELPERS
-------------------------------------------------------- */
-function safeISO(input: any) {
-  const d = new Date(input);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-}
-
-function n(val: any): number {
-  const v = Number(val);
-  return isFinite(v) ? v : 0;
-}
-
-/* -------------------------------------------------------
-   ROUTE: GET /api/trading/open
-------------------------------------------------------- */
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const broker = getBroker();
+    const limit = 500;
+    const offset = 0;
 
-    const rawTrades = await broker.getOpenTrades();
-    const balance = n(await broker.getBalance());
-
-    const trades = await Promise.all(
-      rawTrades.map(async (t) => {
-        const openedISO = safeISO(t.openedAt);
-        const symbol = t.symbol?.toUpperCase() ?? "UNKNOWN";
-        const market = detectMarket(symbol);
-
-        let livePrice = n(t.entryPrice);
-
-        // --------------------------
-        // SAFE PRICE FETCH
-        // --------------------------
-        try {
-          const price = await getPrice(symbol, market);
-          if (typeof price === "number" && !Number.isNaN(price)) {
-            livePrice = price;
-          } else {
-            console.warn(`${market} price invalid for ${symbol}`);
-          }
-        } catch {
-          console.warn(`Price fetch failed for ${symbol}, fallback to entry`);
-        }
-
-        const entry = n(t.entryPrice);
-        const qty = n(t.qty);
-
-        const pnl =
-          t.side === "BUY"
-            ? (livePrice - entry) * qty
-            : (entry - livePrice) * qty;
-
-        return {
-          trade_id: String(t.id),
-          symbol,
-          side: t.side === "BUY" ? "LONG" : "SHORT",
-          strategy: "Unknown",
-
-          entry_price: entry,
-          entry_fill_price: entry,
-          exit_fill_price: null,
-
-          realised_pl: pnl,
-          rr: null,
-
-          qty,
-          opened_at: openedISO,
-          closed_at: null,
-          is_closed: false,
-
-          halaal: true,
-
-          executions: [
-            {
-              exec_id: `open-${t.id}`,
-              price: entry,
-              qty,
-              side: "OPEN",
-              time: openedISO,
-              broker: "paper",
-            },
-          ],
-        };
-      })
+    // 1. Fetch trades
+    const { rows: trades } = await pool.query(
+      `
+      SELECT *
+      FROM paper_trades
+      ORDER BY opened_at DESC
+      LIMIT $1 OFFSET $2
+      `,
+      [limit, offset]
     );
 
-    return NextResponse.json({ trades, balance });
+    if (!trades.length) {
+      return NextResponse.json({ trades: [] });
+    }
+
+    // 2. Fetch all executions in one query
+    const tradeIds = trades.map((t) => t.trade_id);
+
+    const { rows: execs } = await pool.query(
+      `
+      SELECT *
+      FROM trade_executions
+      WHERE trade_id = ANY($1)
+      ORDER BY time ASC
+      `,
+      [tradeIds]
+    );
+
+    // 3. Group executions by trade_id
+    const grouped: Record<string, any[]> = {};
+    for (const e of execs) {
+      const id = String(e.trade_id);
+      if (!grouped[id]) grouped[id] = [];
+      grouped[id].push({
+        exec_id: e.exec_id,
+        price: Number(e.price),
+        qty: Number(e.qty),
+        side: e.side,
+        time: e.time,
+        broker: e.broker ?? "paper",
+      });
+    }
+
+    // 4. Attach executions to each trade
+    const result = trades.map((t) => ({
+      trade_id: String(t.trade_id),
+      symbol: t.symbol,
+      side: t.side,
+      strategy: t.strategy ?? "Unknown",
+
+      entry_price: Number(t.entry_price),
+      entry_fill_price: Number(t.entry_fill_price ?? t.entry_price),
+
+      exit_fill_price: t.exit_fill_price ? Number(t.exit_fill_price) : null,
+      realised_pl: t.realised_pl ? Number(t.realised_pl) : null,
+      rr: t.rr ? Number(t.rr) : null,
+
+      qty: Number(t.qty),
+
+      opened_at: t.opened_at,
+      closed_at: t.closed_at,
+      is_closed: t.is_closed,
+
+      executions: grouped[String(t.trade_id)] ?? [],
+
+      halaal: t.halaal ?? true,
+    }));
+
+    return NextResponse.json({ trades: result });
   } catch (err: any) {
-    console.error("Open trades API error:", err);
+    console.error("History error:", err);
     return NextResponse.json(
-      { success: false, error: String(err.message || err) },
+      { error: err.message || "Unknown error" },
       { status: 500 }
     );
   }

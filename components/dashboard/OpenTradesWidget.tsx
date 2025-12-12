@@ -14,9 +14,12 @@ export default function OpenTradesWidget() {
       if (!res.ok) return;
 
       const json = await res.json();
-      setTrades(json.trades || []);
+
+      setTrades(Array.isArray(json.trades) ? json.trades : []);
       setBalance(Number(json.balance) || 0);
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 
   useEffect(() => {
@@ -24,6 +27,11 @@ export default function OpenTradesWidget() {
     const id = setInterval(load, 3000);
     return () => clearInterval(id);
   }, []);
+
+  const safeNum = (v: any) => {
+    const n = Number(v);
+    return isFinite(n) ? n.toFixed(2) : "—";
+  };
 
   return (
     <Card
@@ -40,7 +48,7 @@ export default function OpenTradesWidget() {
         </Typography>
 
         <Typography sx={{ opacity: 0.7, mb: 2 }}>
-          Balance: £{balance.toFixed(2)}
+          Balance: £{safeNum(balance)}
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
@@ -48,6 +56,7 @@ export default function OpenTradesWidget() {
         {trades.length === 0 && <Typography>No open trades</Typography>}
 
         {trades.map((t) => {
+          const entry = Number(t.entry_fill_price ?? t.entry_price);
           const pnl = Number(t.realised_pl ?? 0);
           const pnlColor = pnl >= 0 ? "#3cff9a" : "#ff6b6b";
 
@@ -58,18 +67,19 @@ export default function OpenTradesWidget() {
             >
               <div>
                 <div className="font-bold">{t.symbol}</div>
+
                 <div className="text-sm opacity-70">
                   {t.side} • Qty {t.qty}
+                </div>
+
+                <div className="text-xs opacity-60 mt-1">
+                  Entry: £{safeNum(entry)}
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-sm">
-                  Entry: £{Number(t.entry_fill_price).toFixed(2)}
-                </div>
-
                 <div className="font-bold" style={{ color: pnlColor }}>
-                  Unrealised PnL: £{pnl.toFixed(2)}
+                  Unrealised PnL: £{safeNum(pnl)}
                 </div>
               </div>
             </div>

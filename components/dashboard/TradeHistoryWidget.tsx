@@ -22,9 +22,7 @@ export default function TradeHistoryWidget() {
       });
 
       const json = await res.json();
-
-      // Correct source key for your API:
-      setItems(json.history || json.trades || []);
+      setItems(Array.isArray(json.trades) ? json.trades : []);
     } catch (err) {
       console.error("Trade history load failed:", err);
     }
@@ -36,18 +34,12 @@ export default function TradeHistoryWidget() {
     return () => clearInterval(id);
   }, []);
 
-  /* ---------------------------
-      SAFE HELPERS
-  ---------------------------- */
-
   const safeNum = (v: any) => {
     const n = Number(v);
-    if (!isFinite(n)) return "—";
-    return n.toFixed(2);
+    return isFinite(n) ? n.toFixed(2) : "—";
   };
 
   const safeDate = (d: any) => {
-    if (!d) return "—";
     const dt = new Date(d);
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
   };
@@ -73,7 +65,7 @@ export default function TradeHistoryWidget() {
         {items.map((t) => {
           const isOpen = openRow === t.trade_id;
 
-          const entry = Number(t.entry_fill_price ?? t.entry_price);
+          const entry = Number(t.entry_price);
           const exit =
             t.exit_fill_price !== null ? Number(t.exit_fill_price) : null;
 
@@ -84,7 +76,6 @@ export default function TradeHistoryWidget() {
               key={t.trade_id}
               className="border-b border-omega-dark-gold/40 py-2"
             >
-              {/* ---------------- HEADER ROW ---------------- */}
               <div
                 className="flex justify-between items-center cursor-pointer"
                 onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
@@ -121,7 +112,6 @@ export default function TradeHistoryWidget() {
                 </div>
               </div>
 
-              {/* ---------------- EXECUTION PANEL ---------------- */}
               <Collapse in={isOpen}>
                 <div className="mt-2 ml-2 text-sm opacity-80">
                   {t.executions.length === 0 && (
@@ -138,7 +128,7 @@ export default function TradeHistoryWidget() {
                       </div>
 
                       <div className="text-right">
-                        Qty {e.qty} • {e.broker ?? "paper"}
+                        Qty {e.qty} • {e.broker}
                         <br />
                         <span className="opacity-60 text-xs">
                           {safeDate(e.time)}
