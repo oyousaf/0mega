@@ -28,11 +28,16 @@ interface StrategySummary {
   rr: number;
 }
 
+function safeNum(n: any) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : 0;
+}
+
 function computeStrategies(trades: Trade[]): StrategySummary[] {
   const map = new Map<string, StrategySummary>();
 
   for (const t of trades) {
-    const strat = t.strategy ?? "Unknown";
+    const strat = (t.strategy && t.strategy.trim()) || "Unknown";
 
     if (!map.has(strat)) {
       map.set(strat, {
@@ -47,26 +52,24 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
     }
 
     const row = map.get(strat)!;
+
     row.trades++;
 
-    // Wins / Losses
-    if (t.realised_pl !== null && Number(t.realised_pl) > 0) row.wins++;
-    if (t.realised_pl !== null && Number(t.realised_pl) < 0) row.losses++;
+    const realised = safeNum(t.realised_pl);
+    const entry = safeNum(t.entry_price);
+    const qty = safeNum(t.qty);
+
+    if (realised > 0) row.wins++;
+    if (realised < 0) row.losses++;
 
     // PnL % contribution
-    if (t.realised_pl !== null) {
-      const entry = Number(t.entry_price);
-      const qty = Number(t.qty);
-      const realised = Number(t.realised_pl);
-
-      const pct = entry > 0 ? (realised / (entry * qty)) * 100 : 0;
+    if (entry > 0 && qty > 0) {
+      const pct = (realised / (entry * qty)) * 100;
       row.pnl += pct;
     }
 
-    // R:R accumulation
-    if (t.rr !== null) {
-      row.rr += Number(t.rr);
-    }
+    // RR accumulation
+    row.rr += safeNum(t.rr);
   }
 
   return [...map.values()].map((r) => ({
@@ -149,12 +152,12 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
           {sorted.map((row) => (
             <Fragment key={row.strategy}>
               <motion.tr
-                onClick={() =>
-                  setExpanded(expanded === row.strategy ? null : row.strategy)
-                }
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 whileHover={{ background: omega.rowHover }}
+                onClick={() =>
+                  setExpanded(expanded === row.strategy ? null : row.strategy)
+                }
                 style={{ cursor: "pointer" }}
               >
                 <TableCell>{row.strategy}</TableCell>

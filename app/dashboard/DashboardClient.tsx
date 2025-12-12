@@ -1,23 +1,12 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  MenuItem,
-  Select,
-  SelectChangeEvent,
-  Modal,
-} from "@mui/material";
-
+import { Button, Modal } from "@mui/material";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
 
-import { computeMetrics } from "@/lib/metrics";
-import RecentSignals from "@/components/dashboard/RecentSignals";
-import { Signal } from "@/app/types/signal";
 import { Trade } from "@/app/types/trade";
+import { computeMetricsFromTrades } from "@/lib/metrics";
 
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
@@ -37,21 +26,13 @@ const PerformanceChart = dynamic(
   { ssr: false }
 );
 
-export default function DashboardClient({
-  initialSignals,
-  recentSignals,
-}: {
-  initialSignals: Signal[];
-  recentSignals: Signal[];
-}) {
-  const [allSignals, setAllSignals] = useState(initialSignals);
+export default function DashboardClient() {
   const [history, setHistory] = useState<Trade[]>([]);
-  const [metrics, setMetrics] = useState(() => computeMetrics(initialSignals));
   const [openSettings, setOpenSettings] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
 
   /* ----------------------------------------------------------
-     LOAD TRADE HISTORY (REAL SOURCE OF TRUTH)
+     LOAD TRADE HISTORY
   ---------------------------------------------------------- */
   async function loadHistory() {
     try {
@@ -60,9 +41,14 @@ export default function DashboardClient({
       });
 
       const json = await res.json();
-
-      // FIX: correct field is json.trades
       setHistory(Array.isArray(json.trades) ? json.trades : []);
+
+      setLastUpdated(
+        new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
     } catch (err) {
       console.error("Failed to load trade history", err);
     }
@@ -75,48 +61,17 @@ export default function DashboardClient({
   }, []);
 
   /* ----------------------------------------------------------
-     SIGNAL AUTO REFRESH
-  ---------------------------------------------------------- */
-  useEffect(() => {
-    const refresh = async () => {
-      try {
-        const res = await fetch("/api/dashboard-signals");
-        const data = await res.json();
-
-        if (Array.isArray(data.signals)) {
-          setAllSignals(data.signals);
-          setMetrics(computeMetrics(data.signals));
-
-          setLastUpdated(
-            new Date().toLocaleTimeString("en-GB", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          );
-        }
-      } catch {}
-    };
-
-    refresh();
-    const id = setInterval(refresh, 30000);
-    return () => clearInterval(id);
-  }, []);
-
-  /* ----------------------------------------------------------
      EQUITY CURVE
   ---------------------------------------------------------- */
   const equityData = useMemo(() => {
-    if (!history.length) return [];
-
     const closed = history
-      .filter((t) => t.realised_pl !== null)
+      .filter(
+        (t) => t.realised_pl !== null && !isNaN(new Date(t.opened_at).getTime())
+      )
       .sort(
         (a, b) =>
-          new Date(a.opened_at).getTime() -
-          new Date(b.opened_at).getTime()
+          new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime()
       );
-
-    if (!closed.length) return [];
 
     let cumulative = 0;
 
@@ -128,6 +83,8 @@ export default function DashboardClient({
       };
     });
   }, [history]);
+
+  const metrics = computeMetricsFromTrades(history);
 
   /* ----------------------------------------------------------
      RENDER
@@ -169,27 +126,23 @@ export default function DashboardClient({
         transition={{ duration: 0.5 }}
         className="max-w-7xl mx-auto text-center p-6 space-y-10"
       >
-        {/* HEADER + METRICS */}
         <motion.h1
           className="text-3xl font-semibold text-omega-gold"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          𝛀mega Dashboard
+          𝛀mega Automated Trading
         </motion.h1>
 
         <MetricsCards metrics={metrics} />
 
-        {/* TRADE + SIGNAL VISUALS */}
         <OpenTradesWidget />
         <TradeHistoryWidget />
 
-        {/* EQUITY CURVE */}
         <ChartWrapper height={300}>
           <PerformanceChart data={equityData} trades={history} />
         </ChartWrapper>
 
-        {/* UPDATED TIME */}
         <div className="flex justify-center mt-2">
           <div
             className="px-4 py-1 rounded-lg text-xs font-bold tracking-widest"
@@ -203,15 +156,11 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* ANALYTICS */}
         <StrategyMiniCards trades={history} />
         <StrategyLeaderboard trades={history} />
         <SymbolLeaderboard trades={history} />
         <HalaalTracker trades={history} />
         <MarketBreakdown trades={history} />
-
-        {/* RECENT SIGNALS */}
-        <RecentSignals signals={recentSignals} />
       </motion.main>
     </>
   );

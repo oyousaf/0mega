@@ -6,6 +6,19 @@ import { Box } from "@mui/material";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { Trade } from "@/app/types/trade";
 
+/* -----------------------------------------
+   SAFE HELPERS
+----------------------------------------- */
+const num = (v: any) => {
+  const n = Number(v);
+  return isFinite(n) ? n : 0;
+};
+
+const pct = (realised: number, entry: number, qty: number) => {
+  if (entry <= 0 || qty <= 0) return null;
+  return (realised / (entry * qty)) * 100;
+};
+
 export default function StrategyDetailPanel({
   strategy,
   trades,
@@ -13,8 +26,12 @@ export default function StrategyDetailPanel({
   strategy: string;
   trades: Trade[];
 }) {
+  /* -----------------------------------------
+     FILTER BY STRATEGY
+  ----------------------------------------- */
   const stratTrades = trades
-    .filter((t) => t.strategy === strategy)
+    .filter((t) => (t.strategy ?? "Unknown") === strategy)
+    .filter((t) => t.realised_pl !== null) // ignore open trades for analytics
     .sort(
       (a, b) =>
         new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()
@@ -22,32 +39,33 @@ export default function StrategyDetailPanel({
 
   const last5 = stratTrades.slice(0, 5);
 
-  const rrList = stratTrades
-    .filter((t) => t.rr !== null)
-    .map((t) => Number(t.rr));
+  /* -----------------------------------------
+     AVG RR
+  ----------------------------------------- */
+  const rrList = stratTrades.filter((t) => t.rr !== null).map((t) => num(t.rr));
 
+  const avgRR = rrList.length
+    ? (rrList.reduce((a, b) => a + b, 0) / rrList.length).toFixed(2)
+    : "0.00";
+
+  /* -----------------------------------------
+     AVG PNL %
+  ----------------------------------------- */
   const pnlList = stratTrades
-    .filter((t) => t.realised_pl !== null && t.entry_price !== null)
-    .map((t) => {
-      const pct = (Number(t.realised_pl) / (t.entry_price * t.qty)) * 100;
-      return pct;
-    });
+    .map((t) => pct(num(t.realised_pl), num(t.entry_price), num(t.qty)))
+    .filter((v): v is number => v !== null);
 
-  const avgRR =
-    rrList.length > 0
-      ? (rrList.reduce((a, b) => a + b, 0) / rrList.length).toFixed(2)
-      : "0.00";
+  const avgPnL = pnlList.length
+    ? (pnlList.reduce((a, b) => a + b, 0) / pnlList.length).toFixed(2)
+    : "0.00";
 
-  const avgPnL =
-    pnlList.length > 0
-      ? (pnlList.reduce((a, b) => a + b, 0) / pnlList.length).toFixed(2)
-      : "0.00";
-
+  /* -----------------------------------------
+     SPARKLINE (Last 5 trades PNL%)
+  ----------------------------------------- */
   const sparkline = last5
     .map((t) => {
-      if (t.realised_pl === null) return null;
-      const pct = (t.realised_pl / (t.entry_price * t.qty)) * 100;
-      return { value: pct };
+      const p = pct(num(t.realised_pl), num(t.entry_price), num(t.qty));
+      return p !== null ? { value: Number(p.toFixed(2)) } : null;
     })
     .filter(Boolean) as { value: number }[];
 
@@ -122,37 +140,38 @@ export default function StrategyDetailPanel({
           Last 5 Trades
         </p>
 
-        {last5.map((t, i) => (
-          <div
-            key={t.trade_id}
-            className="flex justify-between text-sm py-1 border-b border-neutral-700"
-          >
-            <span style={{ color: omega.dim }}>{i + 1}.</span>
+        {last5.map((t, i) => {
+          const pnl = pct(num(t.realised_pl), num(t.entry_price), num(t.qty));
 
-            <span
-              className="truncate"
-              style={{ maxWidth: "85px", color: omega.text }}
+          return (
+            <div
+              key={t.trade_id}
+              className="flex justify-between text-sm py-1 border-b border-neutral-700"
             >
-              {t.symbol}
-            </span>
+              <span style={{ color: omega.dim }}>{i + 1}.</span>
 
-            <span
-              style={{
-                color:
-                  Number(t.realised_pl) > 0
-                    ? omega.win
-                    : Number(t.realised_pl) < 0
-                    ? omega.loss
-                    : omega.text,
-              }}
-            >
-              {t.realised_pl !== null
-                ? ((t.realised_pl / (t.entry_price * t.qty)) * 100).toFixed(2) +
-                  "%"
-                : "--"}
-            </span>
-          </div>
-        ))}
+              <span
+                className="truncate"
+                style={{ maxWidth: "85px", color: omega.text }}
+              >
+                {t.symbol}
+              </span>
+
+              <span
+                style={{
+                  color:
+                    pnl !== null
+                      ? pnl >= 0
+                        ? omega.win
+                        : omega.loss
+                      : omega.text,
+                }}
+              >
+                {pnl !== null ? pnl.toFixed(2) + "%" : "--"}
+              </span>
+            </div>
+          );
+        })}
       </Box>
     </motion.div>
   );

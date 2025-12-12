@@ -5,36 +5,21 @@ import { motion, easeOut, useInView } from "framer-motion";
 import { useRef } from "react";
 import { DashboardMetrics } from "@/lib/metrics";
 
-/* -------------------------------------------------------
-   MOTION VARIANTS
-------------------------------------------------------- */
+/* Animations */
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.1,
-      ease: easeOut,
-    },
+    transition: { staggerChildren: 0.15, delayChildren: 0.1, ease: easeOut },
   },
 };
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.4,
-      ease: easeOut,
-    },
-  },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: easeOut } },
 };
 
-/* -------------------------------------------------------
-   STYLE
-------------------------------------------------------- */
+/* Styling */
 const cardStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
@@ -44,17 +29,13 @@ const cardStyle = {
   textAlign: "center",
 };
 
-interface Props {
-  metrics: DashboardMetrics;
-}
-
 function MetricBox({
   title,
   value,
   suffix,
 }: {
   title: string;
-  value: number | string;
+  value: number;
   suffix?: string;
 }) {
   return (
@@ -75,10 +56,12 @@ function MetricBox({
   );
 }
 
-/* -------------------------------------------------------
-   MAIN
-------------------------------------------------------- */
-export default function MetricsCards({ metrics }: Props) {
+/* Main */
+export default function MetricsCards({
+  metrics,
+}: {
+  metrics: DashboardMetrics;
+}) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
 
@@ -94,15 +77,12 @@ export default function MetricsCards({ metrics }: Props) {
         <Grid>
           <MetricBox title="Win Rate" value={metrics.winRate} suffix="%" />
         </Grid>
-
         <Grid>
           <MetricBox title="Expectancy (R)" value={metrics.expectancy} />
         </Grid>
-
         <Grid>
           <MetricBox title="Profit Factor" value={metrics.profitFactor} />
         </Grid>
-
         <Grid>
           <MetricBox
             title="Halaal Ratio"
