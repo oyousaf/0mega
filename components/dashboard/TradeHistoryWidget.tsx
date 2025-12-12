@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -34,15 +34,54 @@ export default function TradeHistoryWidget() {
     return () => clearInterval(id);
   }, []);
 
+  /* --------------------- SAFE HELPERS --------------------- */
+
+  const n = (v: any) => {
+    const x = Number(v);
+    return isFinite(x) ? x : 0;
+  };
+
   const safeNum = (v: any) => {
-    const n = Number(v);
-    return isFinite(n) ? n.toFixed(2) : "—";
+    const x = Number(v);
+    return isFinite(x) ? x.toFixed(2) : "—";
   };
 
   const safeDate = (d: any) => {
     const dt = new Date(d);
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
   };
+
+  /* ---------------- PNL SUMMARY (Daily/Weekly/Monthly) ---------------- */
+
+  const pnlSummary = useMemo(() => {
+    const today = new Date().toDateString();
+    const now = new Date();
+
+    let daily = 0;
+    let weekly = 0;
+    let monthly = 0;
+
+    for (const t of items) {
+      if (!t.realised_pl || !t.closed_at) continue;
+
+      const pl = n(t.realised_pl);
+      const closed = new Date(t.closed_at);
+
+      if (closed.toDateString() === today) daily += pl;
+
+      const diffDays = (now.getTime() - closed.getTime()) / 86400000;
+      if (diffDays <= 7) weekly += pl;
+      if (diffDays <= 30) monthly += pl;
+    }
+
+    return {
+      daily: daily.toFixed(2),
+      weekly: weekly.toFixed(2),
+      monthly: monthly.toFixed(2),
+    };
+  }, [items]);
+
+  /* --------------------- RENDER --------------------- */
 
   return (
     <Card
@@ -58,6 +97,13 @@ export default function TradeHistoryWidget() {
           Trade History
         </Typography>
 
+        {/* SUMMARY */}
+        <div className="mt-2 text-sm flex justify-center gap-6 opacity-90">
+          <span>Daily: £{pnlSummary.daily}</span>
+          <span>Weekly: £{pnlSummary.weekly}</span>
+          <span>Monthly: £{pnlSummary.monthly}</span>
+        </div>
+
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
 
         {items.length === 0 && <Typography>No trade activity</Typography>}
@@ -65,17 +111,19 @@ export default function TradeHistoryWidget() {
         {items.map((t) => {
           const isOpen = openRow === t.trade_id;
 
-          const entry = Number(t.entry_price);
-          const exit =
-            t.exit_fill_price !== null ? Number(t.exit_fill_price) : null;
+          const entry = n(t.entry_fill_price ?? t.entry_price);
+          const exit = t.exit_fill_price !== null ? n(t.exit_fill_price) : null;
+          const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
 
-          const pl = t.realised_pl !== null ? Number(t.realised_pl) : null;
+          const pnlPct =
+            pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
 
           return (
             <div
               key={t.trade_id}
               className="border-b border-omega-dark-gold/40 py-2"
             >
+              {/* HEADER */}
               <div
                 className="flex justify-between items-center cursor-pointer"
                 onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
@@ -85,11 +133,19 @@ export default function TradeHistoryWidget() {
 
                   <div className="text-sm opacity-70">
                     {t.side} • Qty {t.qty}
+                    {t.strategy && (
+                      <span className="ml-2 text-xs opacity-60">
+                        ({t.strategy})
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-xs opacity-60 mt-1">
                     Entry: £{safeNum(entry)}
                     {exit !== null && <> • Exit: £{safeNum(exit)}</>}
+                    {t.rr !== null && (
+                      <span className="ml-2 text-omega-gold"> R:R {safeNum(t.rr)} </span>
+                    )}
                   </div>
                 </div>
 
@@ -102,7 +158,10 @@ export default function TradeHistoryWidget() {
                         pl >= 0 ? "text-green-400" : "text-red-400"
                       }`}
                     >
-                      £{safeNum(pl)}
+                      £{safeNum(pl)}{" "}
+                      <span className="opacity-70 text-xs">
+                        ({pnlPct}%)
+                      </span>
                     </div>
                   )}
 
@@ -112,6 +171,7 @@ export default function TradeHistoryWidget() {
                 </div>
               </div>
 
+              {/* EXECUTIONS */}
               <Collapse in={isOpen}>
                 <div className="mt-2 ml-2 text-sm opacity-80">
                   {t.executions.length === 0 && (

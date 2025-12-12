@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, Typography, Divider } from "@mui/material";
 import { Trade } from "@/app/types/trade";
 
@@ -14,12 +14,9 @@ export default function OpenTradesWidget() {
       if (!res.ok) return;
 
       const json = await res.json();
-
       setTrades(Array.isArray(json.trades) ? json.trades : []);
       setBalance(Number(json.balance) || 0);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   useEffect(() => {
@@ -28,9 +25,14 @@ export default function OpenTradesWidget() {
     return () => clearInterval(id);
   }, []);
 
+  /* Safe helpers */
+  const n = (v: any) => {
+    const x = Number(v);
+    return isFinite(x) ? x : 0;
+  };
   const safeNum = (v: any) => {
-    const n = Number(v);
-    return isFinite(n) ? n.toFixed(2) : "—";
+    const x = Number(v);
+    return isFinite(x) ? x.toFixed(2) : "—";
   };
 
   return (
@@ -56,8 +58,13 @@ export default function OpenTradesWidget() {
         {trades.length === 0 && <Typography>No open trades</Typography>}
 
         {trades.map((t) => {
-          const entry = Number(t.entry_fill_price ?? t.entry_price);
-          const pnl = Number(t.realised_pl ?? 0);
+          const entry = n(t.entry_fill_price ?? t.entry_price);
+          const pnl = n(t.realised_pl ?? 0);
+          const pnlPct =
+            entry > 0 && t.qty > 0
+              ? ((pnl / (entry * t.qty)) * 100).toFixed(2)
+              : "0.00";
+
           const pnlColor = pnl >= 0 ? "#3cff9a" : "#ff6b6b";
 
           return (
@@ -70,16 +77,27 @@ export default function OpenTradesWidget() {
 
                 <div className="text-sm opacity-70">
                   {t.side} • Qty {t.qty}
+                  {t.strategy && (
+                    <span className="ml-2 text-xs opacity-60">
+                      ({t.strategy})
+                    </span>
+                  )}
                 </div>
 
                 <div className="text-xs opacity-60 mt-1">
                   Entry: £{safeNum(entry)}
+                  {t.rr !== null && (
+                    <span className="ml-2 text-omega-gold">
+                      R:R {safeNum(t.rr)}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div className="text-right">
                 <div className="font-bold" style={{ color: pnlColor }}>
-                  Unrealised PnL: £{safeNum(pnl)}
+                  £{safeNum(pnl)}{" "}
+                  <span className="opacity-70 text-xs">({pnlPct}%)</span>
                 </div>
               </div>
             </div>
