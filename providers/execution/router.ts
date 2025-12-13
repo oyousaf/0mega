@@ -1,8 +1,13 @@
-import { PaperBroker } from "./PaperBroker";
 import type { Broker } from "./broker.interface";
-
-const paper = new PaperBroker();
+import { PaperBroker } from "./PaperBroker";
+import { AlpacaBroker } from "./alpaca";
 
 export function getBroker(): Broker {
-  return paper;
+  const mode = process.env.TRADING_MODE ?? "paper";
+
+  if (mode === "live") {
+    return new AlpacaBroker();
+  }
+
+  return new PaperBroker();
 }

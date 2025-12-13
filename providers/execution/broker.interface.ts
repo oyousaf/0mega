@@ -2,37 +2,40 @@ export type OrderSide = "BUY" | "SELL";
 
 export interface ExecutionResult {
   success: boolean;
-  message: string;
   orderId?: string;
-  filledPrice?: number;
+  price?: number;
   qty?: number;
+  error?: string;
 }
 
-export interface OpenTrade {
-  id: string;
+export interface Position {
   symbol: string;
-  side: OrderSide;
-  entryPrice: number;
   qty: number;
-  openedAt: string;
+  side: OrderSide;
+  avgPrice: number;
+}
+
+export interface Balance {
+  equity: number;
+  cash: number;
 }
 
 /**
- * All brokers must implement these five methods.
- * PaperBroker, AlpacaBroker, BinanceBroker will follow this.
+ * Sprint 16 Broker Adapter Contract
+ * Brokers EXECUTE only. They do not think.
  */
 export interface Broker {
-  openTrade(
+  placeOrder(
     symbol: string,
     qty: number,
     side: OrderSide
   ): Promise<ExecutionResult>;
 
-  closeTrade(orderId: string): Promise<ExecutionResult>;
+  closeOrder(
+    orderId: string,
+    qty?: number
+  ): Promise<ExecutionResult>;
 
-  partialClose(orderId: string, qty: number): Promise<ExecutionResult>;
-
-  getOpenTrades(): Promise<OpenTrade[]>;
-
-  getBalance(): Promise<number>;
+  fetchPositions(): Promise<Position[]>;
+  fetchBalance(): Promise<Balance>;
 }

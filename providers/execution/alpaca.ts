@@ -1,26 +1,25 @@
-export type OrderSide = "buy" | "sell";
+import type {
+  Broker,
+  ExecutionResult,
+  Position,
+  Balance,
+  OrderSide,
+} from "./broker.interface";
 
-export interface ExecutionResult {
-  success: boolean;
-  message: string;
-  orderId?: string;
-  filledPrice?: number;
-  qty?: number;
-}
+export class AlpacaBroker implements Broker {
+  async placeOrder(): Promise<ExecutionResult> {
+    throw new Error("AlpacaBroker not wired");
+  }
 
-export async function executeStockOrder(
-  symbol: string,
-  quantity: number,
-  side: OrderSide
-): Promise<ExecutionResult> {
-  // --- LIVE TRADING DISABLED ---
-  // Stub ensures engine calls succeed without breaking automation.
+  async closeOrder(): Promise<ExecutionResult> {
+    throw new Error("AlpacaBroker not wired");
+  }
 
-  return {
-    success: false,
-    message: "Live execution is not enabled. Using stub.",
-    orderId: undefined,
-    filledPrice: undefined,
-    qty: quantity,
-  };
+  async fetchPositions(): Promise<Position[]> {
+    throw new Error("AlpacaBroker not wired");
+  }
+
+  async fetchBalance(): Promise<Balance> {
+    throw new Error("AlpacaBroker not wired");
+  }
 }
