@@ -135,7 +135,7 @@ export default function DashboardClient() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          𝛀mega Automated Trading
+          𝛀mega
         </motion.h1>
 
         <MetricsCards metrics={metrics} />
