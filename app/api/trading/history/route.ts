@@ -11,7 +11,7 @@ const iso = (v: any) => {
 };
 
 /* -------------------------------------------------------
-   MAIN ROUTE
+   TRADE HISTORY (EXECUTION-DRIVEN)
 ------------------------------------------------------- */
 export async function GET(req: Request) {
   try {
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 
     /* ---------------------------------------------
        1. Fetch trades
-    ----------------------------------------------*/
+    ---------------------------------------------- */
     const { rows: trades } = await pool.query(
       `
       SELECT *
@@ -32,11 +32,13 @@ export async function GET(req: Request) {
       [limit, offset]
     );
 
-    if (!trades.length) return NextResponse.json({ trades: [] });
+    if (!trades.length) {
+      return NextResponse.json({ trades: [] });
+    }
 
     /* ---------------------------------------------
-       2. Fetch executions linked by trade_id
-    ----------------------------------------------*/
+       2. Fetch executions
+    ---------------------------------------------- */
     const ids = trades.map((t) => t.id);
 
     const { rows: execs } = await pool.query(
@@ -58,7 +60,7 @@ export async function GET(req: Request) {
 
     /* ---------------------------------------------
        3. Group executions
-    ----------------------------------------------*/
+    ---------------------------------------------- */
     const execMap: Record<string, any[]> = {};
     for (const e of execs) {
       const key = String(e.trade_id);
@@ -67,33 +69,32 @@ export async function GET(req: Request) {
         exec_id: e.id,
         price: n(e.price),
         qty: n(e.qty),
-        side: e.side,
+        side: e.side, // open | partial | close
         time: iso(e.exec_time),
         broker: e.broker ?? "paper",
       });
     }
 
     /* ---------------------------------------------
-       4. Build final trade objects
-       + RR
-       + realised PnL
-    ----------------------------------------------*/
+       4. Build history objects
+       (realised PnL only)
+    ---------------------------------------------- */
     const result = trades.map((t) => {
       const tid = String(t.id);
       const executions = execMap[tid] ?? [];
 
-      const opens = executions.filter((e) => e.side === "OPEN");
-      const closes = executions.filter((e) => e.side === "CLOSE");
+      const opens = executions.filter((e) => e.side === "open");
+      const closes = executions.filter((e) => e.side === "close");
 
-      const entryFill = opens.length
-        ? opens.reduce((s, e) => s + e.price * e.qty, 0) /
-          opens.reduce((s, e) => s + e.qty, 0)
-        : n(t.entry_price);
+      const entryFill =
+        opens.length > 0
+          ? opens.reduce((s, e) => s + e.price * e.qty, 0) /
+            opens.reduce((s, e) => s + e.qty, 0)
+          : n(t.entry_price);
 
       let exitFill = null;
       let realised = null;
       let closedAt = null;
-      let rr = null;
 
       if (closes.length) {
         exitFill =
@@ -103,21 +104,16 @@ export async function GET(req: Request) {
         closedAt = closes[closes.length - 1].time;
 
         realised =
-          t.side === "LONG"
+          t.side === "BUY"
             ? (exitFill - entryFill) * n(t.qty)
             : (entryFill - exitFill) * n(t.qty);
-
-        if (t.sl) {
-          const risk = Math.abs(entryFill - n(t.sl));
-          const reward = Math.abs(exitFill - entryFill);
-          rr = risk > 0 ? reward / risk : null;
-        }
       }
 
       return {
         trade_id: tid,
         symbol: t.symbol,
         side: t.side,
+
         strategy: t.strategy ?? "Unknown",
 
         entry_price: n(t.entry_price),
@@ -125,7 +121,6 @@ export async function GET(req: Request) {
         exit_fill_price: exitFill,
 
         realised_pl: realised,
-        rr,
 
         qty: n(t.qty),
         opened_at: iso(t.opened_at),
@@ -142,7 +137,7 @@ export async function GET(req: Request) {
   } catch (err: any) {
     console.error("History route error:", err);
     return NextResponse.json(
-      { error: err.message },
+      { error: err.message || String(err) },
       { status: 500 }
     );
   }
