@@ -104,7 +104,7 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
       }}
     >
       <h2 className="text-xl font-semibold text-omega-gold mb-4">
-        📊 Symbol Performance (Trades)
+        📊 Symbol Performance
       </h2>
 
       <Table>
