@@ -26,7 +26,10 @@ function isHalaalTrade(t: Trade): boolean {
 export default function HalaalTracker({ trades }: { trades: Trade[] }) {
   const total = trades.length;
 
-  const halal = trades.filter((t) => isHalaalTrade(t)).length;
+  const halal = trades.filter((t) =>
+    typeof t.halaal === "boolean" ? t.halaal : isHalaalTrade(t)
+  ).length;
+
   const nonHalal = total - halal;
 
   const percent = total > 0 ? Math.round((halal / total) * 100) : 0;
