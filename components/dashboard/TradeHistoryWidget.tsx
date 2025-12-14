@@ -175,7 +175,7 @@ export default function TradeHistoryWidget() {
               <Collapse in={isOpen}>
                 <div className="mt-2 ml-2 text-sm opacity-80">
                   {t.executions.length === 0 && (
-                    <div>No executions recorded</div>
+                    <div>No executions available</div>
                   )}
 
                   {t.executions.map((e) => (
