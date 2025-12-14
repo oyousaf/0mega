@@ -76,35 +76,38 @@ export async function GET(req: Request) {
     }
 
     /* ---------------------------------------------
-       4. Build history objects
-       (realised PnL only)
-    ---------------------------------------------- */
+   4. Build history objects
+   (execution-driven, trade-correct)
+---------------------------------------------- */
     const result = trades.map((t) => {
       const tid = String(t.id);
       const executions = execMap[tid] ?? [];
 
-      const opens = executions.filter((e) => e.side === "open");
-      const closes = executions.filter((e) => e.side === "close");
+      const entrySide = t.side; // BUY or SELL
+      const exitSide = entrySide === "BUY" ? "SELL" : "BUY";
+
+      const entries = executions.filter((e) => e.side === entrySide);
+      const exits = executions.filter((e) => e.side === exitSide);
 
       const entryFill =
-        opens.length > 0
-          ? opens.reduce((s, e) => s + e.price * e.qty, 0) /
-            opens.reduce((s, e) => s + e.qty, 0)
+        entries.length > 0
+          ? entries.reduce((s, e) => s + e.price * e.qty, 0) /
+            entries.reduce((s, e) => s + e.qty, 0)
           : n(t.entry_price);
 
       let exitFill = null;
       let realised = null;
       let closedAt = null;
 
-      if (closes.length) {
+      if (exits.length) {
         exitFill =
-          closes.reduce((s, e) => s + e.price * e.qty, 0) /
-          closes.reduce((s, e) => s + e.qty, 0);
+          exits.reduce((s, e) => s + e.price * e.qty, 0) /
+          exits.reduce((s, e) => s + e.qty, 0);
 
-        closedAt = closes[closes.length - 1].time;
+        closedAt = exits[exits.length - 1].time;
 
         realised =
-          t.side === "BUY"
+          entrySide === "BUY"
             ? (exitFill - entryFill) * n(t.qty)
             : (entryFill - exitFill) * n(t.qty);
       }
