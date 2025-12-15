@@ -1,14 +1,7 @@
-import type { AutomationSignal } from "./types";
-
-export type TradeIntent =
-  | { type: "OPEN" }
-  | { type: "TP1_PARTIAL" }
-  | { type: "TP2_CLOSE" }
-  | { type: "SL_CLOSE" }
-  | { type: "EXPIRED_CLOSE" };
+import { Signal, TradeIntent } from "./types";
 
 export function evaluateSignal(
-  signal: AutomationSignal,
+  signal: Signal,
   price: number,
   hasOpenTrade: boolean
 ): TradeIntent | null {
@@ -20,12 +13,12 @@ export function evaluateSignal(
   }
 
   if (!hasOpenTrade) {
-    const shouldEnter =
+    const enter =
       signal.direction === "BUY"
         ? price >= signal.entry_price
         : price <= signal.entry_price;
 
-    return shouldEnter ? { type: "OPEN" } : null;
+    return enter ? { type: "OPEN" } : null;
   }
 
   if (signal.direction === "BUY") {

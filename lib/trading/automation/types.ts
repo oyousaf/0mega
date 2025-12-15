@@ -1,7 +1,9 @@
-export type AutomationSignal = {
+export type Market = "crypto" | "forex" | "stock";
+
+export type Signal = {
   id: number;
   symbol: string;
-  market: "crypto" | "forex" | "stock";
+  market: Market;
   direction: "BUY" | "SELL";
   entry_price: number;
   tp1?: number;
@@ -10,3 +12,10 @@ export type AutomationSignal = {
   riskPct?: number;
   created_at: string;
 };
+
+export type TradeIntent =
+  | { type: "OPEN" }
+  | { type: "TP1_PARTIAL" }
+  | { type: "TP2_CLOSE" }
+  | { type: "SL_CLOSE" }
+  | { type: "EXPIRED_CLOSE" };

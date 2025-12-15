@@ -3,13 +3,13 @@ import { getPrice } from "@/providers";
 import { evaluateSignal } from "./evaluateSignal";
 import { calcPositionSize } from "./calcPositionSize";
 import { getActiveSignals } from "@/lib/signals/provider";
-import type { AutomationSignal } from "./types";
+import { Signal } from "./types";
 
 export async function runAutomationTick() {
   const broker = getBroker();
 
   const [signals, positions, balance] = await Promise.all([
-    getActiveSignals() as Promise<AutomationSignal[]>,
+    getActiveSignals() as Promise<Signal[]>,
     broker.fetchPositions(),
     broker.fetchBalance(),
   ]);
