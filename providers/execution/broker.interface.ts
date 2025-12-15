@@ -9,6 +9,7 @@ export interface ExecutionResult {
 }
 
 export interface Position {
+  id: string;
   symbol: string;
   qty: number;
   side: OrderSide;

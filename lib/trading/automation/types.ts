@@ -1,4 +1,4 @@
-export type Signal = {
+export type AutomationSignal = {
   id: number;
   symbol: string;
   market: "crypto" | "forex" | "stock";

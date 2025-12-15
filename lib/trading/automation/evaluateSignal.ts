@@ -1,13 +1,4 @@
-type Signal = {
-  id: number;
-  status: string;
-  direction: "BUY" | "SELL";
-  entry_price: number;
-  tp1?: number;
-  tp2?: number;
-  sl?: number;
-  created_at: string;
-};
+import type { AutomationSignal } from "./types";
 
 export type TradeIntent =
   | { type: "OPEN" }
@@ -17,21 +8,17 @@ export type TradeIntent =
   | { type: "EXPIRED_CLOSE" };
 
 export function evaluateSignal(
-  signal: Signal,
+  signal: AutomationSignal,
   price: number,
   hasOpenTrade: boolean
 ): TradeIntent | null {
-  // already closed
-  if (signal.status === "CLOSED") return null;
-
-  // expiration (7 days)
   const ageDays =
     (Date.now() - new Date(signal.created_at).getTime()) / 86400000;
+
   if (ageDays >= 7 && hasOpenTrade) {
     return { type: "EXPIRED_CLOSE" };
   }
 
-  // not in market yet
   if (!hasOpenTrade) {
     const shouldEnter =
       signal.direction === "BUY"
@@ -41,7 +28,6 @@ export function evaluateSignal(
     return shouldEnter ? { type: "OPEN" } : null;
   }
 
-  // trade is open
   if (signal.direction === "BUY") {
     if (signal.tp2 && price >= signal.tp2) return { type: "TP2_CLOSE" };
     if (signal.tp1 && price >= signal.tp1) return { type: "TP1_PARTIAL" };

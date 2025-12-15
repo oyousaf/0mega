@@ -3,12 +3,13 @@ import { getPrice } from "@/providers";
 import { evaluateSignal } from "./evaluateSignal";
 import { calcPositionSize } from "./calcPositionSize";
 import { getActiveSignals } from "@/lib/signals/provider";
+import type { AutomationSignal } from "./types";
 
 export async function runAutomationTick() {
   const broker = getBroker();
 
   const [signals, positions, balance] = await Promise.all([
-    getActiveSignals(),
+    getActiveSignals() as Promise<AutomationSignal[]>,
     broker.fetchPositions(),
     broker.fetchBalance(),
   ]);
@@ -39,11 +40,7 @@ export async function runAutomationTick() {
           });
 
           if (qty > 0) {
-            await broker.placeOrder(
-              signal.symbol,
-              qty,
-              signal.direction
-            );
+            await broker.placeOrder(signal.symbol, qty, signal.direction);
           }
           break;
         }
