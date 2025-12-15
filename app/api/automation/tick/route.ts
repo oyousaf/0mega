@@ -3,10 +3,7 @@ import { runAutomationTick } from "@/lib/trading/automation/runAutomationTick";
 
 /**
  * TEMP: Manual automation trigger
- * Sprint 16 / early Sprint 17
- *
- * GET /api/automation/tick
- */
+ **/
 
 export async function GET() {
   try {
