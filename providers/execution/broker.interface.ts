@@ -20,10 +20,6 @@ export interface Balance {
   cash: number;
 }
 
-/**
- * Sprint 16 Broker Adapter Contract
- * Brokers EXECUTE only. They do not think.
- */
 export interface Broker {
   placeOrder(
     symbol: string,

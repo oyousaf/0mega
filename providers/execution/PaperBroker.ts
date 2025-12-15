@@ -8,14 +8,6 @@ import type {
 import { getPrice } from "@/providers";
 import { detectAsset } from "@/lib/trading/detectAssetType";
 
-/**
- * Sprint 16 PaperBroker
- * ----------------------------------
- * • NO database writes
- * • NO trade_executions inserts
- * • NO paper_trades inserts
- * • Engine owns persistence
- */
 export class PaperBroker implements Broker {
   /* ----------------------------
      BALANCE (stub)
