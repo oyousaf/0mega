@@ -1,3 +1,4 @@
+import { pool } from "@/lib/neon";
 import type {
   Broker,
   ExecutionResult,
@@ -10,20 +11,36 @@ import { detectAsset } from "@/lib/trading/detectAssetType";
 
 export class PaperBroker implements Broker {
   /* ----------------------------
-     BALANCE (stub)
+     BALANCE
   ---------------------------- */
   async fetchBalance(): Promise<Balance> {
+    const { rows } = await pool.query(
+      `SELECT balance FROM paper_balance WHERE id = 1`
+    );
+
+    const balance = rows.length ? Number(rows[0].balance) : 100_000;
+
     return {
-      equity: 100_000,
-      cash: 100_000,
+      equity: balance,
+      cash: balance,
     };
   }
 
   /* ----------------------------
-     POSITIONS (stub)
+     POSITIONS
   ---------------------------- */
   async fetchPositions(): Promise<Position[]> {
-    return [];
+    const { rows } = await pool.query(
+      `SELECT id, symbol, side, entry_price, qty FROM paper_trades`
+    );
+
+    return rows.map((r) => ({
+      id: String(r.id),
+      symbol: r.symbol,
+      side: r.side,
+      qty: Number(r.qty),
+      avgPrice: Number(r.entry_price),
+    }));
   }
 
   /* ----------------------------
@@ -37,26 +54,74 @@ export class PaperBroker implements Broker {
     const asset = detectAsset(symbol);
     const price = await getPrice(symbol, asset);
 
+    const { rows } = await pool.query(
+      `
+      INSERT INTO paper_trades (symbol, side, entry_price, qty)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
+      `,
+      [symbol, side, price, qty]
+    );
+
+    const tradeId = String(rows[0].id);
+
+    await pool.query(
+      `
+      INSERT INTO trade_executions (trade_id, side, qty, price)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [tradeId, side, qty, price]
+    );
+
     return {
       success: true,
-      orderId: crypto.randomUUID(),
+      orderId: tradeId,
       price,
       qty,
     };
   }
 
   /* ----------------------------
-     CLOSE ORDER
+     CLOSE ORDER (FULL / PARTIAL)
   ---------------------------- */
-  async closeOrder(
-    orderId: string,
-    qty?: number
-  ): Promise<ExecutionResult> {
+  async closeOrder(orderId: string, qty?: number): Promise<ExecutionResult> {
+    const { rows } = await pool.query(
+      `SELECT symbol, side, entry_price, qty FROM paper_trades WHERE id = $1`,
+      [orderId]
+    );
+
+    if (!rows.length) {
+      return { success: false, error: "Trade not found" };
+    }
+
+    const trade = rows[0];
+    const asset = detectAsset(trade.symbol);
+    const price = await getPrice(trade.symbol, asset);
+
+    const closeQty = qty ?? Number(trade.qty);
+
+    await pool.query(
+      `
+      INSERT INTO trade_executions (trade_id, side, qty, price)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [orderId, trade.side === "BUY" ? "SELL" : "BUY", closeQty, price]
+    );
+
+    if (qty && closeQty < Number(trade.qty)) {
+      await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
+        closeQty,
+        orderId,
+      ]);
+    } else {
+      await pool.query(`DELETE FROM paper_trades WHERE id = $1`, [orderId]);
+    }
+
     return {
       success: true,
       orderId,
-      price: undefined,
-      qty,
+      price,
+      qty: closeQty,
     };
   }
 }
