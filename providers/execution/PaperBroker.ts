@@ -9,6 +9,10 @@ import type {
 import { getPrice } from "@/providers";
 import { detectAsset } from "@/lib/trading/detectAssetType";
 
+function opposite(side: OrderSide): OrderSide {
+  return side === "BUY" ? "SELL" : "BUY";
+}
+
 export class PaperBroker implements Broker {
   /* ----------------------------
      BALANCE
@@ -86,7 +90,7 @@ export class PaperBroker implements Broker {
   ---------------------------- */
   async closeOrder(orderId: string, qty?: number): Promise<ExecutionResult> {
     const { rows } = await pool.query(
-      `SELECT symbol, side, entry_price, qty FROM paper_trades WHERE id = $1`,
+      `SELECT symbol, side, qty FROM paper_trades WHERE id = $1`,
       [orderId]
     );
 
@@ -105,7 +109,7 @@ export class PaperBroker implements Broker {
       INSERT INTO trade_executions (trade_id, side, qty, price)
       VALUES ($1, $2, $3, $4)
       `,
-      [orderId, trade.side === "BUY" ? "SELL" : "BUY", closeQty, price]
+      [orderId, opposite(trade.side), closeQty, price]
     );
 
     if (qty && closeQty < Number(trade.qty)) {

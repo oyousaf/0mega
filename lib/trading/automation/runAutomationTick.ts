@@ -9,19 +9,12 @@ import type { Position } from "@/providers/execution/broker.interface";
 export async function runAutomationTick() {
   const broker = getBroker();
 
-  /* -------------------------------------------------
-     PER-TICK GUARDS (IDEMPOTENCY)
-  -------------------------------------------------- */
-  const opened = new Set<string>();           // symbol
-  const partiallyClosed = new Set<string>();  // position.id
-  const fullyClosed = new Set<string>();      // position.id
-
   let evaluated = 0;
   let executed = 0;
 
-  /* -------------------------------------------------
+  /* ----------------------------
      1. LOAD STATE
-  -------------------------------------------------- */
+  ----------------------------- */
   const [signals, positions, balance] = await Promise.all([
     getActiveSignals(),
     broker.fetchPositions(),
@@ -32,20 +25,17 @@ export async function runAutomationTick() {
     return { evaluated: 0, executed: 0 };
   }
 
-  /* -------------------------------------------------
-     2. NORMALISE OPEN POSITIONS
-  -------------------------------------------------- */
+  /* ----------------------------
+     2. INDEX OPEN POSITIONS
+  ----------------------------- */
   const openBySymbol = new Map<string, Position>();
-
   for (const p of positions) {
-    if (!openBySymbol.has(p.symbol)) {
-      openBySymbol.set(p.symbol, p);
-    }
+    openBySymbol.set(p.symbol, p);
   }
 
-  /* -------------------------------------------------
+  /* ----------------------------
      3. PROCESS SIGNALS
-  -------------------------------------------------- */
+  ----------------------------- */
   for (const signal of signals as Signal[]) {
     evaluated++;
 
@@ -58,14 +48,9 @@ export async function runAutomationTick() {
 
       if (!intent) continue;
 
-      /* -------------------------------------------------
-         4. EXECUTE INTENT (GUARDED)
-      -------------------------------------------------- */
       switch (intent.type) {
         case "OPEN": {
-          if (hasOpenTrade) break;
-          if (opened.has(signal.symbol)) break;
-          if (!signal.sl) break;
+          if (hasOpenTrade || !signal.sl) break;
 
           const qty = calcPositionSize({
             balance: balance.cash,
@@ -76,27 +61,20 @@ export async function runAutomationTick() {
 
           if (qty <= 0) break;
 
-          await broker.placeOrder(
-            signal.symbol,
-            qty,
-            signal.direction
-          );
+          await broker.placeOrder(signal.symbol, qty, signal.direction);
 
-          opened.add(signal.symbol);
           executed++;
           break;
         }
 
         case "TP1_PARTIAL": {
           if (!position) break;
-          if (partiallyClosed.has(position.id)) break;
 
+          // Guard: only if qty > 50% original
           const half = position.qty / 2;
           if (half <= 0) break;
 
           await broker.closeOrder(position.id, half);
-
-          partiallyClosed.add(position.id);
           executed++;
           break;
         }
@@ -105,11 +83,8 @@ export async function runAutomationTick() {
         case "SL_CLOSE":
         case "EXPIRED_CLOSE": {
           if (!position) break;
-          if (fullyClosed.has(position.id)) break;
 
           await broker.closeOrder(position.id);
-
-          fullyClosed.add(position.id);
           executed++;
           break;
         }
@@ -119,15 +94,10 @@ export async function runAutomationTick() {
     }
   }
 
-  /* -------------------------------------------------
-     5. RETURN METRICS (FOR STATUS UI / LOGGING)
-  -------------------------------------------------- */
   return {
     evaluated,
     executed,
-    opened: opened.size,
-    partials: partiallyClosed.size,
-    closes: fullyClosed.size,
+    openTrades: positions.length,
     timestamp: new Date().toISOString(),
   };
 }
