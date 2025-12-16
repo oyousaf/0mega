@@ -1,13 +1,21 @@
 import type { Broker } from "./broker.interface";
 import { PaperBroker } from "./PaperBroker";
-import { AlpacaBroker } from "./alpaca";
 
+/**
+ * SINGLE ENTRY POINT
+ * Future brokers plug in here.
+ */
+const paper = new PaperBroker();
+
+/**
+ * Market-aware routing
+ * Extend without touching callers.
+ */
 export function getBroker(): Broker {
-  const mode = process.env.TRADING_MODE ?? "paper";
+  // Later:
+  // if (market === "crypto") return binance;
+  // if (market === "forex") return oanda;
+  // if (market === "stock") return alpaca;
 
-  if (mode === "live") {
-    return new AlpacaBroker();
-  }
-
-  return new PaperBroker();
+  return paper;
 }
