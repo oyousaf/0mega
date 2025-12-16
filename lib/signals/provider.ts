@@ -1,18 +1,25 @@
+import { pool } from "@/lib/neon";
 import type { Signal } from "./types";
 
 export async function getActiveSignals(): Promise<Signal[]> {
-  return [
-    {
-      id: 1,
-      symbol: "BTCUSDT",
-      market: "crypto",
-      direction: "BUY",
-      entry_price: 89000,
-      tp1: 90000,
-      tp2: 92000,
-      sl: 87000,
-      created_at: new Date().toISOString(),
-      riskPct: 0.01,
-    },
-  ];
+  const { rows } = await pool.query(
+    `
+    SELECT
+      id,
+      symbol,
+      market,
+      direction,
+      entry_price,
+      tp1,
+      tp2,
+      sl,
+      risk_pct AS "riskPct",
+      created_at
+    FROM signals
+    WHERE status = 'ACTIVE'
+    ORDER BY created_at ASC
+    `
+  );
+
+  return rows;
 }
