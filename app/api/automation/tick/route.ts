@@ -1,17 +1,23 @@
 import { NextResponse } from "next/server";
-import { runControlledTick } from "@/lib/trading/automation/runControlledTick";
+import { runAutomationTick } from "@/lib/trading/automation/runAutomationTick";
 
 export async function GET() {
   try {
-    const result = await runControlledTick();
+    await runAutomationTick();
+
     return NextResponse.json({
       success: true,
-      result,
+      message: "Automation tick executed",
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
+    console.error("Automation tick failed:", err);
+
     return NextResponse.json(
-      { success: false, error: err.message ?? String(err) },
+      {
+        success: false,
+        error: err?.message ?? String(err),
+      },
       { status: 500 }
     );
   }
