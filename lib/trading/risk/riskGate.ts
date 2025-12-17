@@ -1,12 +1,10 @@
 import { pool } from "@/lib/neon";
 import { calculatePositionSize } from "./positionSizing";
 
-const MAX_RISK_PER_TRADE = 0.01; // 1%
-const MAX_DAILY_RISK = 0.03; // 3%
+const MAX_RISK_PER_TRADE = 0.01;
+const MAX_DAILY_RISK = 0.03;
 
-type RiskResult =
-  | { allowed: true; approvedQty: number }
-  | { allowed: false; reason: string };
+type RiskResult = { allowed: true } | { allowed: false; reason: string };
 
 export async function riskGate(
   signal: any,
@@ -16,22 +14,16 @@ export async function riskGate(
     return { allowed: false, reason: "NO_STOP_LOSS" };
   }
 
-  /* -------------------------------------------------
-     1) Load equity
-  -------------------------------------------------- */
-  const { rows: balanceRows } = await pool.query(
+  const { rows } = await pool.query(
     `SELECT balance FROM paper_account LIMIT 1`
   );
 
-  if (!balanceRows.length) {
+  if (!rows.length) {
     return { allowed: false, reason: "NO_ACCOUNT_BALANCE" };
   }
 
-  const equity = Number(balanceRows[0].balance);
+  const equity = Number(rows[0].balance);
 
-  /* -------------------------------------------------
-     2) Position sizing
-  -------------------------------------------------- */
   const approvedQty = calculatePositionSize({
     equity,
     entry: price,
@@ -47,12 +39,9 @@ export async function riskGate(
     return { allowed: false, reason: "POSITION_TOO_LARGE" };
   }
 
-  const positionRisk = Math.abs(price - signal.sl) * signal.qty;
+  const tradeRisk = Math.abs(price - signal.sl) * signal.qty;
 
-  /* -------------------------------------------------
-     3) Daily risk cap
-  -------------------------------------------------- */
-  const { rows: today } = await pool.query(
+  const { rows: used } = await pool.query(
     `
     SELECT COALESCE(SUM(risk_amount), 0) AS total
     FROM trade_executions
@@ -61,11 +50,9 @@ export async function riskGate(
     `
   );
 
-  const usedRisk = Number(today[0].total ?? 0);
-
-  if (usedRisk + positionRisk > equity * MAX_DAILY_RISK) {
+  if (Number(used[0].total) + tradeRisk > equity * MAX_DAILY_RISK) {
     return { allowed: false, reason: "MAX_DAILY_RISK_EXCEEDED" };
   }
 
-  return { allowed: true, approvedQty };
+  return { allowed: true };
 }
