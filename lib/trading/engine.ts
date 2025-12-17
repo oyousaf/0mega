@@ -3,15 +3,6 @@ import { getBroker } from "@/providers/execution/router";
 import type { OrderSide } from "@/providers/execution/broker.interface";
 
 /* -------------------------------------------------
-   Types
--------------------------------------------------- */
-export type TradeIntent = {
-  symbol: string;
-  qty: number;
-  side: OrderSide; // BUY | SELL
-};
-
-/* -------------------------------------------------
    Helpers
 -------------------------------------------------- */
 function reverseSide(side: OrderSide): OrderSide {
@@ -19,22 +10,26 @@ function reverseSide(side: OrderSide): OrderSide {
 }
 
 /* -------------------------------------------------
-   OPEN TRADE (manual, dry-run)
+   OPEN TRADE (fill-level only)
 -------------------------------------------------- */
-export async function executeTradeIntent(intent: TradeIntent) {
+export async function executeTradeIntent(intent: {
+  symbol: string;
+  qty: number;
+  side: OrderSide;
+}) {
   const broker = getBroker();
 
-  // 1) Execute with broker
-  const res = await broker.placeOrder(intent.symbol, intent.qty, intent.side);
+  const res = await broker.placeOrder(
+    intent.symbol,
+    intent.qty,
+    intent.side
+  );
 
   if (!res.success || !res.price) {
-    return {
-      success: false,
-      error: res.error ?? "Order placement failed",
-    };
+    return { success: false, error: res.error ?? "ORDER_FAILED" };
   }
 
-  // 2) Persist paper trade (DB generates id)
+  // Create paper trade
   const { rows } = await pool.query(
     `
     INSERT INTO paper_trades (symbol, side, entry_price, qty)
@@ -44,66 +39,94 @@ export async function executeTradeIntent(intent: TradeIntent) {
     [intent.symbol, intent.side, res.price, intent.qty]
   );
 
-  const tradeId = String(rows[0].id);
+  const tradeId = rows[0].id;
 
-  // 3) Persist execution (BUY/SELL only)
+  // Fill-level execution record ONLY
   await pool.query(
     `
-    INSERT INTO trade_executions (trade_id, side, qty, price, order_id)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO trade_executions (
+      trade_id,
+      side,
+      qty,
+      price,
+      broker,
+      order_id,
+      timestamp
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, NOW())
     `,
-    [tradeId, intent.side, intent.qty, res.price, res.orderId ?? null]
+    [
+      tradeId,
+      intent.side,
+      intent.qty,
+      res.price,
+      "paper",
+      res.orderId ?? null,
+    ]
   );
 
   return { success: true, tradeId };
 }
 
 /* -------------------------------------------------
-   CLOSE TRADE
+   CLOSE TRADE (fill-level only)
 -------------------------------------------------- */
 export async function closeTrade(tradeId: string, qty?: number) {
   const broker = getBroker();
 
-  // 1) Load trade
   const { rows } = await pool.query(
     `SELECT side, qty FROM paper_trades WHERE id = $1`,
     [tradeId]
   );
 
   if (!rows.length) {
-    return { success: false, error: "Trade not found" };
+    return { success: false, error: "TRADE_NOT_FOUND" };
   }
 
   const trade = rows[0];
   const closeQty = qty ?? Number(trade.qty);
 
-  // 2) Execute close
   const res = await broker.closeOrder(tradeId, closeQty);
 
   if (!res.success || !res.price) {
-    return {
-      success: false,
-      error: res.error ?? "Close failed",
-    };
+    return { success: false, error: res.error ?? "CLOSE_FAILED" };
   }
 
-  // 3) Persist close execution
+  // Fill-level execution record ONLY
   await pool.query(
     `
-    INSERT INTO trade_executions (trade_id, side, qty, price, order_id)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO trade_executions (
+      trade_id,
+      side,
+      qty,
+      price,
+      broker,
+      order_id,
+      timestamp
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, NOW())
     `,
-    [tradeId, reverseSide(trade.side), closeQty, res.price, res.orderId ?? null]
+    [
+      tradeId,
+      reverseSide(trade.side),
+      closeQty,
+      res.price,
+      "paper",
+      res.orderId ?? null,
+    ]
   );
 
-  // 4) Update or delete trade
+  // Update or remove paper trade
   if (qty && closeQty < Number(trade.qty)) {
-    await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
-      closeQty,
-      tradeId,
-    ]);
+    await pool.query(
+      `UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`,
+      [closeQty, tradeId]
+    );
   } else {
-    await pool.query(`DELETE FROM paper_trades WHERE id = $1`, [tradeId]);
+    await pool.query(
+      `DELETE FROM paper_trades WHERE id = $1`,
+      [tradeId]
+    );
   }
 
   return { success: true };
