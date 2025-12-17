@@ -1,8 +1,15 @@
+/* -------------------------------------------------
+   Shared Types
+-------------------------------------------------- */
+
 export type OrderSide = "BUY" | "SELL";
 
-export type Balance = {
-  equity: number;
-  cash: number;
+export type ExecutionResult = {
+  success: boolean;
+  price?: number;
+  orderId?: string;
+  qty?: number;
+  error?: string;
 };
 
 export type Position = {
@@ -13,26 +20,30 @@ export type Position = {
   avgPrice: number;
 };
 
-export type ExecutionResult = {
-  success: boolean;
-  orderId?: string;
-  price?: number;
-  qty?: number;
-  error?: string;
+export type Balance = {
+  equity: number;
+  cash: number;
 };
 
-export interface Broker {
-  fetchBalance(): Promise<Balance>;
-  fetchPositions(): Promise<Position[]>;
+/* -------------------------------------------------
+   Broker Contract (v1)
+-------------------------------------------------- */
 
+export interface Broker {
+  /* Orders */
   placeOrder(
     symbol: string,
     qty: number,
     side: OrderSide
   ): Promise<ExecutionResult>;
 
-  closeOrder(
-    orderId: string,
-    qty?: number
-  ): Promise<ExecutionResult>;
+  closeOrder(tradeId: string, qty?: number): Promise<ExecutionResult>;
+
+  /* State */
+  fetchPositions(): Promise<Position[]>;
+
+  fetchBalance(): Promise<Balance>;
+
+  /* Market data */
+  fetchPrice(symbol: string): Promise<{ price: number } | null>;
 }

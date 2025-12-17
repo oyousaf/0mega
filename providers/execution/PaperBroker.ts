@@ -9,10 +9,16 @@ import type {
 import { getPrice } from "@/providers";
 import { detectAsset } from "@/lib/trading/detectAssetType";
 
+/* -------------------------------------------------
+   Helpers
+-------------------------------------------------- */
 function opposite(side: OrderSide): OrderSide {
   return side === "BUY" ? "SELL" : "BUY";
 }
 
+/* -------------------------------------------------
+   Paper Broker
+-------------------------------------------------- */
 export class PaperBroker implements Broker {
   /* ----------------------------
      BALANCE
@@ -48,6 +54,18 @@ export class PaperBroker implements Broker {
   }
 
   /* ----------------------------
+     PRICE FEED (required for unattended)
+  ---------------------------- */
+  async fetchPrice(symbol: string): Promise<{ price: number } | null> {
+    const asset = detectAsset(symbol);
+    const price = await getPrice(symbol, asset);
+
+    if (!price || Number.isNaN(price)) return null;
+
+    return { price };
+  }
+
+  /* ----------------------------
      OPEN ORDER
   ---------------------------- */
   async placeOrder(
@@ -57,6 +75,10 @@ export class PaperBroker implements Broker {
   ): Promise<ExecutionResult> {
     const asset = detectAsset(symbol);
     const price = await getPrice(symbol, asset);
+
+    if (!price) {
+      return { success: false, error: "PRICE_UNAVAILABLE" };
+    }
 
     const { rows } = await pool.query(
       `
@@ -95,12 +117,16 @@ export class PaperBroker implements Broker {
     );
 
     if (!rows.length) {
-      return { success: false, error: "Trade not found" };
+      return { success: false, error: "TRADE_NOT_FOUND" };
     }
 
     const trade = rows[0];
     const asset = detectAsset(trade.symbol);
     const price = await getPrice(trade.symbol, asset);
+
+    if (!price) {
+      return { success: false, error: "PRICE_UNAVAILABLE" };
+    }
 
     const closeQty = qty ?? Number(trade.qty);
 
