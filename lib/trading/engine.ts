@@ -2,9 +2,6 @@ import { pool } from "@/lib/neon";
 import { getBroker } from "@/providers/execution/router";
 import type { OrderSide } from "@/providers/execution/broker.interface";
 
-/* -------------------------------------------------
-   Helpers
--------------------------------------------------- */
 function reverseSide(side: OrderSide): OrderSide {
   return side === "BUY" ? "SELL" : "BUY";
 }
@@ -13,35 +10,32 @@ function reverseSide(side: OrderSide): OrderSide {
    OPEN TRADE (fill-level only)
 -------------------------------------------------- */
 export async function executeTradeIntent(intent: {
+  signalId: string;
   symbol: string;
   qty: number;
   side: OrderSide;
 }) {
   const broker = getBroker();
 
-  const res = await broker.placeOrder(
-    intent.symbol,
-    intent.qty,
-    intent.side
-  );
+  const res = await broker.placeOrder(intent.symbol, intent.qty, intent.side);
 
   if (!res.success || !res.price) {
     return { success: false, error: res.error ?? "ORDER_FAILED" };
   }
 
-  // Create paper trade
+  // Persist paper trade WITH signal linkage
   const { rows } = await pool.query(
     `
-    INSERT INTO paper_trades (symbol, side, entry_price, qty)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO paper_trades (signal_id, symbol, side, entry_price, qty)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING id
     `,
-    [intent.symbol, intent.side, res.price, intent.qty]
+    [intent.signalId, intent.symbol, intent.side, res.price, intent.qty]
   );
 
   const tradeId = rows[0].id;
 
-  // Fill-level execution record ONLY
+  // Fill-level execution only
   await pool.query(
     `
     INSERT INTO trade_executions (
@@ -55,14 +49,7 @@ export async function executeTradeIntent(intent: {
     )
     VALUES ($1, $2, $3, $4, $5, $6, NOW())
     `,
-    [
-      tradeId,
-      intent.side,
-      intent.qty,
-      res.price,
-      "paper",
-      res.orderId ?? null,
-    ]
+    [tradeId, intent.side, intent.qty, res.price, "paper", res.orderId ?? null]
   );
 
   return { success: true, tradeId };
@@ -92,7 +79,6 @@ export async function closeTrade(tradeId: string, qty?: number) {
     return { success: false, error: res.error ?? "CLOSE_FAILED" };
   }
 
-  // Fill-level execution record ONLY
   await pool.query(
     `
     INSERT INTO trade_executions (
@@ -116,17 +102,13 @@ export async function closeTrade(tradeId: string, qty?: number) {
     ]
   );
 
-  // Update or remove paper trade
   if (qty && closeQty < Number(trade.qty)) {
-    await pool.query(
-      `UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`,
-      [closeQty, tradeId]
-    );
+    await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
+      closeQty,
+      tradeId,
+    ]);
   } else {
-    await pool.query(
-      `DELETE FROM paper_trades WHERE id = $1`,
-      [tradeId]
-    );
+    await pool.query(`DELETE FROM paper_trades WHERE id = $1`, [tradeId]);
   }
 
   return { success: true };

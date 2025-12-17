@@ -121,6 +121,7 @@ export async function executeSignal(
     switch (intent.type) {
       case "OPEN":
         result = await executeTradeIntent({
+          signalId,
           symbol: signal.symbol,
           qty: signal.qty,
           side: signal.direction,
