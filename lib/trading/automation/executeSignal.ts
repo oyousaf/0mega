@@ -2,6 +2,7 @@ import { pool } from "@/lib/neon";
 import { evaluateSignal } from "./evaluateSignal";
 import { executeTradeIntent, closeTrade } from "../engine";
 import { riskGate } from "@/lib/trading/risk/riskGate";
+import { halaalGate } from "@/lib/trading/compliance/halaalGate";
 
 type ExecResult =
   | { success: true; action: string }
@@ -47,7 +48,7 @@ export async function executeSignal(
     const hasOpenTrade = openTrades.length > 0;
 
     /* -------------------------------------------------
-       3) Intent
+       3) Derive intent
     -------------------------------------------------- */
     const intent = evaluateSignal(signal, price, hasOpenTrade);
 
@@ -57,7 +58,7 @@ export async function executeSignal(
     }
 
     /* -------------------------------------------------
-       4) Execution log (PENDING)
+       4) Log execution attempt
     -------------------------------------------------- */
     const { rows: execRows } = await client.query(
       `
@@ -92,7 +93,28 @@ export async function executeSignal(
     }
 
     /* -------------------------------------------------
-       6) Execute
+       6) Halaal compliance gate (OPEN only)
+    -------------------------------------------------- */
+    if (intent.type === "OPEN") {
+      const halaal = await halaalGate(signal);
+
+      if (!halaal.allowed) {
+        await client.query(
+          `
+          UPDATE trade_executions
+          SET status = 'FAILED', error = $2
+          WHERE id = $1
+          `,
+          [executionId, halaal.reason]
+        );
+
+        await client.query("ROLLBACK");
+        return { success: false, reason: halaal.reason };
+      }
+    }
+
+    /* -------------------------------------------------
+       7) Execute trade
     -------------------------------------------------- */
     let result;
 
@@ -133,6 +155,9 @@ export async function executeSignal(
       return { success: false, reason: "EXECUTION_FAILED" };
     }
 
+    /* -------------------------------------------------
+       8) Finalise execution
+    -------------------------------------------------- */
     const riskAmount = signal.sl ? Math.abs(price - signal.sl) * signal.qty : 0;
 
     await client.query(
