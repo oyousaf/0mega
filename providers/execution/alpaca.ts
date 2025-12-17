@@ -7,19 +7,31 @@ import type {
 } from "./broker.interface";
 
 export class AlpacaBroker implements Broker {
-  async placeOrder(): Promise<ExecutionResult> {
+  async placeOrder(
+    symbol: string,
+    qty: number,
+    side: OrderSide
+  ): Promise<ExecutionResult> {
     throw new Error("AlpacaBroker not wired");
   }
 
-  async closeOrder(): Promise<ExecutionResult> {
+  async closeOrder(tradeId: string, qty?: number): Promise<ExecutionResult> {
     throw new Error("AlpacaBroker not wired");
   }
 
   async fetchPositions(): Promise<Position[]> {
-    throw new Error("AlpacaBroker not wired");
+    return [];
   }
 
   async fetchBalance(): Promise<Balance> {
-    throw new Error("AlpacaBroker not wired");
+    return {
+      equity: 0,
+      cash: 0,
+    };
+  }
+
+  async fetchPrice(symbol: string): Promise<{ price: number } | null> {
+    // Sprint 20
+    return null;
   }
 }
