@@ -8,7 +8,7 @@ type ExecResult =
   | { success: true; action: string }
   | { success: false; reason: string };
 
-// TEMP paper sizing
+// Sprint-18 paper size
 const PAPER_QTY = 0.01;
 
 export async function executeSignal(
@@ -20,29 +20,25 @@ export async function executeSignal(
   try {
     await client.query("BEGIN");
 
-    /* -------------------------------------------------
-       1) Lock signal
-    -------------------------------------------------- */
-    const { rows } = await client.query(
+    /* 1) Lock signal */
+    const { rows: signals } = await client.query(
       `SELECT * FROM signals WHERE id = $1 FOR UPDATE`,
       [signalId]
     );
 
-    if (!rows.length) {
+    if (!signals.length) {
       await client.query("ROLLBACK");
       return { success: false, reason: "SIGNAL_NOT_FOUND" };
     }
 
-    const signal = rows[0];
+    const signal = signals[0];
 
     if (signal.status !== "ACTIVE") {
       await client.query("ROLLBACK");
       return { success: false, reason: "SIGNAL_NOT_ACTIVE" };
     }
 
-    /* -------------------------------------------------
-       2) Lock open trades
-    -------------------------------------------------- */
+    /* 2) Lock open trades */
     const { rows: openTrades } = await client.query(
       `SELECT * FROM paper_trades WHERE signal_id = $1 FOR UPDATE`,
       [signalId]
@@ -50,9 +46,7 @@ export async function executeSignal(
 
     const hasOpenTrade = openTrades.length > 0;
 
-    /* -------------------------------------------------
-       3) Derive intent
-    -------------------------------------------------- */
+    /* 3) Intent */
     const intent = evaluateSignal(signal, price, hasOpenTrade);
 
     if (!intent) {
@@ -60,9 +54,13 @@ export async function executeSignal(
       return { success: true, action: "NOOP" };
     }
 
-    /* -------------------------------------------------
-       4) Log execution attempt
-    -------------------------------------------------- */
+    /* 🔒 Prevent duplicate OPENs */
+    if (intent.type === "OPEN" && hasOpenTrade) {
+      await client.query("ROLLBACK");
+      return { success: true, action: "ALREADY_OPEN" };
+    }
+
+    /* 4) Log execution */
     const { rows: execRows } = await client.query(
       `
       INSERT INTO trade_executions (signal_id, intent, status)
@@ -74,12 +72,9 @@ export async function executeSignal(
 
     const executionId = execRows[0].id;
 
-    /* -------------------------------------------------
-       5) Risk gate (OPEN only)
-    -------------------------------------------------- */
+    /* 5) Risk gate */
     if (intent.type === "OPEN") {
       const risk = await riskGate(signal, price);
-
       if (!risk.allowed) {
         await client.query(
           `
@@ -89,18 +84,14 @@ export async function executeSignal(
           `,
           [executionId, risk.reason]
         );
-
         await client.query("ROLLBACK");
         return { success: false, reason: risk.reason };
       }
     }
 
-    /* -------------------------------------------------
-       6) Halaal gate (OPEN only)
-    -------------------------------------------------- */
+    /* 6) Halaal gate */
     if (intent.type === "OPEN") {
       const halaal = await halaalGate(signal);
-
       if (!halaal.allowed) {
         await client.query(
           `
@@ -110,15 +101,12 @@ export async function executeSignal(
           `,
           [executionId, halaal.reason]
         );
-
         await client.query("ROLLBACK");
         return { success: false, reason: halaal.reason };
       }
     }
 
-    /* -------------------------------------------------
-       7) Execute trade
-    -------------------------------------------------- */
+    /* 7) Execute */
     let result;
 
     switch (intent.type) {
@@ -157,14 +145,11 @@ export async function executeSignal(
         `,
         [executionId, result?.error ?? "EXECUTION_FAILED"]
       );
-
       await client.query("ROLLBACK");
       return { success: false, reason: "EXECUTION_FAILED" };
     }
 
-    /* -------------------------------------------------
-       8) Finalise execution
-    -------------------------------------------------- */
+    /* 8) Finalise */
     const riskAmount =
       signal.sl !== null ? Math.abs(price - Number(signal.sl)) * PAPER_QTY : 0;
 
