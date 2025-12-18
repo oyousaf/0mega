@@ -8,6 +8,9 @@ type ExecResult =
   | { success: true; action: string }
   | { success: false; reason: string };
 
+// TEMP paper sizing
+const PAPER_QTY = 0.01;
+
 export async function executeSignal(
   signalId: string,
   price: number
@@ -20,17 +23,17 @@ export async function executeSignal(
     /* -------------------------------------------------
        1) Lock signal
     -------------------------------------------------- */
-    const { rows: signals } = await client.query(
+    const { rows } = await client.query(
       `SELECT * FROM signals WHERE id = $1 FOR UPDATE`,
       [signalId]
     );
 
-    if (!signals.length) {
+    if (!rows.length) {
       await client.query("ROLLBACK");
       return { success: false, reason: "SIGNAL_NOT_FOUND" };
     }
 
-    const signal = signals[0];
+    const signal = rows[0];
 
     if (signal.status !== "ACTIVE") {
       await client.query("ROLLBACK");
@@ -93,7 +96,7 @@ export async function executeSignal(
     }
 
     /* -------------------------------------------------
-       6) Halaal compliance gate (OPEN only)
+       6) Halaal gate (OPEN only)
     -------------------------------------------------- */
     if (intent.type === "OPEN") {
       const halaal = await halaalGate(signal);
@@ -123,13 +126,16 @@ export async function executeSignal(
         result = await executeTradeIntent({
           signalId,
           symbol: signal.symbol,
-          qty: signal.qty,
+          qty: PAPER_QTY,
           side: signal.direction,
         });
         break;
 
       case "TP1_PARTIAL":
-        result = await closeTrade(openTrades[0].id, signal.tp1_qty);
+        result = await closeTrade(
+          openTrades[0].id,
+          signal.tp1_qty ?? undefined
+        );
         break;
 
       case "TP2_CLOSE":
@@ -159,7 +165,8 @@ export async function executeSignal(
     /* -------------------------------------------------
        8) Finalise execution
     -------------------------------------------------- */
-    const riskAmount = signal.sl ? Math.abs(price - signal.sl) * signal.qty : 0;
+    const riskAmount =
+      signal.sl !== null ? Math.abs(price - Number(signal.sl)) * PAPER_QTY : 0;
 
     await client.query(
       `
