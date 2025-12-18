@@ -1,6 +1,7 @@
 import { pool } from "@/lib/neon";
 import { evaluateSignal } from "./evaluateSignal";
-import { executeTradeIntent, closeTrade } from "../engine";
+import { executeTradeIntent, closeTrade } from "./executionHelpers";
+
 import { riskGate } from "@/lib/trading/risk/riskGate";
 import { halaalGate } from "@/lib/trading/compliance/halaalGate";
 
@@ -108,6 +109,10 @@ export async function executeSignal(
 
     /* 7) Execute */
     let result;
+    if (intent.type !== "OPEN" && !openTrades.length) {
+      await client.query("ROLLBACK");
+      return { success: false, reason: "NO_OPEN_TRADE" };
+    }
 
     switch (intent.type) {
       case "OPEN":
