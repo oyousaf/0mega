@@ -1,5 +1,6 @@
 import { BrokerAdapter, Market, PlaceOrderParams } from "./types";
 import { logBrokerEvent } from "./logger";
+import { getLatency, recordLatency } from "./latency";
 
 type BrokerMap = Record<Market, BrokerAdapter[]>;
 
@@ -7,7 +8,8 @@ export class BrokerRouter {
   constructor(private brokers: BrokerMap) {}
 
   private async pickHealthy(market: Market): Promise<BrokerAdapter> {
-    let lastError = "unknown";
+    const candidates: BrokerAdapter[] = [];
+
     for (const broker of this.brokers[market]) {
       try {
         const ok = await broker.healthCheck();
@@ -20,37 +22,59 @@ export class BrokerRouter {
           });
           continue;
         }
-        logBrokerEvent({
-          type: "SELECTED",
-          market,
-          broker: broker.name,
-        });
-        return broker;
+        candidates.push(broker);
       } catch (err: any) {
-        lastError = err?.message ?? "healthCheck error";
         logBrokerEvent({
           type: "FAILED",
           market,
           broker: broker.name,
-          error: lastError,
+          error: err?.message ?? "healthCheck error",
         });
       }
     }
-    throw new Error(`No healthy broker for ${market}. Last=${lastError}`);
+
+    if (!candidates.length) {
+      throw new Error(`No healthy broker for ${market}`);
+    }
+
+    candidates.sort((a, b) => getLatency(a.name) - getLatency(b.name));
+
+    const selected = candidates[0];
+    logBrokerEvent({
+      type: "SELECTED",
+      market,
+      broker: selected.name,
+    });
+    return selected;
   }
 
   async placeOrder(params: PlaceOrderParams) {
     const broker = await this.pickHealthy(params.market);
-    return broker.placeOrder(params);
+    const t0 = Date.now();
+    try {
+      return await broker.placeOrder(params);
+    } finally {
+      recordLatency(broker.name, Date.now() - t0);
+    }
   }
 
   async fetchBalance(market: Market) {
     const broker = await this.pickHealthy(market);
-    return broker.fetchBalance();
+    const t0 = Date.now();
+    try {
+      return await broker.fetchBalance();
+    } finally {
+      recordLatency(broker.name, Date.now() - t0);
+    }
   }
 
   async fetchPositions(market: Market) {
     const broker = await this.pickHealthy(market);
-    return broker.fetchPositions();
+    const t0 = Date.now();
+    try {
+      return await broker.fetchPositions();
+    } finally {
+      recordLatency(broker.name, Date.now() - t0);
+    }
   }
 }
