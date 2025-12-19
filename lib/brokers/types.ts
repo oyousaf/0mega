@@ -16,12 +16,15 @@ export interface NormalisedPosition {
   unrealisedPnl?: number;
 }
 
+// in types.ts (optional)
 export interface PlaceOrderParams {
   symbol: string;
-  side: OrderSide;
+  side: "BUY" | "SELL";
   qty: number;
   price?: number;
   market: Market;
+  leverage?: number;
+  instrumentType?: "SPOT" | "MARGIN" | "FUTURE";
 }
 
 export interface BrokerAdapter {

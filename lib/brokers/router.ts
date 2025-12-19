@@ -1,6 +1,7 @@
 import { BrokerAdapter, Market, PlaceOrderParams } from "./types";
 import { logBrokerEvent } from "./logger";
 import { getLatency, recordLatency } from "./latency";
+import { halaalCheck } from "./halaal";
 
 type BrokerMap = Record<Market, BrokerAdapter[]>;
 
@@ -49,6 +50,24 @@ export class BrokerRouter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
+    // Halaal gate
+    const reason = halaalCheck({
+      market: params.market,
+      symbol: params.symbol,
+      leverage: (params as any).leverage,
+      instrumentType: (params as any).instrumentType,
+    });
+
+    if (reason) {
+      logBrokerEvent({
+        type: "FAILED",
+        market: params.market,
+        broker: "router",
+        error: `HALAAL_BLOCK:${reason}`,
+      });
+      throw new Error(`HALAAL_BLOCK:${reason}`);
+    }
+
     const broker = await this.pickHealthy(params.market);
     const t0 = Date.now();
     try {
