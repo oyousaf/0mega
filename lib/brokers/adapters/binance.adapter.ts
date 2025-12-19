@@ -1,5 +1,4 @@
 import crypto from "crypto";
-
 import { BrokerAdapter, Market, PlaceOrderParams } from "@/lib/brokers/types";
 
 /* -------------------------------------------------
@@ -52,8 +51,22 @@ export class BinanceAdapter implements BrokerAdapter {
 
   /* ----------------------------
      BALANCE
+     NOTE:
+     Binance Spot Testnet is unreliable.
+     We mock balance on testnet.
   ---------------------------- */
   async fetchBalance() {
+    if (IS_TESTNET) {
+      return [
+        {
+          currency: "USDT",
+          free: 10000,
+          used: 0,
+          total: 10000,
+        },
+      ];
+    }
+
     const data = await this.signedGet("/api/v3/account");
 
     return data.balances
@@ -104,48 +117,59 @@ export class BinanceAdapter implements BrokerAdapter {
 
   /* -------------------------------------------------
      INTERNAL HELPERS
-  -------------------------------------------------- */
+-------------------------------------------------- */
   private async signedGet(path: string) {
     const timestamp = Date.now();
-    const query = `timestamp=${timestamp}`;
+    const recvWindow = 5000;
+
+    const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
     const signature = this.sign(query);
 
-    const res = await fetch(
-      `${BASE_URL}${path}?${query}&signature=${signature}`,
-      {
-        headers: { "X-MBX-APIKEY": this.apiKey },
-      }
-    );
+    const url = `${BASE_URL}${path}?${query}&signature=${signature}`;
+
+    const res = await fetch(url, {
+      headers: { "X-MBX-APIKEY": this.apiKey },
+    });
+
+    const text = await res.text();
 
     if (!res.ok) {
-      throw new Error("BINANCE_GET_FAILED");
+      throw new Error(
+        `BINANCE_GET_FAILED: status=${res.status} body=${text || "<empty>"}`
+      );
     }
 
-    return res.json();
+    return JSON.parse(text);
   }
 
   private async signedPost(path: string, body: Record<string, any>) {
     const timestamp = Date.now();
+    const recvWindow = 5000;
+
     const query = new URLSearchParams({
       ...body,
       timestamp: String(timestamp),
+      recvWindow: String(recvWindow),
     }).toString();
 
     const signature = this.sign(query);
 
-    const res = await fetch(
-      `${BASE_URL}${path}?${query}&signature=${signature}`,
-      {
-        method: "POST",
-        headers: { "X-MBX-APIKEY": this.apiKey },
-      }
-    );
+    const url = `${BASE_URL}${path}?${query}&signature=${signature}`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "X-MBX-APIKEY": this.apiKey },
+    });
+
+    const text = await res.text();
 
     if (!res.ok) {
-      throw new Error("BINANCE_POST_FAILED");
+      throw new Error(
+        `BINANCE_POST_FAILED: status=${res.status} body=${text || "<empty>"}`
+      );
     }
 
-    return res.json();
+    return JSON.parse(text);
   }
 
   private sign(payload: string) {
