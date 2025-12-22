@@ -20,6 +20,14 @@ type SimTrade = {
   side: "BUY" | "SELL";
 };
 
+type SimExecution = {
+  symbol: string;
+  side: "BUY" | "SELL";
+  qty: number;
+  price: number;
+  t: number;
+};
+
 export class SimulatedBrokerAdapter implements BrokerAdapter {
   name = "simulated";
   market: Market;
@@ -27,6 +35,7 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
   private cash = 100_000;
   private positions: SimTrade[] = [];
   private lastPrice: Record<string, number> = {};
+  private executions: SimExecution[] = [];
 
   constructor(market: Market) {
     this.market = market;
@@ -92,9 +101,10 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
       throw new Error("SIM_PRICE_NOT_SET");
     }
 
-    const cost = price * params.qty;
+    const now = Date.now();
 
     if (params.side === "BUY") {
+      const cost = price * params.qty;
       if (this.cash < cost) {
         throw new Error("SIM_INSUFFICIENT_FUNDS");
       }
@@ -107,31 +117,40 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
         side: "BUY",
       });
     } else {
-      // SELL → close FIFO
       let remaining = params.qty;
 
       this.positions = this.positions.flatMap((p) => {
-        if (p.symbol !== params.symbol || remaining <= 0) {
-          return [p];
-        }
+        if (p.symbol !== params.symbol || remaining <= 0) return [p];
 
         const closeQty = Math.min(p.qty, remaining);
         remaining -= closeQty;
-
         this.cash += closeQty * price;
 
         if (p.qty > closeQty) {
           return [{ ...p, qty: p.qty - closeQty }];
         }
-
         return [];
       });
     }
 
-    return { orderId: `SIM-${Date.now()}` };
+    // Record execution
+    this.executions.push({
+      symbol: params.symbol,
+      side: params.side,
+      qty: params.qty,
+      price,
+      t: now,
+    });
+
+    return { orderId: `SIM-${now}` };
   }
 
   async cancelOrder() {
     return;
   }
+
+  getExecutions() {
+  return [...this.executions];
+}
+
 }
