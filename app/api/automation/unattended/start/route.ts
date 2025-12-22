@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { startUnattended } from "@/lib/trading/automation/scheduler";
+import { runEngine } from "@/lib/engine/runEngine";
 
 export async function POST() {
-  startUnattended();
+  await runEngine();
   return NextResponse.json({ success: true });
 }
