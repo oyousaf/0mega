@@ -5,8 +5,9 @@ export function halaalCheck(params: {
   symbol: string;
   leverage?: number;
   instrumentType?: string;
+  side?: "BUY" | "SELL";
 }): string | null {
-  const { market, symbol, leverage, instrumentType } = params;
+  const { market, symbol, leverage, instrumentType, side } = params;
   const s = symbol.toUpperCase();
 
   if (leverage && leverage > 1) {
@@ -20,6 +21,10 @@ export function halaalCheck(params: {
   }
 
   if (market === "equity") {
+    if (side === "SELL") {
+      return "EQUITY_SHORTING_NOT_ALLOWED";
+    }
+
     if (instrumentType && instrumentType !== "SPOT") {
       return "EQUITY_NON_SPOT_NOT_ALLOWED";
     }

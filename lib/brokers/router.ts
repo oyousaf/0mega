@@ -50,10 +50,10 @@ export class BrokerRouter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
-    // Halaal gate
     const reason = halaalCheck({
       market: params.market,
       symbol: params.symbol,
+      side: params.side,
       leverage: (params as any).leverage,
       instrumentType: (params as any).instrumentType,
     });
