@@ -10,17 +10,13 @@ import { isUsMarketOpen } from "@/lib/market/usMarketHours";
 /* -------------------------------------------------
    ENV
 -------------------------------------------------- */
-const ALPACA_KEY = process.env.ALPACA_API_KEY!;
-const ALPACA_SECRET = process.env.ALPACA_API_SECRET!;
+const ALPACA_KEY = process.env.ALPACA_API_KEY;
+const ALPACA_SECRET = process.env.ALPACA_API_SECRET;
 const ALPACA_PAPER = process.env.ALPACA_PAPER === "true";
 
 const BASE_URL = ALPACA_PAPER
   ? "https://paper-api.alpaca.markets"
   : "https://api.alpaca.markets";
-
-if (!ALPACA_KEY || !ALPACA_SECRET) {
-  throw new Error("ALPACA_API_KEYS_MISSING");
-}
 
 /* -------------------------------------------------
    ALPACA ADAPTER (SPOT EQUITIES ONLY)
@@ -29,12 +25,19 @@ export class AlpacaAdapter implements BrokerAdapter {
   name = "alpaca";
   market: Market = "equity";
 
+  private assertKeys() {
+    if (!ALPACA_KEY || !ALPACA_SECRET) {
+      throw new Error("ALPACA_API_KEYS_MISSING");
+    }
+  }
+
   async connect() {
     return;
   }
 
   async healthCheck(): Promise<boolean> {
     try {
+      this.assertKeys();
       const res = await fetch(`${BASE_URL}/v2/account`, {
         headers: this.headers(),
       });
@@ -48,6 +51,8 @@ export class AlpacaAdapter implements BrokerAdapter {
      BALANCE
   ---------------------------- */
   async fetchBalance(): Promise<NormalisedBalance[]> {
+    this.assertKeys();
+
     const res = await fetch(`${BASE_URL}/v2/account`, {
       headers: this.headers(),
     });
@@ -74,6 +79,8 @@ export class AlpacaAdapter implements BrokerAdapter {
      POSITIONS
   ---------------------------- */
   async fetchPositions(): Promise<NormalisedPosition[]> {
+    this.assertKeys();
+
     const res = await fetch(`${BASE_URL}/v2/positions`, {
       headers: this.headers(),
     });
@@ -94,11 +101,10 @@ export class AlpacaAdapter implements BrokerAdapter {
 
   /* ----------------------------
      PLACE ORDER
-     - Spot only
-     - No shorts
-     - Market hours enforced
   ---------------------------- */
   async placeOrder(params: PlaceOrderParams): Promise<{ orderId: string }> {
+    this.assertKeys();
+
     if (!isUsMarketOpen()) {
       throw new Error("US_MARKET_CLOSED");
     }
@@ -132,6 +138,8 @@ export class AlpacaAdapter implements BrokerAdapter {
      CANCEL ORDER
   ---------------------------- */
   async cancelOrder(orderId: string): Promise<void> {
+    this.assertKeys();
+
     const res = await fetch(`${BASE_URL}/v2/orders/${orderId}`, {
       method: "DELETE",
       headers: this.headers(),
@@ -147,8 +155,8 @@ export class AlpacaAdapter implements BrokerAdapter {
   ---------------------------- */
   private headers() {
     return {
-      "APCA-API-KEY-ID": ALPACA_KEY,
-      "APCA-API-SECRET-KEY": ALPACA_SECRET,
+      "APCA-API-KEY-ID": ALPACA_KEY!,
+      "APCA-API-SECRET-KEY": ALPACA_SECRET!,
       "Content-Type": "application/json",
     };
   }
