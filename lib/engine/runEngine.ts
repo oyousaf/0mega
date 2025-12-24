@@ -11,6 +11,11 @@ import {
 
 import { computeForexPositionSize } from "@/lib/engine/risk/forexPositionSizing";
 
+import {
+  assertTradingAllowed,
+  recordRealisedPnl,
+} from "@/lib/engine/risk/dailyRisk";
+
 /* -------------------------------------------------
    BACKTEST BROKER (singleton per process)
 -------------------------------------------------- */
@@ -119,9 +124,14 @@ async function place(params: {
   slPips?: number;
   riskPct?: number;
 }) {
+  // DAILY LOSS GUARD (before opening trades)
+  if (params.qty == null) {
+    assertTradingAllowed(params.market, 0.02); // 2% daily loss cap
+  }
+
   let qty = params.qty;
 
-  // FOREX OPEN → risk-based sizing
+  // FOREX OPEN → risk sizing
   if (params.market === "forex" && qty == null) {
     if (!params.slPips) {
       throw new Error("FOREX_SL_PIPS_REQUIRED");
@@ -175,8 +185,19 @@ async function closeSignal(signal: any, reason: string) {
     market: signal.market,
     symbol: signal.symbol,
     side: signal.direction === "BUY" ? "SELL" : "BUY",
-    qty: signal.qty, // explicit close qty
+    qty: signal.qty,
   });
+
+  // VERY SIMPLE realised PnL approximation
+  const exitPrice = await fetchPrice(signal.symbol);
+  if (exitPrice != null) {
+    const pnl =
+      signal.direction === "BUY"
+        ? (exitPrice - signal.entry_price) * signal.qty
+        : (signal.entry_price - exitPrice) * signal.qty;
+
+    recordRealisedPnl(signal.market, pnl, 0.02);
+  }
 
   await pool.query(
     `UPDATE signals SET status = 'CLOSED', close_reason = $2 WHERE id = $1`,
