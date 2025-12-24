@@ -7,79 +7,84 @@ function normalise(raw: string) {
   const p = raw.toUpperCase().trim();
   if (p.includes("/")) return p;
   if (p.length === 6) return `${p.slice(0, 3)}/${p.slice(3)}`;
-  return p;
+  throw new Error(`Invalid forex pair: ${raw}`);
+}
+
+function assertMarketOpen() {
+  const day = new Date().getUTCDay();
+  if (day === 0 || day === 6) {
+    throw new Error("FOREX_MARKET_CLOSED");
+  }
 }
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ pair: string }> }
+  { params }: { params: { pair: string } }
 ) {
-  const { pair } = await params;
-  const normal = normalise(pair);
-  const [base, quote] = normal.split("/");
-  const cacheKey = `forex_${normal}`;
-
-  // CACHE
-  const cached = getCached(cacheKey);
-  if (cached) return NextResponse.json({ ...cached, cached: true });
-
-  // 1. Frankfurter
   try {
-    const url = `https://api.frankfurter.app/latest?from=${base}&to=${quote}`;
-    const res = await fetch(url, { cache: "no-store" });
+    assertMarketOpen();
 
-    if (res.ok) {
-      const j = await res.json();
-      const px = safe(j?.rates?.[quote]);
+    const normal = normalise(params.pair);
+    const [base, quote] = normal.split("/");
+    const cacheKey = `forex_${normal}`;
 
-      if (px) {
-        const result = {
-          source: "frankfurter_spot",
-          pair: normal,
-          price: px,
-          halaal: true,
-          cached: false,
-        };
+    const cached = getCached(cacheKey);
+    if (cached) return NextResponse.json({ ...cached, cached: true });
 
-        setCached(cacheKey, result, 60000);
-        return NextResponse.json(result);
+    // 1. Frankfurter
+    try {
+      const url = `https://api.frankfurter.app/latest?from=${base}&to=${quote}`;
+      const res = await fetch(url, { cache: "no-store" });
+
+      if (res.ok) {
+        const j = await res.json();
+        const px = safe(j?.rates?.[quote]);
+
+        if (px) {
+          const result = {
+            source: "frankfurter_spot",
+            pair: normal,
+            price: px,
+            halaal: true,
+          };
+
+          setCached(cacheKey, result, 60_000);
+          return NextResponse.json(result);
+        }
       }
-    }
-  } catch {}
+    } catch {}
 
-  // 2. TwelveData fallback
-  try {
-    const tUrl = `https://api.twelvedata.com/price?symbol=${normal}&apikey=${process.env.TWELVE_DATA_API_KEY}`;
-    const res = await fetch(tUrl, { cache: "no-store" });
+    // 2. TwelveData
+    try {
+      const tUrl = `https://api.twelvedata.com/price?symbol=${normal}&apikey=${process.env.TWELVE_DATA_API_KEY}`;
+      const res = await fetch(tUrl, { cache: "no-store" });
 
-    if (res.ok) {
-      const j = await res.json();
-      const px = safe(j?.price);
+      if (res.ok) {
+        const j = await res.json();
+        const px = safe(j?.price);
 
-      if (px) {
-        const result = {
-          source: "twelvedata_spot",
-          pair: normal,
-          price: px,
-          halaal: true,
-          cached: false,
-        };
+        if (px) {
+          const result = {
+            source: "twelvedata_spot",
+            pair: normal,
+            price: px,
+            halaal: true,
+          };
 
-        setCached(cacheKey, result, 2000);
-        return NextResponse.json(result);
+          setCached(cacheKey, result, 5_000);
+          return NextResponse.json(result);
+        }
       }
-    }
-  } catch {}
+    } catch {}
 
-  // 3. Synthetic fallback (do NOT break the UI)
-  return NextResponse.json(
-    {
-      source: "forex_fallback",
-      pair: normal,
-      price: 1,
-      halaal: true,
-      fallback: true,
-    },
-    { status: 200 }
-  );
+    return NextResponse.json(
+      { error: "NO_FOREX_PRICE" },
+      { status: 503 }
+    );
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e.message },
+      { status: 400 }
+    );
+  }
 }
