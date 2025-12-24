@@ -1,18 +1,17 @@
 import { BrokerAdapter, Market, PlaceOrderParams } from "@/lib/brokers/types";
-import { PaperBroker as LegacyPaperBroker } from "@/providers/execution/PaperBroker";
+import { PaperBroker } from "@/providers/execution/PaperBroker";
+import { assertForexMarketOpen, normaliseForexPair } from "@/lib/market/forex";
 
 export class PaperBrokerAdapter implements BrokerAdapter {
   name = "paper";
   market: Market;
-  private broker: LegacyPaperBroker;
+  private broker = new PaperBroker();
 
   constructor(market: Market) {
     this.market = market;
-    this.broker = new LegacyPaperBroker();
   }
 
   async connect() {}
-
   async healthCheck() {
     return true;
   }
@@ -39,6 +38,11 @@ export class PaperBrokerAdapter implements BrokerAdapter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
+    if (params.market === "forex") {
+      assertForexMarketOpen();
+      params.symbol = normaliseForexPair(params.symbol);
+    }
+
     const res = await this.broker.placeOrder(
       params.symbol,
       params.qty,

@@ -5,6 +5,13 @@ export function normaliseForexPair(raw: string) {
   throw new Error(`Invalid forex pair: ${raw}`);
 }
 
+export function assertForexMarketOpen() {
+  const day = new Date().getUTCDay();
+  if (day === 0 || day === 6) {
+    throw new Error("FOREX_MARKET_CLOSED");
+  }
+}
+
 export function getPipMeta(pair: string) {
   const clean = pair.replace("/", "");
   const isJPY = clean.endsWith("JPY");
@@ -13,11 +20,4 @@ export function getPipMeta(pair: string) {
     pipDecimals: isJPY ? 3 : 5,
     pipValue: isJPY ? 0.01 : 0.0001,
   };
-}
-
-export function assertForexMarketOpen() {
-  const day = new Date().getUTCDay();
-  if (day === 0 || day === 6) {
-    throw new Error("FOREX_MARKET_CLOSED");
-  }
 }
