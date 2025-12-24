@@ -1,6 +1,13 @@
-import { BrokerAdapter, Market, PlaceOrderParams } from "@/lib/brokers/types";
+import {
+  BrokerAdapter,
+  Market,
+  PlaceOrderParams,
+} from "@/lib/brokers/types";
 import { PaperBroker } from "@/providers/execution/PaperBroker";
-import { assertForexMarketOpen, normaliseForexPair } from "@/lib/market/forex";
+import {
+  assertForexMarketOpen,
+  normaliseForexPair,
+} from "@/lib/market/forex";
 
 export class PaperBrokerAdapter implements BrokerAdapter {
   name = "paper";
@@ -38,13 +45,18 @@ export class PaperBrokerAdapter implements BrokerAdapter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
+    let symbol = params.symbol;
+
     if (params.market === "forex") {
       assertForexMarketOpen();
-      params.symbol = normaliseForexPair(params.symbol);
+      symbol = normaliseForexPair(symbol);
     }
 
+    // IMPORTANT:
+    // PaperBroker does NOT accept price overrides.
+    // Spread realism is enforced in SimulatedBrokerAdapter.
     const res = await this.broker.placeOrder(
-      params.symbol,
+      symbol,
       params.qty,
       params.side
     );

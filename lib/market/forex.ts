@@ -21,3 +21,19 @@ export function getPipMeta(pair: string) {
     pipValue: isJPY ? 0.01 : 0.0001,
   };
 }
+
+/**
+ * Convert price difference → pips
+ */
+export function priceToPips(pair: string, priceDiff: number) {
+  const { pipValue } = getPipMeta(pair);
+  return priceDiff / pipValue;
+}
+
+/**
+ * Convert pips → price difference
+ */
+export function pipsToPrice(pair: string, pips: number) {
+  const { pipValue } = getPipMeta(pair);
+  return pips * pipValue;
+}

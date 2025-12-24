@@ -4,6 +4,7 @@ import {
   PlaceOrderParams,
   NormalisedBalance,
 } from "@/lib/brokers/types";
+import { applyForexSpread } from "@/lib/engine/risk/applySpread";
 
 type Execution = {
   id: string;
@@ -32,7 +33,7 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
     this.market = market;
   }
 
-  /* ---------------- BrokerAdapter ---------------- */
+  /* ------------ BrokerAdapter ------------ */
 
   async connect() {}
   async healthCheck() {
@@ -48,10 +49,18 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
-    const price = this.prices.get(params.symbol);
+    let price = this.prices.get(params.symbol);
 
-    if (!price) {
+    if (price == null) {
       throw new Error(`NO_PRICE_FOR_SYMBOL:${params.symbol}`);
+    }
+
+    if (params.market === "forex") {
+      price = applyForexSpread({
+        pair: params.symbol,
+        midPrice: price,
+        side: params.side,
+      });
     }
 
     const id = crypto.randomUUID();
@@ -65,22 +74,17 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
       t: Date.now(),
     });
 
-    // simplistic equity impact for backtests
-    this.balance.total += 0;
-
     return { orderId: id };
   }
 
   async cancelOrder() {}
 
-  /* ---------------- Simulation-only API ---------------- */
+  /* ------------ Simulation-only API ------------ */
 
-  /** Inject candle price */
   setPrice(symbol: string, price: number) {
     this.prices.set(symbol, price);
   }
 
-  /** Read-only execution history */
   getExecutions() {
     return this.executions;
   }

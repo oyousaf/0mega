@@ -3,10 +3,19 @@ import { brokerRouter } from "@/lib/brokers";
 import { engineNow, engineMode } from "./context";
 import { SimulatedBrokerAdapter } from "@/lib/brokers/adapters/simulated.adapter";
 
+import {
+  computeStopLossPrice,
+  computeTakeProfitPrice,
+  validateForexLevels,
+} from "@/lib/engine/risk/forexLevels";
+
 /* -------------------------------------------------
    BACKTEST BROKER (singleton per process)
 -------------------------------------------------- */
-const simulatedBrokers: Record<string, SimulatedBrokerAdapter> = {};
+const simulatedBrokers: Record<
+  "crypto" | "equity" | "forex",
+  SimulatedBrokerAdapter
+> = {} as any;
 
 function getSimBroker(market: "crypto" | "equity" | "forex") {
   if (!simulatedBrokers[market]) {
@@ -39,7 +48,7 @@ export async function runEngine() {
    SIGNAL PROCESSING
 -------------------------------------------------- */
 async function processSignal(signal: any, now: number) {
-  // Expiry logic
+  // 1) Expiry logic
   const created = new Date(signal.created_at).getTime();
   const maxAge = 7 * 24 * 60 * 60 * 1000;
 
@@ -50,19 +59,50 @@ async function processSignal(signal: any, now: number) {
     return;
   }
 
+  // 2) Fetch current price
   const price = await fetchPrice(signal.symbol);
-  if (!price) return;
+  if (price == null) return;
 
+  // 3) Resolve SL / TP (pip-aware for forex)
+  let sl = signal.sl;
+  let tp1 = signal.tp1 ?? null;
+
+  if (signal.market === "forex") {
+    sl = computeStopLossPrice({
+      pair: signal.symbol,
+      entryPrice: signal.entry_price,
+      slPips: signal.sl,
+      side: signal.direction,
+    });
+
+    if (signal.tp1) {
+      tp1 = computeTakeProfitPrice({
+        pair: signal.symbol,
+        entryPrice: signal.entry_price,
+        tpPips: signal.tp1,
+        side: signal.direction,
+      });
+    }
+
+    validateForexLevels({
+      entry: signal.entry_price,
+      sl,
+      tp: tp1 ?? undefined,
+      side: signal.direction,
+    });
+  }
+
+  // 4) Canonical comparison
   if (signal.direction === "BUY") {
-    if (price <= signal.sl) {
+    if (price <= sl) {
       await closeSignal(signal, "SL_HIT");
-    } else if (signal.tp1 && price >= signal.tp1) {
+    } else if (tp1 && price >= tp1) {
       await partialClose(signal, "TP1_HIT");
     }
   } else {
-    if (price >= signal.sl) {
+    if (price >= sl) {
       await closeSignal(signal, "SL_HIT");
-    } else if (signal.tp1 && price <= signal.tp1) {
+    } else if (tp1 && price <= tp1) {
       await partialClose(signal, "TP1_HIT");
     }
   }
@@ -79,10 +119,16 @@ async function place(params: {
 }) {
   if (engineMode() === "BACKTEST") {
     const sim = getSimBroker(params.market);
-    return sim.placeOrder(params);
+    return sim.placeOrder({
+      ...params,
+      market: params.market,
+    });
   }
 
-  return brokerRouter.placeOrder(params);
+  return brokerRouter.placeOrder({
+    ...params,
+    market: params.market,
+  });
 }
 
 async function closeSignal(signal: any, reason: string) {
@@ -127,5 +173,6 @@ async function fetchPrice(symbol: string): Promise<number | null> {
   const mod = await import("@/providers");
   const asset = await import("@/lib/trading/detectAssetType");
   const a = asset.detectAsset(symbol);
+
   return mod.getPrice(symbol, a);
 }
