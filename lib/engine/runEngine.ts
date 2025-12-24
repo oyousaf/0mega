@@ -9,6 +9,8 @@ import {
   validateForexLevels,
 } from "@/lib/engine/risk/forexLevels";
 
+import { computeForexPositionSize } from "@/lib/engine/risk/forexPositionSizing";
+
 /* -------------------------------------------------
    BACKTEST BROKER (singleton per process)
 -------------------------------------------------- */
@@ -28,14 +30,12 @@ function getSimBroker(market: "crypto" | "equity" | "forex") {
    CANONICAL ENGINE ENTRY
 -------------------------------------------------- */
 export async function runEngine() {
-  const { rows: signals } = await pool.query(
-    `
+  const { rows: signals } = await pool.query(`
     SELECT *
     FROM signals
     WHERE status = 'ACTIVE'
     ORDER BY created_at ASC
-    `
-  );
+  `);
 
   const now = engineNow();
 
@@ -48,7 +48,7 @@ export async function runEngine() {
    SIGNAL PROCESSING
 -------------------------------------------------- */
 async function processSignal(signal: any, now: number) {
-  // 1) Expiry logic
+  // Expiry
   const created = new Date(signal.created_at).getTime();
   const maxAge = 7 * 24 * 60 * 60 * 1000;
 
@@ -59,11 +59,11 @@ async function processSignal(signal: any, now: number) {
     return;
   }
 
-  // 2) Fetch current price
+  // Price
   const price = await fetchPrice(signal.symbol);
   if (price == null) return;
 
-  // 3) Resolve SL / TP (pip-aware for forex)
+  // Resolve SL / TP
   let sl = signal.sl;
   let tp1 = signal.tp1 ?? null;
 
@@ -92,7 +92,7 @@ async function processSignal(signal: any, now: number) {
     });
   }
 
-  // 4) Canonical comparison
+  // Comparison
   if (signal.direction === "BUY") {
     if (price <= sl) {
       await closeSignal(signal, "SL_HIT");
@@ -109,34 +109,73 @@ async function processSignal(signal: any, now: number) {
 }
 
 /* -------------------------------------------------
-   EXECUTION HELPERS
+   EXECUTION HELPER
 -------------------------------------------------- */
 async function place(params: {
   market: "crypto" | "equity" | "forex";
   symbol: string;
   side: "BUY" | "SELL";
-  qty: number;
+  qty?: number;
+  slPips?: number;
+  riskPct?: number;
 }) {
+  let qty = params.qty;
+
+  // FOREX OPEN → risk-based sizing
+  if (params.market === "forex" && qty == null) {
+    if (!params.slPips) {
+      throw new Error("FOREX_SL_PIPS_REQUIRED");
+    }
+
+    let equity: number;
+
+    if (engineMode() === "BACKTEST") {
+      const sim = getSimBroker("forex");
+      const balance = await sim.fetchBalance();
+      equity = balance[0].total;
+    } else {
+      const balance = await brokerRouter.fetchBalance("forex");
+      equity = balance[0].total;
+    }
+
+    qty = computeForexPositionSize({
+      equity,
+      riskPct: params.riskPct ?? 0.01,
+      slPips: params.slPips,
+      pair: params.symbol,
+    });
+  }
+
+  if (!qty || qty <= 0) {
+    throw new Error("INVALID_QTY");
+  }
+
   if (engineMode() === "BACKTEST") {
-    const sim = getSimBroker(params.market);
-    return sim.placeOrder({
-      ...params,
+    return getSimBroker(params.market).placeOrder({
+      symbol: params.symbol,
+      side: params.side,
+      qty,
       market: params.market,
     });
   }
 
   return brokerRouter.placeOrder({
-    ...params,
+    symbol: params.symbol,
+    side: params.side,
+    qty,
     market: params.market,
   });
 }
 
+/* -------------------------------------------------
+   CLOSE HELPERS
+-------------------------------------------------- */
 async function closeSignal(signal: any, reason: string) {
   await place({
     market: signal.market,
     symbol: signal.symbol,
     side: signal.direction === "BUY" ? "SELL" : "BUY",
-    qty: signal.qty,
+    qty: signal.qty, // explicit close qty
   });
 
   await pool.query(
@@ -166,8 +205,7 @@ async function partialClose(signal: any, reason: string) {
 -------------------------------------------------- */
 async function fetchPrice(symbol: string): Promise<number | null> {
   if (engineMode() === "BACKTEST") {
-    // Price already injected into simulated broker
-    return null;
+    return null; // injected into simulated broker
   }
 
   const mod = await import("@/providers");
