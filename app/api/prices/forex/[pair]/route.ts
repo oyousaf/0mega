@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { getCached, setCached } from "@/lib/rateLimitCache";
 
 const safe = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : null);
@@ -18,18 +18,20 @@ function assertMarketOpen() {
 }
 
 export async function GET(
-  _req: Request,
-  { params }: { params: { pair: string } }
+  _req: NextRequest,
+  context: { params: { pair: string } }
 ) {
   try {
     assertMarketOpen();
 
-    const normal = normalise(params.pair);
+    const normal = normalise(context.params.pair);
     const [base, quote] = normal.split("/");
     const cacheKey = `forex_${normal}`;
 
     const cached = getCached(cacheKey);
-    if (cached) return NextResponse.json({ ...cached, cached: true });
+    if (cached) {
+      return NextResponse.json({ ...cached, cached: true });
+    }
 
     // 1. Frankfurter
     try {
@@ -54,7 +56,7 @@ export async function GET(
       }
     } catch {}
 
-    // 2. TwelveData
+    // 2. TwelveData fallback
     try {
       const tUrl = `https://api.twelvedata.com/price?symbol=${normal}&apikey=${process.env.TWELVE_DATA_API_KEY}`;
       const res = await fetch(tUrl, { cache: "no-store" });
