@@ -8,16 +8,12 @@ type BrokerMap = Record<Market, BrokerAdapter[]>;
 export class BrokerRouter {
   constructor(private brokers: BrokerMap) {}
 
-  /* -------------------------------------------------
-     INTERNAL: pick healthiest + lowest latency broker
-  -------------------------------------------------- */
   private async pickHealthy(market: Market): Promise<BrokerAdapter> {
     const candidates: BrokerAdapter[] = [];
 
     for (const broker of this.brokers[market]) {
       try {
         const ok = await broker.healthCheck();
-
         if (!ok) {
           logBrokerEvent({
             type: "SKIPPED",
@@ -27,7 +23,6 @@ export class BrokerRouter {
           });
           continue;
         }
-
         candidates.push(broker);
       } catch (err: any) {
         logBrokerEvent({
@@ -40,32 +35,27 @@ export class BrokerRouter {
     }
 
     if (!candidates.length) {
-      throw new Error(`NO_HEALTHY_BROKER:${market}`);
+      throw new Error(`No healthy broker for ${market}`);
     }
 
     candidates.sort((a, b) => getLatency(a.name) - getLatency(b.name));
 
     const selected = candidates[0];
-
     logBrokerEvent({
       type: "SELECTED",
       market,
       broker: selected.name,
     });
-
     return selected;
   }
 
-  /* -------------------------------------------------
-     PUBLIC: place order (halaal + latency guarded)
-  -------------------------------------------------- */
   async placeOrder(params: PlaceOrderParams) {
     const reason = halaalCheck({
       market: params.market,
       symbol: params.symbol,
       side: params.side,
-      leverage: params.leverage,
-      instrumentType: params.instrumentType,
+      leverage: (params as any).leverage,
+      instrumentType: (params as any).instrumentType,
     });
 
     if (reason) {
@@ -80,7 +70,6 @@ export class BrokerRouter {
 
     const broker = await this.pickHealthy(params.market);
     const t0 = Date.now();
-
     try {
       return await broker.placeOrder(params);
     } finally {
@@ -88,13 +77,9 @@ export class BrokerRouter {
     }
   }
 
-  /* -------------------------------------------------
-     PUBLIC: fetch balance
-  -------------------------------------------------- */
   async fetchBalance(market: Market) {
     const broker = await this.pickHealthy(market);
     const t0 = Date.now();
-
     try {
       return await broker.fetchBalance();
     } finally {
@@ -102,13 +87,9 @@ export class BrokerRouter {
     }
   }
 
-  /* -------------------------------------------------
-     PUBLIC: fetch positions
-  -------------------------------------------------- */
   async fetchPositions(market: Market) {
     const broker = await this.pickHealthy(market);
     const t0 = Date.now();
-
     try {
       return await broker.fetchPositions();
     } finally {
