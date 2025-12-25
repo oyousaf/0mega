@@ -1,17 +1,33 @@
 import { pipsToPrice } from "@/lib/market/forex";
-import { getForexSpreadPips } from "@/lib/market/spread";
+import { computeSpreadFactor, getBaseSpread } from "@/lib/market/spreadCurve";
 
 type Side = "BUY" | "SELL";
+type Market = "crypto" | "equity" | "forex";
 
-export function applyForexSpread(params: {
-  pair: string;
+export function applySpread(params: {
+  market: Market;
+  pair?: string;
   midPrice: number;
   side: Side;
+  prevPrice?: number;
 }) {
-  const spreadPips = getForexSpreadPips(params.pair);
-  const halfSpread = pipsToPrice(params.pair, spreadPips / 2);
+  const base = getBaseSpread(params.market);
+  const factor = computeSpreadFactor({
+    market: params.market,
+    midPrice: params.midPrice,
+    prevPrice: params.prevPrice,
+  });
+
+  let spreadAmount: number;
+
+  if (params.market === "forex") {
+    spreadAmount = pipsToPrice(params.pair!, (base * factor) / 2);
+  } else {
+    // bps → price
+    spreadAmount = (params.midPrice * (base * factor)) / 10_000 / 2;
+  }
 
   return params.side === "BUY"
-    ? params.midPrice + halfSpread
-    : params.midPrice - halfSpread;
+    ? params.midPrice + spreadAmount
+    : params.midPrice - spreadAmount;
 }

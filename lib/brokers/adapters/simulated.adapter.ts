@@ -4,7 +4,7 @@ import {
   PlaceOrderParams,
   NormalisedBalance,
 } from "@/lib/brokers/types";
-import { applyForexSpread } from "@/lib/engine/risk/applySpread";
+import { applySpread } from "@/lib/engine/risk/applySpread";
 import { applySlippage } from "@/lib/engine/execution/slippage";
 import { computeFee } from "@/lib/engine/execution/fees";
 
@@ -30,6 +30,7 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
   };
 
   private prices = new Map<string, number>();
+  private lastPrices = new Map<string, number>();
   private executions: Execution[] = [];
 
   constructor(market: Market) {
@@ -50,19 +51,21 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
-    let price = this.prices.get(params.symbol);
-    if (price == null) {
+    let mid = this.prices.get(params.symbol);
+    if (mid == null) {
       throw new Error(`NO_PRICE_FOR_SYMBOL:${params.symbol}`);
     }
 
-    // 1) Spread (forex only)
-    if (params.market === "forex") {
-      price = applyForexSpread({
-        pair: params.symbol,
-        midPrice: price,
-        side: params.side,
-      });
-    }
+    const prev = this.lastPrices.get(params.symbol);
+
+    // 1) Spread curve
+    let price = applySpread({
+      market: params.market,
+      pair: params.symbol,
+      midPrice: mid,
+      prevPrice: prev,
+      side: params.side,
+    });
 
     // 2) Slippage
     price = applySlippage({
@@ -77,6 +80,8 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
       price,
       qty: params.qty,
     });
+
+    this.lastPrices.set(params.symbol, mid);
 
     const id = crypto.randomUUID();
 
