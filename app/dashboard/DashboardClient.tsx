@@ -20,6 +20,7 @@ import MarketBreakdown from "@/components/dashboard/analytics/MarketBreakdown";
 import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
 import TradeHistoryWidget from "@/components/dashboard/TradeHistoryWidget";
+import TodayStatusWidget from "@/components/dashboard/TodayStatusWidget";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -138,6 +139,7 @@ export default function DashboardClient() {
           𝛀mega
         </motion.h1>
 
+        <TodayStatusWidget />
         <MetricsCards metrics={metrics} />
 
         <OpenTradesWidget />
