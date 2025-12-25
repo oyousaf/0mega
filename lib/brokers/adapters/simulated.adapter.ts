@@ -5,6 +5,8 @@ import {
   NormalisedBalance,
 } from "@/lib/brokers/types";
 import { applyForexSpread } from "@/lib/engine/risk/applySpread";
+import { applySlippage } from "@/lib/engine/execution/slippage";
+import { computeFee } from "@/lib/engine/execution/fees";
 
 type Execution = {
   id: string;
@@ -12,6 +14,7 @@ type Execution = {
   side: "BUY" | "SELL";
   qty: number;
   price: number;
+  fee: number;
   t: number;
 };
 
@@ -33,8 +36,6 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
     this.market = market;
   }
 
-  /* ------------ BrokerAdapter ------------ */
-
   async connect() {}
   async healthCheck() {
     return true;
@@ -50,11 +51,11 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
 
   async placeOrder(params: PlaceOrderParams) {
     let price = this.prices.get(params.symbol);
-
     if (price == null) {
       throw new Error(`NO_PRICE_FOR_SYMBOL:${params.symbol}`);
     }
 
+    // 1) Spread (forex only)
     if (params.market === "forex") {
       price = applyForexSpread({
         pair: params.symbol,
@@ -62,6 +63,20 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
         side: params.side,
       });
     }
+
+    // 2) Slippage
+    price = applySlippage({
+      market: params.market,
+      midPrice: price,
+      side: params.side,
+    });
+
+    // 3) Fee
+    const fee = computeFee({
+      market: params.market,
+      price,
+      qty: params.qty,
+    });
 
     const id = crypto.randomUUID();
 
@@ -71,6 +86,7 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
       side: params.side,
       qty: params.qty,
       price,
+      fee,
       t: Date.now(),
     });
 
@@ -79,7 +95,7 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
 
   async cancelOrder() {}
 
-  /* ------------ Simulation-only API ------------ */
+  /* -------- Simulation-only -------- */
 
   setPrice(symbol: string, price: number) {
     this.prices.set(symbol, price);

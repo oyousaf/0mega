@@ -188,15 +188,23 @@ async function closeSignal(signal: any, reason: string) {
     qty: signal.qty,
   });
 
-  // VERY SIMPLE realised PnL approximation
+  // Realised PnL (fees included)
   const exitPrice = await fetchPrice(signal.symbol);
   if (exitPrice != null) {
-    const pnl =
+    const grossPnl =
       signal.direction === "BUY"
         ? (exitPrice - signal.entry_price) * signal.qty
         : (signal.entry_price - exitPrice) * signal.qty;
 
-    recordRealisedPnl(signal.market, pnl, 0.02);
+    let fee = 0;
+
+    if (engineMode() === "BACKTEST") {
+      const execs = getSimBroker(signal.market).getExecutions();
+      const last = execs[execs.length - 1];
+      fee = last?.fee ?? 0;
+    }
+
+    recordRealisedPnl(signal.market, grossPnl - fee, 0.02);
   }
 
   await pool.query(
