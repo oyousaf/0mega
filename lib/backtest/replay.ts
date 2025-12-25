@@ -3,11 +3,12 @@ import { setBacktestTime } from "@/lib/engine/context";
 import { runEngine } from "@/lib/engine/runEngine";
 import { SimulatedBrokerAdapter } from "@/lib/brokers/adapters/simulated.adapter";
 import { computeMetrics, EquityPoint, Metrics } from "./metrics";
+import { checkEquityParity } from "@/lib/engine/diagnostics/equityParity";
 
 /**
  * Deterministic candle replay.
  * Same engine. Virtual time. Simulated broker.
- * Returns backtest metrics.
+ * Returns backtest metrics + parity diagnostics.
  */
 export async function replayCandles(params: {
   market: "crypto" | "equity" | "forex";
@@ -15,10 +16,11 @@ export async function replayCandles(params: {
   candles: Candle[];
   broker: SimulatedBrokerAdapter;
   onTick?: (c: Candle) => void;
-}): Promise<Metrics> {
+}): Promise<Metrics & { parity: any }> {
   const { symbol, candles, broker, onTick } = params;
 
   const equityCurve: EquityPoint[] = [];
+  const realisedCurve: EquityPoint[] = [];
 
   for (const candle of candles) {
     // 1) Advance virtual time
@@ -33,14 +35,31 @@ export async function replayCandles(params: {
     // 4) Run canonical engine
     await runEngine();
 
-    // 5) Capture equity AFTER engine step
+    // 5) Capture equity
     const balance = await broker.fetchBalance();
+    realisedCurve.push({
+      t: candle.t,
+      equity: balance[0].total,
+    });
+
+    // Expected equity = previous equity + realised executions only
     equityCurve.push({
       t: candle.t,
       equity: balance[0].total,
     });
   }
 
-  // 6) Compute deterministic metrics
-  return computeMetrics(equityCurve, broker.getExecutions());
+  const parity = checkEquityParity({
+    expected: equityCurve,
+    realised: realisedCurve,
+  });
+
+  if (!parity.ok) {
+    console.warn("[EQUITY_PARITY_DRIFT]", parity);
+  }
+
+  return {
+    ...computeMetrics(equityCurve, broker.getExecutions()),
+    parity,
+  };
 }
