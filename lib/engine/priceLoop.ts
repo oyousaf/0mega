@@ -94,11 +94,7 @@ async function tick(cfg: PriceLoopConfig) {
 
     const broker = getBroker();
 
-    await broker.placeOrder(
-      signal.symbol,
-      1,
-      signal.direction
-    );
+    await broker.placeOrder(signal.symbol, 1, signal.direction);
 
     console.log("[PRICE_LOOP] trade opened", signal);
   });
