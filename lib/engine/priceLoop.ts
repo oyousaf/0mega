@@ -16,24 +16,34 @@ const DEFAULT_CONFIG: PriceLoopConfig = {
   pollMs: 5000,
 };
 
-let loopRunning = false;
+declare global {
+  // eslint-disable-next-line no-var
+  var __OMEGA_27_LOOP_ID__: number | undefined;
+}
+
+function nextLoopId() {
+  const id = (globalThis.__OMEGA_27_LOOP_ID__ ?? 0) + 1;
+  globalThis.__OMEGA_27_LOOP_ID__ = id;
+  return id;
+}
+
+function currentLoopId() {
+  return globalThis.__OMEGA_27_LOOP_ID__ ?? 0;
+}
+
 let lastCandleTs: number | null = null;
 
 export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
-  if (loopRunning) {
-    console.warn("[PRICE_LOOP] already running");
-    return;
-  }
-
+  const loopId = nextLoopId();
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  loopRunning = true;
 
-  console.log("[PRICE_LOOP] started", cfg);
+  console.log("[PRICE_LOOP] started", cfg, "loopId=", loopId);
 
-  while (loopRunning) {
+  while (currentLoopId() === loopId) {
     const started = Date.now();
+
     try {
-      await tick(cfg);
+      await tick(cfg, loopId);
     } catch (err) {
       console.error("[PRICE_LOOP] tick error", err);
     }
@@ -41,21 +51,26 @@ export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
     const sleep = Math.max(cfg.pollMs - (Date.now() - started), 0);
     await delay(sleep);
   }
+
+  console.log("[PRICE_LOOP] exited cleanly", "loopId=", loopId);
 }
 
 export function stopPriceLoop() {
-  loopRunning = false;
-  console.log("[PRICE_LOOP] stopped");
+  nextLoopId(); // invalidate all running loops
+  console.log("[PRICE_LOOP] stop requested");
 }
 
-async function tick(cfg: PriceLoopConfig) {
+async function tick(cfg: PriceLoopConfig, loopId: number) {
+  if (currentLoopId() !== loopId) return;
+
   const provider = getPriceProvider(cfg.symbol, cfg.timeframe);
   const candles = await provider.fetchCandles();
   if (!candles.length) return;
 
+  if (currentLoopId() !== loopId) return;
+
   const latest = candles[candles.length - 1];
 
-  // Idempotency guard
   if (lastCandleTs === latest.timestamp) return;
   lastCandleTs = latest.timestamp;
 
@@ -75,17 +90,18 @@ async function tick(cfg: PriceLoopConfig) {
     return;
   }
 
-  const risk = await riskGate(signal, latest.close);
+  console.log("[STRUCTURE_SIGNAL]", signal);
 
+  const risk = await riskGate(signal, latest.close);
   if (!risk.allowed) {
     console.warn("[RISK_BLOCK]", risk.reason);
     return;
   }
 
   await withDbLock(async () => {
-    const { rows } = await pool.query(
-      `SELECT 1 FROM paper_trades WHERE status = 'ACTIVE' LIMIT 1`
-    );
+    if (currentLoopId() !== loopId) return;
+
+    const { rows } = await pool.query(`SELECT 1 FROM paper_trades LIMIT 1`);
 
     if (rows.length) {
       console.log("[PRICE_LOOP] trade already active");
@@ -93,7 +109,6 @@ async function tick(cfg: PriceLoopConfig) {
     }
 
     const broker = getBroker();
-
     await broker.placeOrder(signal.symbol, 1, signal.direction);
 
     console.log("[PRICE_LOOP] trade opened", signal);
