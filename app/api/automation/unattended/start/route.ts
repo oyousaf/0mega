@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { runEngine } from "@/lib/engine/runEngine";
+import { startPriceLoop } from "@/lib/engine/priceLoop";
 
 export async function POST() {
-  await runEngine();
-  return NextResponse.json({ success: true });
+  startPriceLoop();
+
+  return NextResponse.json({
+    ok: true,
+    engine: "OMEGA-27",
+    mode: "paper",
+  });
 }

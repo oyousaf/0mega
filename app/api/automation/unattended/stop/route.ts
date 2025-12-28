@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { stopUnattended } from "@/lib/trading/automation/scheduler";
+import { stopPriceLoop } from "@/lib/engine/priceLoop";
 
 export async function POST() {
-  stopUnattended();
-  return NextResponse.json({ success: true });
+  stopPriceLoop();
+
+  return NextResponse.json({
+    ok: true,
+    engine: "OMEGA-27",
+    stopped: true,
+  });
 }
