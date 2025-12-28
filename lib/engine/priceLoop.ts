@@ -1,4 +1,4 @@
-import { getPriceProvider } from "../prices/provider";
+import { getPriceProvider } from "@/lib/prices/provider";
 import { runStructureCheck } from "@/lib/strategies/marketStructure";
 import { riskGate } from "@/lib/trading/risk/riskGate";
 import { getBroker } from "@/providers/execution/router";
