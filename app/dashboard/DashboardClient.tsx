@@ -27,6 +27,14 @@ const PerformanceChart = dynamic(
   { ssr: false }
 );
 
+/* ----------------------------------------------------------
+   EXECUTION GUARDS
+---------------------------------------------------------- */
+const hasExecuted = (t: Trade) =>
+  Array.isArray(t.executions) && t.executions.length > 0;
+
+const isClosedExecuted = (t: Trade) => hasExecuted(t) && t.closed_at !== null;
+
 export default function DashboardClient() {
   const [history, setHistory] = useState<Trade[]>([]);
   const [openSettings, setOpenSettings] = useState(false);
@@ -62,17 +70,14 @@ export default function DashboardClient() {
   }, []);
 
   /* ----------------------------------------------------------
-     EQUITY CURVE
+     EQUITY CURVE (STRICT)
   ---------------------------------------------------------- */
   const equityData = useMemo(() => {
-    if (!history.length) return [];
-
     const closed = history
-      .filter((t) => t.is_closed && t.realised_pl !== null)
+      .filter(isClosedExecuted)
       .sort(
         (a, b) =>
-          new Date(a.closed_at ?? a.opened_at).getTime() -
-          new Date(b.closed_at ?? b.opened_at).getTime()
+          new Date(a.closed_at!).getTime() - new Date(b.closed_at!).getTime()
       );
 
     let cumulative = 0;
@@ -82,8 +87,7 @@ export default function DashboardClient() {
       cumulative += pnl;
 
       return {
-        date: new Date(t.closed_at ?? t.opened_at).toISOString(),
-        pnl,
+        date: new Date(t.closed_at!).toISOString(),
         cumulative,
       };
     });
@@ -139,14 +143,18 @@ export default function DashboardClient() {
           𝛀mega
         </motion.h1>
 
+        {/* SYSTEM & RISK */}
         <TodayStatusWidget />
+
+        {/* PERFORMANCE SNAPSHOT */}
         <MetricsCards metrics={metrics} />
 
+        {/* LIVE EXPOSURE */}
         <OpenTradesWidget />
-        <TradeHistoryWidget />
 
+        {/* EQUITY */}
         <ChartWrapper height={300}>
-          <PerformanceChart data={equityData} trades={history} />
+          <PerformanceChart data={equityData} />
         </ChartWrapper>
 
         <div className="flex justify-center mt-2">
@@ -162,11 +170,19 @@ export default function DashboardClient() {
           </div>
         </div>
 
+        {/* BEHAVIOUR */}
         <StrategyMiniCards trades={history} />
+
+        {/* ANALYTICS */}
         <StrategyLeaderboard trades={history} />
         <SymbolLeaderboard trades={history} />
-        <HalaalTracker trades={history} />
         <MarketBreakdown trades={history} />
+
+        {/* COMPLIANCE */}
+        <HalaalTracker trades={history} />
+
+        {/* FORENSICS */}
+        <TradeHistoryWidget />
       </motion.main>
     </>
   );
