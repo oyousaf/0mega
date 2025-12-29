@@ -80,9 +80,14 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     close: latest.close,
   });
 
+  /* -----------------------------
+     EXIT WATCHER 
+  ------------------------------ */
   await runExitWatcher(latest.close);
 
-
+  /* -----------------------------
+     ENTRY LOGIC
+  ------------------------------ */
   const signal = await runStructureCheck({
     symbol: cfg.symbol,
     timeframe: cfg.timeframe,
@@ -113,9 +118,26 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     }
 
     const broker = getBroker();
-    await broker.placeOrder(signal.symbol, 1, signal.direction);
 
-    console.log("[PRICE_LOOP] trade opened", signal);
+    // ---- OPEN TRADE ----
+    const res = await broker.placeOrder(signal.symbol, 1, signal.direction);
+
+    // ---- PERSIST SL / TP ----
+    await pool.query(
+      `
+      UPDATE paper_trades
+      SET sl = $1, tp1 = $2
+      WHERE id = $3
+      `,
+      [signal.sl, signal.tp1 ?? null, res.orderId]
+    );
+
+    console.log("[PRICE_LOOP] trade opened", {
+      id: res.orderId,
+      side: signal.direction,
+      sl: signal.sl,
+      tp1: signal.tp1 ?? null,
+    });
   });
 }
 
