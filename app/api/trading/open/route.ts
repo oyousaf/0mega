@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getBroker } from "@/providers/execution/router";
 
 /* ---------------------------------------------
-   OPEN TRADES (UI-ADAPTED)
+   OPEN TRADES
 --------------------------------------------- */
 export async function GET() {
   try {
@@ -22,7 +22,7 @@ export async function GET() {
       entry_price: p.avgPrice,
       entry_fill_price: p.avgPrice,
 
-      realised_pl: 0, // unrealised only for now
+      realised_pl: 0,
       strategy: "Structure",
       rr: null,
 
