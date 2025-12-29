@@ -35,7 +35,7 @@ function MetricBox({
   suffix,
 }: {
   title: string;
-  value: number;
+  value: string | number;
   suffix?: string;
 }) {
   return (
