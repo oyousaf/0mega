@@ -24,7 +24,6 @@ const cardStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
   borderRadius: "0.75rem",
-  color: "var(--omega-gold)",
   padding: "1rem",
   textAlign: "center",
 };
@@ -42,11 +41,18 @@ function MetricBox({
     <motion.div variants={itemVariants}>
       <Card sx={cardStyle}>
         <CardContent>
-          <Typography variant="body2" sx={{ opacity: 0.65 }}>
+          <Typography
+            variant="body2"
+            sx={{ opacity: 0.65, color: "var(--omega-gold)" }}
+          >
             {title}
           </Typography>
 
-          <Typography variant="h5" fontWeight="bold">
+          <Typography
+            variant="h5"
+            fontWeight="bold"
+            sx={{ color: "var(--omega-gold)" }}
+          >
             {value}
             {suffix}
           </Typography>

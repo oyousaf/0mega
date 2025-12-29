@@ -13,9 +13,10 @@ export default function StrategyMiniCards({ trades }: Props) {
 
   const closed = trades.filter((t) => t.realised_pl !== null);
 
-  const total = closed.length;
-  const wins = closed.filter((t) => Number(t.realised_pl) > 0).length;
-  const losses = closed.filter((t) => Number(t.realised_pl) < 0).length;
+  const scored = closed.filter((t) => Number(t.realised_pl) !== 0);
+  const total = scored.length;
+  const wins = scored.filter((t) => Number(t.realised_pl) > 0).length;
+  const losses = scored.filter((t) => Number(t.realised_pl) < 0).length;
 
   const winRate = total ? (wins / total) * 100 : 0;
 

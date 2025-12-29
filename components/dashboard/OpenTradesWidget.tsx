@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, Typography, Divider } from "@mui/material";
 import { Trade } from "@/app/types/trade";
 
@@ -25,11 +25,11 @@ export default function OpenTradesWidget() {
     return () => clearInterval(id);
   }, []);
 
-  /* Safe helpers */
   const n = (v: any) => {
     const x = Number(v);
     return isFinite(x) ? x : 0;
   };
+
   const safeNum = (v: any) => {
     const x = Number(v);
     return isFinite(x) ? x.toFixed(2) : "—";
@@ -41,21 +41,27 @@ export default function OpenTradesWidget() {
         background: "var(--omega-green)",
         border: "1px solid var(--omega-dark-gold)",
         borderRadius: "1rem",
-        color: "var(--omega-gold)",
       }}
     >
-      <CardContent>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+      <CardContent sx={{ color: "var(--omega-gold)" }}>
+        <Typography
+          variant="h5"
+          sx={{ fontWeight: 700, color: "var(--omega-gold)" }}
+        >
           Open Trades
         </Typography>
 
-        <Typography sx={{ opacity: 0.7, mb: 2 }}>
+        <Typography sx={{ opacity: 0.7, mb: 2, color: "var(--omega-gold)" }}>
           Balance: £{safeNum(balance)}
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
 
-        {trades.length === 0 && <Typography>No open trades</Typography>}
+        {trades.length === 0 && (
+          <Typography sx={{ color: "var(--omega-gold)" }}>
+            No open trades
+          </Typography>
+        )}
 
         {trades.map((t) => {
           const entry = n(t.entry_fill_price ?? t.entry_price);
@@ -70,21 +76,25 @@ export default function OpenTradesWidget() {
           return (
             <div
               key={t.trade_id}
-              className="flex justify-between items-center border-b border-omega-dark-gold/40 py-2"
+              className="
+                flex justify-between items-center
+                border-b border-omega-dark-gold/40 py-2
+                text-omega-gold
+              "
             >
               <div>
-                <div className="font-bold">{t.symbol}</div>
+                <div className="font-bold text-omega-gold">{t.symbol}</div>
 
-                <div className="text-sm opacity-70">
+                <div className="text-sm opacity-70 text-omega-gold">
                   {t.side} • Qty {t.qty}
                   {t.strategy && (
-                    <span className="ml-2 text-xs opacity-60">
+                    <span className="ml-2 text-xs opacity-60 text-omega-gold">
                       ({t.strategy})
                     </span>
                   )}
                 </div>
 
-                <div className="text-xs opacity-60 mt-1">
+                <div className="text-xs opacity-60 mt-1 text-omega-gold">
                   Entry: £{safeNum(entry)}
                   {t.rr !== null && (
                     <span className="ml-2 text-omega-gold">

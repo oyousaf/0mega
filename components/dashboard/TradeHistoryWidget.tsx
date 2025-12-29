@@ -51,7 +51,7 @@ export default function TradeHistoryWidget() {
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
   };
 
-  /* ---------------- PNL SUMMARY (Daily/Weekly/Monthly) ---------------- */
+  /* ---------------- PNL SUMMARY ---------------- */
 
   const pnlSummary = useMemo(() => {
     const today = new Date().toDateString();
@@ -89,16 +89,18 @@ export default function TradeHistoryWidget() {
         background: "var(--omega-green)",
         border: "1px solid var(--omega-dark-gold)",
         borderRadius: "1rem",
-        color: "var(--omega-gold)",
       }}
     >
-      <CardContent>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+      <CardContent sx={{ color: "var(--omega-gold)" }}>
+        <Typography
+          variant="h5"
+          sx={{ fontWeight: 700, color: "var(--omega-gold)" }}
+        >
           Trade History
         </Typography>
 
         {/* SUMMARY */}
-        <div className="mt-2 text-sm flex justify-center gap-6 opacity-90">
+        <div className="mt-2 text-sm flex justify-center gap-6 opacity-90 text-omega-gold">
           <span>Daily: £{pnlSummary.daily}</span>
           <span>Weekly: £{pnlSummary.weekly}</span>
           <span>Monthly: £{pnlSummary.monthly}</span>
@@ -106,7 +108,11 @@ export default function TradeHistoryWidget() {
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
 
-        {items.length === 0 && <Typography>No trade activity</Typography>}
+        {items.length === 0 && (
+          <Typography sx={{ color: "var(--omega-gold)" }}>
+            No trade activity
+          </Typography>
+        )}
 
         {items.map((t) => {
           const isOpen = openRow === t.trade_id;
@@ -121,7 +127,10 @@ export default function TradeHistoryWidget() {
           return (
             <div
               key={t.trade_id}
-              className="border-b border-omega-dark-gold/40 py-2"
+              className="
+                border-b border-omega-dark-gold/40 py-2
+                text-omega-gold
+              "
             >
               {/* HEADER */}
               <div
@@ -129,28 +138,32 @@ export default function TradeHistoryWidget() {
                 onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
               >
                 <div>
-                  <div className="font-bold">{t.symbol}</div>
+                  <div className="font-bold text-omega-gold">{t.symbol}</div>
 
-                  <div className="text-sm opacity-70">
+                  <div className="text-sm opacity-70 text-omega-gold">
                     {t.side} • Qty {t.qty}
                     {t.strategy && (
-                      <span className="ml-2 text-xs opacity-60">
+                      <span className="ml-2 text-xs opacity-60 text-omega-gold">
                         ({t.strategy})
                       </span>
                     )}
                   </div>
 
-                  <div className="text-xs opacity-60 mt-1">
+                  <div className="text-xs opacity-60 mt-1 text-omega-gold">
                     Entry: £{safeNum(entry)}
                     {exit !== null && <> • Exit: £{safeNum(exit)}</>}
                     {t.rr !== null && (
-                      <span className="ml-2 text-omega-gold"> R:R {safeNum(t.rr)} </span>
+                      <span className="ml-2 text-omega-gold">
+                        R:R {safeNum(t.rr)}
+                      </span>
                     )}
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-sm">{safeDate(t.opened_at)}</div>
+                  <div className="text-sm opacity-70">
+                    {safeDate(t.opened_at)}
+                  </div>
 
                   {pl !== null && (
                     <div
@@ -159,13 +172,11 @@ export default function TradeHistoryWidget() {
                       }`}
                     >
                       £{safeNum(pl)}{" "}
-                      <span className="opacity-70 text-xs">
-                        ({pnlPct}%)
-                      </span>
+                      <span className="opacity-70 text-xs">({pnlPct}%)</span>
                     </div>
                   )}
 
-                  <div className="flex justify-end mt-1">
+                  <div className="flex justify-end mt-1 text-omega-gold">
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
                   </div>
                 </div>
@@ -173,7 +184,7 @@ export default function TradeHistoryWidget() {
 
               {/* EXECUTIONS */}
               <Collapse in={isOpen}>
-                <div className="mt-2 ml-2 text-sm opacity-80">
+                <div className="mt-2 ml-2 text-sm opacity-80 text-omega-gold">
                   {t.executions.length === 0 && (
                     <div>No executions available</div>
                   )}
@@ -181,7 +192,11 @@ export default function TradeHistoryWidget() {
                   {t.executions.map((e) => (
                     <div
                       key={e.exec_id}
-                      className="flex justify-between py-1 border-b border-omega-dark-gold/20"
+                      className="
+                        flex justify-between py-1
+                        border-b border-omega-dark-gold/20
+                        text-omega-gold
+                      "
                     >
                       <div>
                         {e.side} @ £{safeNum(e.price)}
