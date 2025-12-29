@@ -2,23 +2,38 @@
 
 Escaping the Matrix — one trade at a time.
 
-Omega is a **halaal-first automated trading system** built around
-**execution truth**, not signal hype.
+Omega is a halaal-first automated trading system focused on execution truth, safety, and auditability over speed, scale, or optimisation.
 
-This is a personal system designed for **correctness, safety, and auditability**
-before speed, scale, or automation.
+This repository contains a personal research system. Live trading is intentionally disabled.
 
 ---
 
-## Core Philosophy
+## Overview
 
-- Execution before signals
-- Safety before speed
-- Deterministic behaviour
-- No hidden leverage
-- No interest-based instruments
-- Fully auditable state
-- Halaal by design
+Omega is designed around deterministic execution and strict risk control.  
+Signals are inputs. Executions are the source of truth.
+
+The system prioritises:
+
+- Correctness over performance
+- Safety over automation
+- Transparency over abstraction
+- Halaal compliance by design
+
+---
+
+## Features
+
+- Deterministic execution engine
+- Broker-agnostic architecture
+- Paper trading broker
+- Risk-based position sizing
+- Daily loss and consecutive-loss guards
+- SL / TP enforcement with partial and full closes
+- Realistic execution modelling (spread, slippage, fees)
+- Deterministic backtesting and forward testing
+- Analytics and performance review dashboard
+- Fully auditable trade and execution state
 
 ---
 
@@ -37,102 +52,63 @@ before speed, scale, or automation.
 ### Backend
 
 - Next.js API routes
-- Neon (Postgres)
 - Server Actions
+- Neon (Postgres)
 - Typed execution engine
 
 ---
 
-## Trading Architecture
+## Architecture
 
-- Broker-agnostic execution layer
 - Execution-first data model
-- Deterministic automation engine
-- Paper trading broker (current)
-- Risk and safety enforced at engine level
+- Trades and executions as source of truth
+- Idempotent engine ticks
+- Backtest, forward, and live symmetry
+- Risk and halaal rules enforced at engine level
+- No hidden leverage or interest-based instruments
 
 ---
 
-## What Exists Today
+## Current Status
 
-### Execution Engine
+- Paper trading only
+- Forward testing in progress
+- Logic frozen during evaluation windows
+- No live broker connectivity enabled
 
-- Trades and executions are the source of truth
-- Deterministic execution logic
-- Partial closes, full closes, SL / TP handling
-- Realistic execution modelling:
-  - Spread curves
-  - Slippage
-  - Fees
-- Daily loss guard and trade freeze
-- Risk-based position sizing
+---
 
-### Backtesting System
-
-- Same engine for backtest and live
-- Candle replay
-- Deterministic results
-- Equity curve and drawdown metrics
-- Execution realism parity diagnostics
-
-### Automation Core
-
-- Idempotent engine ticks
-- Safe to run repeatedly
-- Manual trigger endpoints
-- Backtest and live symmetry
-
-### Analytics Dashboard
+## Analytics
 
 - Equity curve
+- Drawdown tracking
 - Win rate
 - Profit factor
-- Strategy performance
-- Symbol performance
+- Expectancy
+- R-multiple distribution
+- Daily PnL analysis
+- Strategy and symbol breakdown
 - Market breakdown (crypto / forex / equities)
 - Halaal compliance tracking
 
-### UI
-
-- Omega-themed dashboard
-- Modular analytics widgets
-- Execution transparency
-- Real-time polling
+Analytics are used for validation and decision-making, not optimisation.
 
 ---
 
-## Current Mode
+## Roadmap (Personal Use)
 
-Omega currently runs in **paper trading mode only**.
-
-There is **no live trading** enabled by design.
-
----
-
-## What’s Next
-
-### Planned (Personal Use)
-
-- Continuous automation loop (local)
+- Continuous local automation loop
 - Automatic entry scanning
-- Automatic SL / TP enforcement
 - Trade expiry handling
-- Daily performance snapshot view
-
-### Optional (Future)
-
-- Live broker integrations
-- Mobile notifications
-- Strategy editor / AI strategies
-- Cloud deployment
+- Daily performance snapshot
+- Extended risk diagnostics
 
 ---
 
 ## Disclaimer
 
-Omega is a **personal research and trading system**.
+Omega is a personal research and trading system.
 
-It is not financial advice.
-It is not a product.
-Live trading is intentionally disabled until all safety,
-risk, and compliance layers are fully verified.
+It is not financial advice.  
+It is not a product.  
+Live trading is disabled until all safety, risk, and halaal compliance layers are fully verified.
