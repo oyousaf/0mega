@@ -17,6 +17,12 @@ const DEFAULT_CONFIG: PriceLoopConfig = {
   pollMs: 5000,
 };
 
+/* -----------------------------
+   COOLDOWN CONFIG
+------------------------------ */
+const COOLDOWN_CANDLES = 5;
+let cooldownUntilTs: number | null = null;
+
 declare global {
   // eslint-disable-next-line no-var
   var __OMEGA_27_LOOP_ID__: number | undefined;
@@ -57,7 +63,7 @@ export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
 }
 
 export function stopPriceLoop() {
-  nextLoopId(); // invalidate all running loops
+  nextLoopId();
   console.log("[PRICE_LOOP] stop requested");
 }
 
@@ -81,9 +87,26 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
   });
 
   /* -----------------------------
-     EXIT WATCHER 
+     EXIT WATCHER (ALWAYS RUNS)
   ------------------------------ */
-  await runExitWatcher(latest.close);
+  const exited = await runExitWatcher(latest.close);
+
+  if (exited) {
+    cooldownUntilTs = latest.timestamp + COOLDOWN_CANDLES * cfg.pollMs;
+
+    console.log(
+      "[COOLDOWN] started until",
+      new Date(cooldownUntilTs).toISOString()
+    );
+  }
+
+  /* -----------------------------
+     COOLDOWN ENFORCEMENT
+  ------------------------------ */
+  if (cooldownUntilTs && latest.timestamp < cooldownUntilTs) {
+    console.log("[COOLDOWN] active, skipping entry");
+    return;
+  }
 
   /* -----------------------------
      ENTRY LOGIC
@@ -119,10 +142,8 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
 
     const broker = getBroker();
 
-    // ---- OPEN TRADE ----
     const res = await broker.placeOrder(signal.symbol, 1, signal.direction);
 
-    // ---- PERSIST SL / TP ----
     await pool.query(
       `
       UPDATE paper_trades
