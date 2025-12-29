@@ -3,6 +3,7 @@ import { runStructureCheck } from "@/lib/strategies/marketStructure";
 import { riskGate } from "@/lib/trading/risk/riskGate";
 import { getBroker } from "@/providers/execution/router";
 import { pool } from "@/lib/neon";
+import { runExitWatcher } from "./exitWatcher";
 
 type PriceLoopConfig = {
   symbol: string;
@@ -78,6 +79,9 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     ts: latest.timestamp,
     close: latest.close,
   });
+
+  await runExitWatcher(latest.close);
+
 
   const signal = await runStructureCheck({
     symbol: cfg.symbol,
