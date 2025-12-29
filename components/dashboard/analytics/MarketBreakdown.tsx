@@ -23,35 +23,43 @@ function getMarket(symbol: string): "crypto" | "forex" | "stock" | "other" {
 
   const s = symbol.toUpperCase();
 
-  // Crypto pattern (BTCUSDT, ETHUSD, SOLUSDT)
+  // Crypto
   if (s.endsWith("USDT") || s.endsWith("USD") || /^[A-Z]{3,5}BTC$/.test(s)) {
-    if (["XAUUSD", "XAGUSD"].includes(s)) return "forex"; // avoid gold misclassifying as crypto
+    if (["XAUUSD", "XAGUSD"].includes(s)) return "forex";
     return "crypto";
   }
 
-  // Forex pattern (GBPUSD, EURUSD, USDJPY, etc.)
+  // Forex
   if (/^[A-Z]{6}$/.test(s)) return "forex";
 
-  // Stocks (AAPL, TSLA, NVDA, etc.)
+  // Stocks
   if (/^[A-Z]{1,5}$/.test(s)) return "stock";
 
   return "other";
 }
 
 /* ---------------------------------------------------------
-   BREAKDOWN CALCULATION USING REAL TRADE DATA
+   STRICT BREAKDOWN (EXECUTED + CLOSED ONLY)
 --------------------------------------------------------- */
+
+function hasExecutedAndClosed(t: Trade): boolean {
+  return (
+    Array.isArray(t.executions) &&
+    t.executions.length > 0 &&
+    t.closed_at !== null
+  );
+}
 
 function computeMarketBreakdown(trades: Trade[]) {
   const markets = ["crypto", "forex", "stock"] as const;
 
-  const buckets = {
-    crypto: [] as Trade[],
-    forex: [] as Trade[],
-    stock: [] as Trade[],
+  const buckets: Record<(typeof markets)[number], Trade[]> = {
+    crypto: [],
+    forex: [],
+    stock: [],
   };
 
-  for (const t of trades) {
+  for (const t of trades.filter(hasExecutedAndClosed)) {
     const m = getMarket(t.symbol);
     if (m in buckets) {
       buckets[m as keyof typeof buckets].push(t);
@@ -62,7 +70,6 @@ function computeMarketBreakdown(trades: Trade[]) {
     const rows = buckets[m];
 
     const total = rows.length;
-
     const wins = rows.filter((t) => Number(t.realised_pl ?? 0) > 0).length;
 
     return {
@@ -94,7 +101,6 @@ export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
           boxShadow: omega.cardShadow,
           borderRadius: "1rem",
           padding: "1.5rem",
-          color: omega.text,
           width: "100%",
           height: "100%",
         }}
@@ -137,10 +143,10 @@ export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
                 {data.map((d) => {
                   const colour =
                     d.winRate >= 60
-                      ? "#4CAF50" // strong
+                      ? "#4CAF50"
                       : d.winRate >= 40
-                      ? "#FFC107" // average
-                      : "#FF5252"; // poor
+                      ? "#FFC107"
+                      : "#FF5252";
                   return <Cell key={d.market} fill={colour} />;
                 })}
               </Bar>
@@ -148,7 +154,7 @@ export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
           </ResponsiveContainer>
         </div>
 
-        <div className="flex justify-center gap-6 mt-4 text-sm opacity-80">
+        <div className="flex justify-center gap-6 mt-4 text-sm opacity-80 text-omega-gold">
           {data.map((d) => (
             <div key={d.market} className="text-center">
               <p className="font-semibold">{d.market}</p>

@@ -62,13 +62,11 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
     if (realised > 0) row.wins++;
     if (realised < 0) row.losses++;
 
-    // PnL % contribution
     if (entry > 0 && qty > 0) {
       const pct = (realised / (entry * qty)) * 100;
       row.pnl += pct;
     }
 
-    // RR accumulation
     row.rr += safeNum(t.rr);
   }
 
@@ -139,6 +137,13 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
                         setOrder("desc");
                       }
                     }}
+                    sx={{
+                      color: omega.text,
+                      "&.Mui-active": { color: omega.text },
+                      "& .MuiTableSortLabel-icon": {
+                        color: `${omega.text} !important`,
+                      },
+                    }}
                   >
                     {key.toUpperCase()}
                   </TableSortLabel>
@@ -158,22 +163,29 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
                 onClick={() =>
                   setExpanded(expanded === row.strategy ? null : row.strategy)
                 }
-                style={{ cursor: "pointer" }}
+                style={{ cursor: "pointer", color: omega.text }}
               >
-                <TableCell>{row.strategy}</TableCell>
-                <TableCell align="right">{row.trades}</TableCell>
-                <TableCell align="right">{row.winRate.toFixed(1)}%</TableCell>
-                <TableCell align="right">{row.pnl.toFixed(2)}%</TableCell>
-                <TableCell align="right">{row.rr.toFixed(2)}</TableCell>
+                <TableCell sx={{ color: omega.text }}>{row.strategy}</TableCell>
+                <TableCell align="right" sx={{ color: omega.text }}>
+                  {row.trades}
+                </TableCell>
+                <TableCell align="right" sx={{ color: omega.text }}>
+                  {row.winRate.toFixed(1)}%
+                </TableCell>
+                <TableCell align="right" sx={{ color: omega.text }}>
+                  {row.pnl.toFixed(2)}%
+                </TableCell>
+                <TableCell align="right" sx={{ color: omega.text }}>
+                  {row.rr.toFixed(2)}
+                </TableCell>
               </motion.tr>
 
               {expanded === row.strategy && (
                 <motion.tr
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
                 >
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={5} sx={{ color: omega.text }}>
                     <StrategyDetailPanel
                       strategy={row.strategy}
                       trades={trades}

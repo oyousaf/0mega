@@ -48,10 +48,13 @@ function computeSymbols(trades: Trade[]): SymbolSummary[] {
     }
 
     const row = map.get(sym)!;
-    row.trades++;
 
     if (t.realised_pl !== null) {
       const pl = Number(t.realised_pl);
+
+      // exclude breakeven from win-rate denominator
+      if (pl !== 0) row.trades++;
+
       if (pl > 0) row.wins++;
       if (pl < 0) row.losses++;
     }
@@ -73,7 +76,7 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
     return [...data].sort((a, b) => {
       const A = a[orderBy];
       const B = b[orderBy];
-      return order === "asc" ? (A < B ? -1 : 1) : (A > B ? -1 : 1);
+      return order === "asc" ? (A < B ? -1 : 1) : A > B ? -1 : 1;
     });
   }, [data, orderBy, order]);
 
@@ -140,6 +143,7 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
                     )}
                     sx={{
                       color: isActive ? omega.text : omega.dim,
+                      "&.Mui-active": { color: omega.text },
                     }}
                   >
                     {h.label}
@@ -160,6 +164,7 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.25, delay: i * 0.03 }}
                 whileHover={{ backgroundColor: omega.rowHover }}
+                style={{ color: omega.text }}
               >
                 <TableCell
                   sx={{

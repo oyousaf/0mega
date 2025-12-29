@@ -8,25 +8,29 @@ import { Box } from "@mui/material";
 function isHalaalTrade(t: Trade): boolean {
   const s = t.symbol.toUpperCase();
 
-  // Crypto fully halaal by default
+  // Crypto
   if (s.endsWith("USDT") || s.endsWith("BTC") || s.endsWith("ETH")) return true;
 
-  // Forex: majors are acceptable in AAOIFI rulings if no swap fees (paper = OK)
+  // Forex majors (paper trading = no swaps)
   if (/^[A-Z]{6}$/.test(s)) return true;
 
-  // Stocks case
-  if (/^[A-Z]{1,5}$/.test(s)) {
-    // You can add a Stock Shariah screen later (debt ratio, etc.)
-    return true;
-  }
+  // Stocks (placeholder – full screening later)
+  if (/^[A-Z]{1,5}$/.test(s)) return true;
 
   return false;
 }
 
-export default function HalaalTracker({ trades }: { trades: Trade[] }) {
-  const total = trades.length;
+function hasExecuted(t: Trade): boolean {
+  return Array.isArray(t.executions) && t.executions.length > 0;
+}
 
-  const halal = trades.filter((t) =>
+export default function HalaalTracker({ trades }: { trades: Trade[] }) {
+  // STRICT: only executed trades count
+  const executed = trades.filter(hasExecuted);
+
+  const total = executed.length;
+
+  const halal = executed.filter((t) =>
     typeof t.halaal === "boolean" ? t.halaal : isHalaalTrade(t)
   ).length;
 
@@ -51,7 +55,6 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
           borderRadius: "1rem",
           padding: "1.2rem",
           marginTop: "2rem",
-          color: omega.text,
         }}
       >
         <h2 className="text-xl font-semibold text-omega-gold mb-3">
@@ -59,9 +62,9 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
         </h2>
 
         {/* METRICS ROW */}
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-3 gap-4 text-center text-omega-gold">
           <div>
-            <p className="opacity-70 text-sm">TOTAL</p>
+            <p className="opacity-70 text-sm">EXECUTED</p>
             <p className="font-bold text-lg">{total}</p>
           </div>
 
