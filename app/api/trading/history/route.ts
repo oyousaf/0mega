@@ -11,132 +11,105 @@ const iso = (v: any) => {
 };
 
 /* -------------------------------------------------------
-   TRADE HISTORY (EXECUTION-DRIVEN)
+   TRADE HISTORY (EXECUTION-ONLY)
 ------------------------------------------------------- */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const limit = n(searchParams.get("limit") || 200);
-    const offset = n(searchParams.get("offset") || 0);
+    const limit = n(searchParams.get("limit") ?? 200);
+    const offset = n(searchParams.get("offset") ?? 0);
 
     /* ---------------------------------------------
-       1. Fetch trades
+       1. Fetch executions
     ---------------------------------------------- */
-    const { rows: trades } = await pool.query(
-      `
-      SELECT *
-      FROM paper_trades
-      ORDER BY opened_at DESC
-      LIMIT $1 OFFSET $2
-      `,
-      [limit, offset]
-    );
-
-    if (!trades.length) {
-      return NextResponse.json({ trades: [] });
-    }
-
-    /* ---------------------------------------------
-       2. Fetch executions
-    ---------------------------------------------- */
-    const ids = trades.map((t) => t.id);
-
-    const { rows: execs } = await pool.query(
+    const { rows } = await pool.query(
       `
       SELECT
         id,
         trade_id,
-        price,
-        qty,
         side,
-        timestamp AS exec_time,
-        broker
+        qty,
+        price,
+        broker,
+        timestamp
       FROM trade_executions
-      WHERE trade_id = ANY($1)
       ORDER BY timestamp ASC
-      `,
-      [ids]
+      `
     );
 
+    if (!rows.length) {
+      return NextResponse.json({ trades: [] });
+    }
+
     /* ---------------------------------------------
-       3. Group executions
+       2. Group by trade_id
     ---------------------------------------------- */
-    const execMap: Record<string, any[]> = {};
-    for (const e of execs) {
-      const key = String(e.trade_id);
-      if (!execMap[key]) execMap[key] = [];
-      execMap[key].push({
-        exec_id: e.id,
-        price: n(e.price),
-        qty: n(e.qty),
-        side: e.side, // open | partial | close
-        time: iso(e.exec_time),
-        broker: e.broker ?? "paper",
+    const tradeMap: Record<string, any[]> = {};
+
+    for (const r of rows) {
+      const tid = String(r.trade_id);
+      if (!tradeMap[tid]) tradeMap[tid] = [];
+      tradeMap[tid].push({
+        exec_id: r.id,
+        side: r.side,
+        qty: n(r.qty),
+        price: n(r.price),
+        broker: r.broker ?? "paper",
+        time: iso(r.timestamp),
       });
     }
 
     /* ---------------------------------------------
-   4. Build history objects
-   (execution-driven, trade-correct)
----------------------------------------------- */
-    const result = trades.map((t) => {
-      const tid = String(t.id);
-      const executions = execMap[tid] ?? [];
+       3. Build trades
+    ---------------------------------------------- */
+    const trades = Object.entries(tradeMap)
+      .map(([trade_id, executions]) => {
+        const entry = executions[0];
+        const exit = executions.length > 1
+          ? executions[executions.length - 1]
+          : null;
 
-      const entrySide = t.side; // BUY or SELL
-      const exitSide = entrySide === "BUY" ? "SELL" : "BUY";
+        const isBuy = entry.side === "BUY";
+        const qty = entry.qty;
 
-      const entries = executions.filter((e) => e.side === entrySide);
-      const exits = executions.filter((e) => e.side === exitSide);
+        const realised_pl =
+          exit
+            ? isBuy
+              ? (exit.price - entry.price) * qty
+              : (entry.price - exit.price) * qty
+            : null;
 
-      const entryFill =
-        entries.length > 0
-          ? entries.reduce((s, e) => s + e.price * e.qty, 0) /
-            entries.reduce((s, e) => s + e.qty, 0)
-          : n(t.entry_price);
+        return {
+          trade_id,
+          symbol: "BTCUSDT", // safe default for now
+          side: entry.side,
+          qty,
 
-      let exitFill = null;
-      let realised = null;
-      let closedAt = null;
+          entry_price: entry.price,
+          entry_fill_price: entry.price,
+          exit_fill_price: exit?.price ?? null,
 
-      if (exits.length) {
-        exitFill =
-          exits.reduce((s, e) => s + e.price * e.qty, 0) /
-          exits.reduce((s, e) => s + e.qty, 0);
+          realised_pl,
 
-        closedAt = exits[exits.length - 1].time;
+          opened_at: entry.time,
+          closed_at: exit?.time ?? null,
+          is_closed: Boolean(exit),
 
-        realised =
-          entrySide === "BUY"
-            ? (exitFill - entryFill) * n(t.qty)
-            : (entryFill - exitFill) * n(t.qty);
-      }
+          strategy: "Structure",
+          rr: null,
+          halaal: true,
 
-      return {
-        trade_id: tid,
-        symbol: t.symbol,
-        side: t.side,
+          executions,
+        };
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.opened_at!).getTime() -
+          new Date(a.opened_at!).getTime()
+      )
+      .slice(offset, offset + limit);
 
-        strategy: t.strategy ?? "Unknown",
-
-        entry_price: n(t.entry_price),
-        entry_fill_price: entryFill,
-        exit_fill_price: exitFill,
-
-        realised_pl: realised,
-
-        qty: n(t.qty),
-        opened_at: iso(t.opened_at),
-        closed_at: closedAt,
-        is_closed: exitFill !== null,
-
-        executions,
-
-        halaal: t.halaal ?? true,
-      };
-    });
-
-    return NextResponse.json({ trades: result });
+    return NextResponse.json({ trades });
   } catch (err: any) {
     console.error("History route error:", err);
     return NextResponse.json(
