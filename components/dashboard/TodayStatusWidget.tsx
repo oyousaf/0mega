@@ -96,7 +96,9 @@ export default function TodayStatusWidget() {
 
         <Block label="LAST TICK">
           <span className="text-xs opacity-70 tracking-wide">
-            {new Date(data.lastTick).toLocaleTimeString("en-GB")}
+            {data.lastTick
+              ? new Date(data.lastTick).toLocaleTimeString("en-GB")
+              : "—"}
           </span>
         </Block>
       </div>
@@ -121,9 +123,12 @@ function Block({
       <span className="text-[0.65rem] tracking-widest opacity-60 text-omega-gold">
         {label}
       </span>
-      <span className="text-lg font-semibold text-omega-gold">
-        {children ?? value}
-      </span>
+
+      {children ? (
+        children
+      ) : (
+        <span className="text-lg font-semibold text-omega-gold">{value}</span>
+      )}
     </div>
   );
 }
