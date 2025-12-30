@@ -139,7 +139,7 @@ export default function DashboardClient() {
         {/* PERFORMANCE SNAPSHOT */}
         <MetricsCards metrics={metrics} />
 
-        {/* FORWARD-TEST REVIEW (OMEGA-29 CORE) */}
+        {/* FORWARD-TEST REVIEW */}
         <ForwardTestReview trades={history} />
 
         {/* LIVE EXPOSURE */}
