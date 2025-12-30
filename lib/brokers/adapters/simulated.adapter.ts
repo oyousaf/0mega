@@ -1,13 +1,19 @@
+import crypto from "crypto";
+
 import {
   BrokerAdapter,
   Market,
   PlaceOrderParams,
   NormalisedBalance,
 } from "@/lib/brokers/types";
+
 import { applySpread } from "@/lib/engine/risk/applySpread";
 import { applySlippage } from "@/lib/engine/execution/slippage";
 import { computeFee } from "@/lib/engine/execution/fees";
 
+/* ---------------------------------------------
+   TYPES
+---------------------------------------------- */
 type Execution = {
   id: string;
   symbol: string;
@@ -18,6 +24,9 @@ type Execution = {
   t: number;
 };
 
+/* ---------------------------------------------
+   SIMULATED BROKER
+---------------------------------------------- */
 export class SimulatedBrokerAdapter implements BrokerAdapter {
   name = "simulated";
   market: Market;
@@ -38,6 +47,7 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
   }
 
   async connect() {}
+
   async healthCheck() {
     return true;
   }
@@ -51,14 +61,14 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
   }
 
   async placeOrder(params: PlaceOrderParams) {
-    let mid = this.prices.get(params.symbol);
+    const mid = this.prices.get(params.symbol);
     if (mid == null) {
       throw new Error(`NO_PRICE_FOR_SYMBOL:${params.symbol}`);
     }
 
     const prev = this.lastPrices.get(params.symbol);
 
-    // 1) Spread curve
+    // Spread
     let price = applySpread({
       market: params.market,
       pair: params.symbol,
@@ -67,14 +77,14 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
       side: params.side,
     });
 
-    // 2) Slippage
+    // Slippage
     price = applySlippage({
       market: params.market,
       midPrice: price,
       side: params.side,
     });
 
-    // 3) Fee
+    // Fees
     const fee = computeFee({
       market: params.market,
       price,
@@ -100,10 +110,15 @@ export class SimulatedBrokerAdapter implements BrokerAdapter {
 
   async cancelOrder() {}
 
-  /* -------- Simulation-only -------- */
-
+  /* ---------------------------------------------
+     SIMULATION HELPERS
+  ---------------------------------------------- */
   setPrice(symbol: string, price: number) {
     this.prices.set(symbol, price);
+  }
+
+  getPrice(symbol: string): number | null {
+    return this.prices.get(symbol) ?? null;
   }
 
   getExecutions() {

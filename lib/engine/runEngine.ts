@@ -17,7 +17,7 @@ import {
 } from "@/lib/engine/risk/dailyRisk";
 
 /* -------------------------------------------------
-   BACKTEST BROKER (singleton per process)
+   BACKTEST BROKER REGISTRY
 -------------------------------------------------- */
 const simulatedBrokers: Record<
   "crypto" | "equity" | "forex",
@@ -32,7 +32,7 @@ function getSimBroker(market: "crypto" | "equity" | "forex") {
 }
 
 /* -------------------------------------------------
-   CANONICAL ENGINE ENTRY
+   ENGINE ENTRY
 -------------------------------------------------- */
 export async function runEngine() {
   const { rows: signals } = await pool.query(`
@@ -53,7 +53,6 @@ export async function runEngine() {
    SIGNAL PROCESSING
 -------------------------------------------------- */
 async function processSignal(signal: any, now: number) {
-  // Expiry
   const created = new Date(signal.created_at).getTime();
   const maxAge = 7 * 24 * 60 * 60 * 1000;
 
@@ -64,11 +63,12 @@ async function processSignal(signal: any, now: number) {
     return;
   }
 
-  // Price
-  const price = await fetchPrice(signal.symbol);
-  if (price == null) return;
+  const price = await fetchPrice(signal.market, signal.symbol);
+  if (price == null) {
+    console.warn("[ENGINE][NO_PRICE]", signal.symbol, signal.market);
+    return;
+  }
 
-  // Resolve SL / TP
   let sl = signal.sl;
   let tp1 = signal.tp1 ?? null;
 
@@ -97,7 +97,6 @@ async function processSignal(signal: any, now: number) {
     });
   }
 
-  // Comparison
   if (signal.direction === "BUY") {
     if (price <= sl) {
       await closeSignal(signal, "SL_HIT");
@@ -114,7 +113,7 @@ async function processSignal(signal: any, now: number) {
 }
 
 /* -------------------------------------------------
-   EXECUTION HELPER
+   ORDER PLACEMENT
 -------------------------------------------------- */
 async function place(params: {
   market: "crypto" | "equity" | "forex";
@@ -124,29 +123,19 @@ async function place(params: {
   slPips?: number;
   riskPct?: number;
 }) {
-  // DAILY LOSS GUARD (before opening trades)
   if (params.qty == null) {
-    assertTradingAllowed(params.market, 0.02); // 2% daily loss cap
+    assertTradingAllowed(params.market, 0.02);
   }
 
   let qty = params.qty;
 
-  // FOREX OPEN → risk sizing
   if (params.market === "forex" && qty == null) {
-    if (!params.slPips) {
-      throw new Error("FOREX_SL_PIPS_REQUIRED");
-    }
+    if (!params.slPips) throw new Error("FOREX_SL_PIPS_REQUIRED");
 
-    let equity: number;
-
-    if (engineMode() === "BACKTEST") {
-      const sim = getSimBroker("forex");
-      const balance = await sim.fetchBalance();
-      equity = balance[0].total;
-    } else {
-      const balance = await brokerRouter.fetchBalance("forex");
-      equity = balance[0].total;
-    }
+    const equity =
+      engineMode() === "BACKTEST"
+        ? (await getSimBroker("forex").fetchBalance())[0].total
+        : (await brokerRouter.fetchBalance("forex"))[0].total;
 
     qty = computeForexPositionSize({
       equity,
@@ -156,9 +145,7 @@ async function place(params: {
     });
   }
 
-  if (!qty || qty <= 0) {
-    throw new Error("INVALID_QTY");
-  }
+  if (!qty || qty <= 0) throw new Error("INVALID_QTY");
 
   if (engineMode() === "BACKTEST") {
     return getSimBroker(params.market).placeOrder({
@@ -178,7 +165,7 @@ async function place(params: {
 }
 
 /* -------------------------------------------------
-   CLOSE HELPERS
+   CLOSE / PARTIAL
 -------------------------------------------------- */
 async function closeSignal(signal: any, reason: string) {
   await place({
@@ -188,23 +175,20 @@ async function closeSignal(signal: any, reason: string) {
     qty: signal.qty,
   });
 
-  // Realised PnL (fees included)
-  const exitPrice = await fetchPrice(signal.symbol);
+  const exitPrice = await fetchPrice(signal.market, signal.symbol);
   if (exitPrice != null) {
-    const grossPnl =
+    const gross =
       signal.direction === "BUY"
         ? (exitPrice - signal.entry_price) * signal.qty
         : (signal.entry_price - exitPrice) * signal.qty;
 
     let fee = 0;
-
     if (engineMode() === "BACKTEST") {
       const execs = getSimBroker(signal.market).getExecutions();
-      const last = execs[execs.length - 1];
-      fee = last?.fee ?? 0;
+      fee = execs.at(-1)?.fee ?? 0;
     }
 
-    recordRealisedPnl(signal.market, grossPnl - fee, 0.02);
+    recordRealisedPnl(signal.market, gross - fee, 0.02);
   }
 
   await pool.query(
@@ -214,13 +198,11 @@ async function closeSignal(signal: any, reason: string) {
 }
 
 async function partialClose(signal: any, reason: string) {
-  const qty = signal.qty * 0.5;
-
   await place({
     market: signal.market,
     symbol: signal.symbol,
     side: signal.direction === "BUY" ? "SELL" : "BUY",
-    qty,
+    qty: signal.qty * 0.5,
   });
 
   await pool.query(`UPDATE signals SET status = $2 WHERE id = $1`, [
@@ -230,16 +212,17 @@ async function partialClose(signal: any, reason: string) {
 }
 
 /* -------------------------------------------------
-   PRICE FETCH
+   PRICE SOURCE (FIXED)
 -------------------------------------------------- */
-async function fetchPrice(symbol: string): Promise<number | null> {
+async function fetchPrice(
+  market: "crypto" | "equity" | "forex",
+  symbol: string
+): Promise<number | null> {
   if (engineMode() === "BACKTEST") {
-    return null; // injected into simulated broker
+    return getSimBroker(market).getPrice(symbol);
   }
 
   const mod = await import("@/providers");
   const asset = await import("@/lib/trading/detectAssetType");
-  const a = asset.detectAsset(symbol);
-
-  return mod.getPrice(symbol, a);
+  return mod.getPrice(symbol, asset.detectAsset(symbol));
 }
