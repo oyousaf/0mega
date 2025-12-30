@@ -7,6 +7,8 @@ import { useEffect, useState, useMemo } from "react";
 
 import { Trade } from "@/app/types/trade";
 import { computeMetricsFromTrades } from "@/lib/metrics";
+import { isClosedExecuted } from "@/lib/tradeGuards";
+import { buildEquityAndDrawdown } from "@/lib/analytics/equity";
 
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
@@ -16,6 +18,7 @@ import SymbolLeaderboard from "@/components/dashboard/analytics/SymbolLeaderboar
 import StrategyMiniCards from "@/components/dashboard/analytics/StrategyMiniCards";
 import HalaalTracker from "@/components/dashboard/analytics/HalaalTracker";
 import MarketBreakdown from "@/components/dashboard/analytics/MarketBreakdown";
+import ForwardTestReview from "@/components/dashboard/analytics/ForwardTestReview";
 
 import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
@@ -27,13 +30,10 @@ const PerformanceChart = dynamic(
   { ssr: false }
 );
 
-/* ----------------------------------------------------------
-   EXECUTION GUARDS
----------------------------------------------------------- */
-const hasExecuted = (t: Trade) =>
-  Array.isArray(t.executions) && t.executions.length > 0;
-
-const isClosedExecuted = (t: Trade) => hasExecuted(t) && t.closed_at !== null;
+const DrawdownChart = dynamic(
+  () => import("@/components/charts/DrawdownChart"),
+  { ssr: false }
+);
 
 export default function DashboardClient() {
   const [history, setHistory] = useState<Trade[]>([]);
@@ -41,7 +41,7 @@ export default function DashboardClient() {
   const [lastUpdated, setLastUpdated] = useState("");
 
   /* ----------------------------------------------------------
-     LOAD TRADE HISTORY
+     LOAD TRADE HISTORY (EXECUTION TRUTH)
   ---------------------------------------------------------- */
   async function loadHistory() {
     try {
@@ -70,27 +70,17 @@ export default function DashboardClient() {
   }, []);
 
   /* ----------------------------------------------------------
-     EQUITY CURVE (STRICT)
+     EQUITY + DRAWDOWN (STRICT, CLOSED & EXECUTED)
   ---------------------------------------------------------- */
-  const equityData = useMemo(() => {
-    const closed = history
-      .filter(isClosedExecuted)
-      .sort(
-        (a, b) =>
-          new Date(a.closed_at!).getTime() - new Date(b.closed_at!).getTime()
-      );
+  const equitySeries = useMemo(() => {
+    const closed = history.filter(isClosedExecuted);
 
-    let cumulative = 0;
-
-    return closed.map((t) => {
-      const pnl = Number(t.realised_pl) || 0;
-      cumulative += pnl;
-
-      return {
-        date: new Date(t.closed_at!).toISOString(),
-        cumulative,
-      };
-    });
+    return buildEquityAndDrawdown(
+      closed.map((t) => ({
+        closed_at: t.closed_at!,
+        realised_pl: Number(t.realised_pl) || 0,
+      }))
+    );
   }, [history]);
 
   const metrics = computeMetricsFromTrades(history);
@@ -149,12 +139,30 @@ export default function DashboardClient() {
         {/* PERFORMANCE SNAPSHOT */}
         <MetricsCards metrics={metrics} />
 
+        {/* FORWARD-TEST REVIEW (OMEGA-29 CORE) */}
+        <ForwardTestReview trades={history} />
+
         {/* LIVE EXPOSURE */}
         <OpenTradesWidget />
 
         {/* EQUITY */}
         <ChartWrapper height={300}>
-          <PerformanceChart data={equityData} />
+          <PerformanceChart
+            data={equitySeries.map((e) => ({
+              date: e.date,
+              cumulative: e.equity,
+            }))}
+          />
+        </ChartWrapper>
+
+        {/* DRAWDOWN */}
+        <ChartWrapper height={220}>
+          <DrawdownChart
+            data={equitySeries.map((e) => ({
+              date: e.date,
+              drawdown: e.drawdown,
+            }))}
+          />
         </ChartWrapper>
 
         <div className="flex justify-center mt-2">
