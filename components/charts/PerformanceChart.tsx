@@ -13,7 +13,6 @@ import { motion } from "framer-motion";
 
 interface Props {
   data: { date: string; cumulative: number }[];
-  trades?: any[];
 }
 
 const omega = {
@@ -42,26 +41,27 @@ export default function PerformanceChart({ data }: Props) {
         background: "var(--omega-green)",
         border: "1px solid var(--omega-dark-gold)",
         borderRadius: "0.75rem",
-        padding: "1rem",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <h2 className="text-xl font-semibold text-omega-gold mb-3">
-        📈 Equity Curve
-      </h2>
+      {/* HEADER */}
+      <div className="px-4 pt-3 pb-1">
+        <h2 className="text-xl font-semibold text-omega-gold">
+          📈 Equity Curve
+        </h2>
+      </div>
 
-      <div style={{ width: "100%", height: 250 }}>
-        <ResponsiveContainer
-          width="100%"
-          height="100%"
-          initialDimension={{ width: 320, height: 200 }}
-        >
+      {/* CHART VIEWPORT — NO PADDING */}
+      <div style={{ flex: 1, minHeight: 0, padding: "0 1rem 1rem" }}>
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={formatted}>
             <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
             <XAxis dataKey="date" stroke={omega.gold} />
             <YAxis stroke={omega.gold} />
             <Tooltip
               contentStyle={{
-                background: "var(--omega-green)",
+                background: omega.green,
                 border: "1px solid var(--omega-dark-gold)",
                 color: omega.gold,
               }}

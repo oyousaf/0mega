@@ -9,12 +9,11 @@ export default function ChartWrapper({
 }) {
   return (
     <div
+      className="w-full overflow-hidden rounded-xl"
       style={{
-        width: "100%",
         height,
         minHeight: height,
         position: "relative",
-        overflow: "hidden",
       }}
     >
       {children}
