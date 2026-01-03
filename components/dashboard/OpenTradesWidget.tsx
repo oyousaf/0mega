@@ -44,12 +44,9 @@ export default function OpenTradesWidget() {
       }}
     >
       <CardContent sx={{ color: "var(--omega-gold)" }}>
-        <Typography
-          variant="h5"
-          sx={{ fontWeight: 700, color: "var(--omega-gold)" }}
-        >
-          Open Trades
-        </Typography>
+        <h2 className="text-xl font-semibold text-omega-gold mb-1">
+          ⏳ Open Trades
+        </h2>
 
         <Typography sx={{ opacity: 0.7, mb: 2, color: "var(--omega-gold)" }}>
           Balance: £{safeNum(balance)}

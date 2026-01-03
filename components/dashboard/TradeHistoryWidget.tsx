@@ -123,9 +123,9 @@ export default function TradeHistoryWidget() {
       }}
     >
       <CardContent sx={{ color: "var(--omega-gold)" }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Trade History
-        </Typography>
+        <h2 className="text-xl font-semibold text-omega-gold mb-1">
+          📜 Trade History
+        </h2>
 
         {/* SUMMARY — SERVER TRUTH */}
         <div className="mt-2 text-sm flex justify-center gap-6 opacity-90">
@@ -154,9 +154,7 @@ export default function TradeHistoryWidget() {
             const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
 
             const pnlPct =
-              pl !== null
-                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
-                : null;
+              pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
 
             return (
               <div
@@ -165,9 +163,7 @@ export default function TradeHistoryWidget() {
               >
                 <div
                   className="flex justify-between items-center cursor-pointer"
-                  onClick={() =>
-                    setOpenRow(isOpen ? null : t.trade_id)
-                  }
+                  onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
@@ -189,9 +185,7 @@ export default function TradeHistoryWidget() {
                         }`}
                       >
                         £{safeNum(pl)}{" "}
-                        <span className="opacity-70 text-xs">
-                          ({pnlPct}%)
-                        </span>
+                        <span className="opacity-70 text-xs">({pnlPct}%)</span>
                       </div>
                     )}
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
