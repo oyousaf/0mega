@@ -5,13 +5,14 @@ import { getDailyRisk } from "@/lib/engine/risk/dailyRisk";
 const MAX_DAILY_LOSS = 0.02;
 
 /* -------------------------------------------------
-   TODAY ENGINE STATUS
+   TODAY ENGINE STATUS (CANONICAL)
 -------------------------------------------------- */
 export async function GET() {
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
+  );
 
-  // Safe defaults
   let pnlToday = 0;
   let tradesToday = 0;
   let openTrades = 0;
@@ -19,62 +20,71 @@ export async function GET() {
   let tradingAllowed = true;
 
   /* -----------------------------------------
-     1. Trades today + open trades (DB truth)
+     1. OPEN TRADES (CURRENT STATE)
+  ------------------------------------------ */
+  try {
+    const { rows } = await pool.query(`
+      SELECT COUNT(*) AS open_trades
+      FROM paper_trades
+      WHERE status = 'OPEN'
+    `);
+
+    openTrades = Number(rows[0]?.open_trades ?? 0);
+  } catch {}
+
+  /* -----------------------------------------
+     2. TRADES TODAY (FILLED EXECUTIONS)
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(
       `
-      SELECT
-        COUNT(*) FILTER (WHERE opened_at >= $1) AS trades_today,
-        COUNT(*) FILTER (WHERE status = 'OPEN') AS open_trades
-      FROM paper_trades
+      SELECT COUNT(DISTINCT trade_id) AS trades_today
+      FROM trade_executions
+      WHERE
+        timestamp >= $1
+        AND status = 'FILLED'
       `,
       [start.toISOString()]
     );
 
     tradesToday = Number(rows[0]?.trades_today ?? 0);
-    openTrades = Number(rows[0]?.open_trades ?? 0);
-  } catch {
-    // swallow
-  }
+  } catch {}
 
   /* -----------------------------------------
-     2. Realised PnL today (executions)
+     3. REALISED PNL TODAY (CLOSE FILLS ONLY)
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(
       `
       SELECT
-        t.side,
+        t.side AS trade_side,
         t.entry_price,
         t.qty,
-        e.price,
-        e.side AS exec_side
+        e.price AS exit_price
       FROM trade_executions e
       JOIN paper_trades t ON t.id = e.trade_id
-      WHERE e.timestamp >= $1
+      WHERE
+        e.timestamp >= $1
+        AND e.intent = 'CLOSE'
+        AND e.status = 'FILLED'
       `,
       [start.toISOString()]
     );
 
-    for (const e of rows) {
-      if (e.exec_side !== (e.side === "BUY" ? "SELL" : "BUY")) continue;
-
-      const entry = Number(e.entry_price);
-      const exit = Number(e.price);
-      const qty = Number(e.qty);
+    for (const r of rows) {
+      const entry = Number(r.entry_price);
+      const exit = Number(r.exit_price);
+      const qty = Number(r.qty);
 
       if (!isFinite(entry) || !isFinite(exit) || !isFinite(qty)) continue;
 
       pnlToday +=
-        e.side === "BUY" ? (exit - entry) * qty : (entry - exit) * qty;
+        r.trade_side === "LONG" ? (exit - entry) * qty : (entry - exit) * qty;
     }
-  } catch {
-    // swallow
-  }
+  } catch {}
 
   /* -----------------------------------------
-     3. Daily risk
+     4. DAILY RISK (ENGINE STATE)
   ------------------------------------------ */
   try {
     const risk = getDailyRisk("GLOBAL");
@@ -87,9 +97,7 @@ export async function GET() {
 
       tradingAllowed = !risk.frozen;
     }
-  } catch {
-    // engine not initialised yet
-  }
+  } catch {}
 
   return NextResponse.json({
     pnlToday,
