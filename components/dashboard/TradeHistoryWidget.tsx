@@ -23,6 +23,19 @@ export default function TradeHistoryWidget() {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  /* ---------------- DEDUPE MERGE ---------------- */
+
+  function mergeTrades(prev: Trade[], next: Trade[]) {
+    const map = new Map<string, Trade>();
+    for (const t of prev) {
+      map.set(`${t.trade_id}-${t.opened_at}`, t);
+    }
+    for (const t of next) {
+      map.set(`${t.trade_id}-${t.opened_at}`, t);
+    }
+    return Array.from(map.values());
+  }
+
   /* ---------------- FETCH PAGE ---------------- */
 
   async function loadPage(nextOffset = 0, append = false) {
@@ -38,7 +51,11 @@ export default function TradeHistoryWidget() {
       const json = await res.json();
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
-      setItems((prev) => (append ? [...prev, ...trades] : trades));
+      setItems((prev) => {
+        if (!append) return trades;
+        return mergeTrades(prev, trades);
+      });
+
       setHasMore(Boolean(json.hasMore));
       setOffset(nextOffset);
     } catch (err) {
@@ -54,7 +71,7 @@ export default function TradeHistoryWidget() {
     loadPage(0, false);
 
     const id = setInterval(() => {
-      loadPage(0, false);
+      loadPage(0, false); // refresh first page only
     }, POLL_INTERVAL);
 
     return () => clearInterval(id);
@@ -142,7 +159,6 @@ export default function TradeHistoryWidget() {
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
 
-        {/* SCROLL CONTAINER — SCROLLBAR HIDDEN */}
         <div
           ref={containerRef}
           className="trade-history-scroll"
@@ -164,7 +180,7 @@ export default function TradeHistoryWidget() {
 
             return (
               <div
-                key={t.trade_id}
+                key={`${t.trade_id}-${t.opened_at}`}
                 className="border-b border-omega-dark-gold/40 py-2"
               >
                 <div
