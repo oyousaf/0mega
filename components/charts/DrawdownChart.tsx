@@ -82,7 +82,9 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               width={40}
             />
             <Tooltip
-              formatter={(v: number) => `${Math.abs(v).toFixed(2)}%`}
+              formatter={(v) =>
+                typeof v === "number" ? `${Math.abs(v).toFixed(2)}%` : "—"
+              }
               contentStyle={{
                 background: omega.green,
                 border: "1px solid var(--omega-dark-gold)",
