@@ -4,7 +4,7 @@ import { pool } from "@/lib/neon";
 /* -------------------------------------------------------
    SAFE CAST HELPERS
 ------------------------------------------------------- */
-const n = (v: any) => (isFinite(Number(v)) ? Number(v) : 0);
+const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const iso = (v: any) => {
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d.toISOString();
@@ -16,13 +16,39 @@ const iso = (v: any) => {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const limit = n(searchParams.get("limit") ?? 200);
-    const offset = n(searchParams.get("offset") ?? 0);
 
-    /* ---------------------------------------------
-       1. Fetch executions
-    ---------------------------------------------- */
-    const { rows } = await pool.query(
+    const limit = Math.min(n(searchParams.get("limit") ?? 20), 50);
+    const offset = Math.max(n(searchParams.get("offset") ?? 0), 0);
+
+    /* -------------------------------------------------
+       1. Get trade_ids for this page
+    -------------------------------------------------- */
+    const { rows: tradeRows } = await pool.query(
+      `
+      SELECT
+        trade_id,
+        MAX(timestamp) AS last_time
+      FROM trade_executions
+      GROUP BY trade_id
+      ORDER BY last_time DESC
+      LIMIT $1 OFFSET $2
+      `,
+      [limit + 1, offset]
+    );
+
+    if (!tradeRows.length) {
+      return NextResponse.json({ trades: [], hasMore: false });
+    }
+
+    const hasMore = tradeRows.length > limit;
+    const pageTradeIds = tradeRows
+      .slice(0, limit)
+      .map((r) => r.trade_id);
+
+    /* -------------------------------------------------
+       2. Fetch executions for those trade_ids
+    -------------------------------------------------- */
+    const { rows: execRows } = await pool.query(
       `
       SELECT
         id,
@@ -33,22 +59,21 @@ export async function GET(req: Request) {
         broker,
         timestamp
       FROM trade_executions
-      ORDER BY timestamp ASC
-      `
+      WHERE trade_id = ANY($1)
+      ORDER BY trade_id, timestamp ASC
+      `,
+      [pageTradeIds]
     );
 
-    if (!rows.length) {
-      return NextResponse.json({ trades: [] });
-    }
-
-    /* ---------------------------------------------
-       2. Group by trade_id
-    ---------------------------------------------- */
+    /* -------------------------------------------------
+       3. Group executions by trade_id
+    -------------------------------------------------- */
     const tradeMap: Record<string, any[]> = {};
 
-    for (const r of rows) {
+    for (const r of execRows) {
       const tid = String(r.trade_id);
       if (!tradeMap[tid]) tradeMap[tid] = [];
+
       tradeMap[tid].push({
         exec_id: r.id,
         side: r.side,
@@ -59,57 +84,55 @@ export async function GET(req: Request) {
       });
     }
 
-    /* ---------------------------------------------
-       3. Build trades
-    ---------------------------------------------- */
-    const trades = Object.entries(tradeMap)
-      .map(([trade_id, executions]) => {
-        const entry = executions[0];
-        const exit = executions.length > 1
+    /* -------------------------------------------------
+       4. Build trade objects
+    -------------------------------------------------- */
+    const trades = pageTradeIds.map((trade_id) => {
+      const executions = tradeMap[String(trade_id)] ?? [];
+      const entry = executions[0];
+      const exit =
+        executions.length > 1
           ? executions[executions.length - 1]
           : null;
 
-        const isBuy = entry.side === "BUY";
-        const qty = entry.qty;
+      const isBuy = entry.side === "BUY";
+      const qty = entry.qty;
 
-        const realised_pl =
-          exit
-            ? isBuy
-              ? (exit.price - entry.price) * qty
-              : (entry.price - exit.price) * qty
-            : null;
+      const realised_pl =
+        exit
+          ? isBuy
+            ? (exit.price - entry.price) * qty
+            : (entry.price - exit.price) * qty
+          : null;
 
-        return {
-          trade_id,
-          symbol: "BTCUSDT", // safe default for now
-          side: entry.side,
-          qty,
+      return {
+        trade_id,
+        symbol: "BTCUSDT",
+        side: entry.side,
+        qty,
 
-          entry_price: entry.price,
-          entry_fill_price: entry.price,
-          exit_fill_price: exit?.price ?? null,
+        entry_price: entry.price,
+        entry_fill_price: entry.price,
+        exit_fill_price: exit?.price ?? null,
 
-          realised_pl,
+        realised_pl,
 
-          opened_at: entry.time,
-          closed_at: exit?.time ?? null,
-          is_closed: Boolean(exit),
+        opened_at: entry.time,
+        closed_at: exit?.time ?? null,
+        is_closed: Boolean(exit),
 
-          strategy: "Structure",
-          rr: null,
-          halaal: true,
+        strategy: "Structure",
+        rr: null,
+        halaal: true,
 
-          executions,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.opened_at!).getTime() -
-          new Date(a.opened_at!).getTime()
-      )
-      .slice(offset, offset + limit);
+        executions,
+      };
+    });
 
-    return NextResponse.json({ trades });
+    return NextResponse.json({
+      trades,
+      hasMore,
+    });
   } catch (err: any) {
     console.error("History route error:", err);
     return NextResponse.json(

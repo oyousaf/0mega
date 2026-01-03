@@ -97,3 +97,13 @@ body {
 .omega-pulse {
   animation: omegaPulse 2s infinite ease-in-out;
 }
+
+/* Hide scrollbar but keep scrolling */
+.trade-history-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.trade-history-scroll::-webkit-scrollbar {
+  display: none;
+}
