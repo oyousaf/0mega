@@ -128,11 +128,22 @@ export default function TradeHistoryWidget() {
         </h2>
 
         {/* SUMMARY — SERVER TRUTH */}
-        <div className="mt-2 text-sm flex justify-center gap-6 opacity-90">
+        <Typography
+          sx={{
+            mt: 1,
+            fontSize: 13,
+            display: "flex",
+            justifyContent: "center",
+            gap: 3,
+            opacity: 0.9,
+            color: "var(--omega-gold)",
+            letterSpacing: "0.02em",
+          }}
+        >
           <span>Daily: £{pnlSummary.daily.toFixed(2)}</span>
           <span>Weekly: £{pnlSummary.weekly.toFixed(2)}</span>
           <span>Monthly: £{pnlSummary.monthly.toFixed(2)}</span>
-        </div>
+        </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
 

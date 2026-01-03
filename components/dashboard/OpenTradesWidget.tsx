@@ -48,9 +48,9 @@ export default function OpenTradesWidget() {
           ⏳ Open Trades
         </h2>
 
-        <Typography sx={{ opacity: 0.7, mb: 2, color: "var(--omega-gold)" }}>
+        <p className="text-sm text-omega-gold/70 mb-2">
           Balance: £{safeNum(balance)}
-        </Typography>
+        </p>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
 
