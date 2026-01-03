@@ -1,22 +1,12 @@
 "use client";
 
-import { useMemo, useState, Fragment } from "react";
-import { motion } from "framer-motion";
-import {
-  Box,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableSortLabel,
-} from "@mui/material";
+import { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Box } from "@mui/material";
 
 import { Trade } from "@/app/types/trade";
 import StrategyDetailPanel from "./StrategyDetailPanel";
 import { omegaAnalytics as omega } from "./theme";
-
-type Order = "asc" | "desc";
 
 interface StrategySummary {
   strategy: string;
@@ -52,7 +42,6 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
     }
 
     const row = map.get(strat)!;
-
     row.trades++;
 
     const realised = safeNum(t.realised_pl);
@@ -63,48 +52,32 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
     if (realised < 0) row.losses++;
 
     if (entry > 0 && qty > 0) {
-      const pct = (realised / (entry * qty)) * 100;
-      row.pnl += pct;
+      row.pnl += (realised / (entry * qty)) * 100;
     }
 
     row.rr += safeNum(t.rr);
   }
 
-  return [...map.values()].map((r) => ({
-    ...r,
-    winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
-    rr: r.trades ? r.rr / r.trades : 0,
-  }));
+  return [...map.values()]
+    .map((r) => ({
+      ...r,
+      winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
+      rr: r.trades ? r.rr / r.trades : 0,
+    }))
+    .sort((a, b) => b.winRate - a.winRate);
 }
 
 export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
-  const [order, setOrder] = useState<Order>("desc");
-  const [orderBy, setOrderBy] = useState<keyof StrategySummary>("winRate");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const data = useMemo(() => computeStrategies(trades), [trades]);
-
-  const sorted = useMemo(() => {
-    return [...data].sort((a, b) => {
-      const A = a[orderBy];
-      const B = b[orderBy];
-
-      if (typeof A === "number" && typeof B === "number") {
-        return order === "asc" ? A - B : B - A;
-      }
-
-      return order === "asc"
-        ? String(A).localeCompare(String(B))
-        : String(B).localeCompare(String(A));
-    });
-  }, [data, order, orderBy]);
 
   return (
     <Box
       sx={{
         background: omega.bg,
         borderRadius: "1rem",
-        padding: "1.2rem",
+        padding: "1rem",
         border: `1px solid ${omega.sep}`,
         marginTop: "2rem",
       }}
@@ -113,90 +86,77 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
         🔥 Strategy Performance
       </h2>
 
-      <Table sx={{ minWidth: 650, width: "100%", tableLayout: "fixed" }}>
-        <TableHead>
-          <TableRow>
-            {["strategy", "trades", "winRate", "pnl", "rr"].map((key) => {
-              const k = key as keyof StrategySummary;
-              const isActive = orderBy === k;
+      <div className="space-y-3">
+        {data.map((row) => {
+          const open = expanded === row.strategy;
 
-              return (
-                <TableCell
-                  key={key}
-                  align={k === "strategy" ? "left" : "right"}
-                  sx={{ color: omega.text, fontWeight: 600 }}
-                >
-                  <TableSortLabel
-                    active={isActive}
-                    direction={isActive ? order : "asc"}
-                    onClick={() => {
-                      if (orderBy === k) {
-                        setOrder(order === "asc" ? "desc" : "asc");
-                      } else {
-                        setOrderBy(k);
-                        setOrder("desc");
-                      }
-                    }}
-                    sx={{
-                      color: omega.text,
-                      "&.Mui-active": { color: omega.text },
-                      "& .MuiTableSortLabel-icon": {
-                        color: `${omega.text} !important`,
-                      },
-                    }}
+          return (
+            <motion.div
+              key={row.strategy}
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.15 }}
+              className="rounded-lg border border-omega-dark-gold bg-black/40 p-4 cursor-pointer"
+              onClick={() =>
+                setExpanded(open ? null : row.strategy)
+              }
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-omega-gold truncate">
+                  {row.strategy}
+                </p>
+                <span className="text-xs text-omega-gold/70 shrink-0">
+                  {row.trades} trades
+                </span>
+              </div>
+
+              {/* Metrics */}
+              <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                <div className="text-omega-gold">
+                  Win
+                  <span className="ml-1 font-semibold">
+                    {row.winRate.toFixed(1)}%
+                  </span>
+                </div>
+
+                <div className="text-omega-gold text-center">
+                  PnL
+                  <span className="ml-1 font-semibold">
+                    {row.pnl.toFixed(2)}%
+                  </span>
+                </div>
+
+                <div className="text-omega-gold text-right">
+                  RR
+                  <span className="ml-1 font-semibold">
+                    {row.rr.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Expand */}
+              <AnimatePresence>
+                {open && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="mt-4"
                   >
-                    {key.toUpperCase()}
-                  </TableSortLabel>
-                </TableCell>
-              );
-            })}
-          </TableRow>
-        </TableHead>
-
-        <TableBody>
-          {sorted.map((row) => (
-            <Fragment key={row.strategy}>
-              <motion.tr
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                whileHover={{ background: omega.rowHover }}
-                onClick={() =>
-                  setExpanded(expanded === row.strategy ? null : row.strategy)
-                }
-                style={{ cursor: "pointer", color: omega.text }}
-              >
-                <TableCell sx={{ color: omega.text }}>{row.strategy}</TableCell>
-                <TableCell align="right" sx={{ color: omega.text }}>
-                  {row.trades}
-                </TableCell>
-                <TableCell align="right" sx={{ color: omega.text }}>
-                  {row.winRate.toFixed(1)}%
-                </TableCell>
-                <TableCell align="right" sx={{ color: omega.text }}>
-                  {row.pnl.toFixed(2)}%
-                </TableCell>
-                <TableCell align="right" sx={{ color: omega.text }}>
-                  {row.rr.toFixed(2)}
-                </TableCell>
-              </motion.tr>
-
-              {expanded === row.strategy && (
-                <motion.tr
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                >
-                  <TableCell colSpan={5} sx={{ color: omega.text }}>
                     <StrategyDetailPanel
                       strategy={row.strategy}
                       trades={trades}
                     />
-                  </TableCell>
-                </motion.tr>
-              )}
-            </Fragment>
-          ))}
-        </TableBody>
-      </Table>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+        })}
+      </div>
     </Box>
   );
 }
