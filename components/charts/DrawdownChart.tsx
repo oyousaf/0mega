@@ -6,10 +6,10 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
 import { useMemo } from "react";
+import { useElementSize } from "@/hooks/useElementSize";
 
 const omega = {
   gold: "var(--omega-gold)",
@@ -24,6 +24,8 @@ type DrawdownPoint = {
 };
 
 export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
+  const { ref, size } = useElementSize<HTMLDivElement>();
+
   const safeData = useMemo(() => {
     if (!Array.isArray(data)) return [];
     return data.filter(
@@ -39,32 +41,11 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
     );
   }, [safeData]);
 
-  if (safeData.length < 2) {
-    return (
-      <div
-        style={{
-          height: 300,
-          background: omega.green,
-          border: "1px solid var(--omega-dark-gold)",
-          borderRadius: "0.75rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: omega.gold,
-          fontSize: 12,
-          opacity: 0.7,
-        }}
-      >
-        Drawdown data unavailable
-      </div>
-    );
-  }
-
   return (
     <div
       style={{
         width: "100%",
-        height: 300, // 🔒 explicit, stable
+        height: "100%",
         background: omega.green,
         border: "1px solid var(--omega-dark-gold)",
         borderRadius: "0.75rem",
@@ -85,9 +66,9 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
         </h3>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, padding: "0 0.75rem 0.75rem" }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={safeData}>
+      <div ref={ref} style={{ flex: 1, padding: "0 0.75rem 0.75rem" }}>
+        {size.width > 0 && size.height > 0 && (
+          <AreaChart width={size.width} height={size.height} data={safeData}>
             <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
             <XAxis dataKey="date" hide />
             <YAxis
@@ -96,10 +77,7 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               axisLine={false}
               tickLine={false}
               domain={[maxDD, 0]}
-              ticks={Array.from(
-                { length: Math.abs(maxDD) + 1 },
-                (_, i) => -i
-              )}
+              ticks={Array.from({ length: Math.abs(maxDD) + 1 }, (_, i) => -i)}
               tickFormatter={(v) => `${Math.abs(v)}%`}
               width={40}
             />
@@ -119,10 +97,9 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               fill="rgba(255,82,82,0.25)"
               strokeWidth={2}
               dot={false}
-              isAnimationActive={false}
             />
           </AreaChart>
-        </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
