@@ -24,29 +24,19 @@ export default function TradeHistoryWidget() {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  /* ---------------- SERVER-SIDE SUMMARY ---------------- */
-
   const pnlSummary = usePnlSummary(POLL_INTERVAL);
-
-  /* ---------------- DEDUPE MERGE ---------------- */
 
   function mergeTrades(prev: Trade[], next: Trade[]) {
     const map = new Map<string, Trade>();
-    for (const t of prev) {
-      map.set(`${t.trade_id}-${t.opened_at}`, t);
-    }
-    for (const t of next) {
-      map.set(`${t.trade_id}-${t.opened_at}`, t);
-    }
+    for (const t of prev) map.set(`${t.trade_id}-${t.opened_at}`, t);
+    for (const t of next) map.set(`${t.trade_id}-${t.opened_at}`, t);
     return Array.from(map.values());
   }
 
-  /* ---------------- FETCH PAGE ---------------- */
-
   async function loadPage(nextOffset = 0, append = false) {
     if (loadingMore) return;
-
     setLoadingMore(true);
+
     try {
       const res = await fetch(
         `/api/trading/history?limit=${PAGE_SIZE}&offset=${nextOffset}`,
@@ -56,11 +46,7 @@ export default function TradeHistoryWidget() {
       const json = await res.json();
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
-      setItems((prev) => {
-        if (!append) return trades;
-        return mergeTrades(prev, trades);
-      });
-
+      setItems((prev) => (!append ? trades : mergeTrades(prev, trades)));
       setHasMore(Boolean(json.hasMore));
       setOffset(nextOffset);
     } catch (err) {
@@ -70,19 +56,11 @@ export default function TradeHistoryWidget() {
     }
   }
 
-  /* ---------------- INITIAL LOAD + POLL ---------------- */
-
   useEffect(() => {
     loadPage(0, false);
-
-    const id = setInterval(() => {
-      loadPage(0, false); // refresh first page only
-    }, POLL_INTERVAL);
-
+    const id = setInterval(() => loadPage(0, false), POLL_INTERVAL);
     return () => clearInterval(id);
   }, []);
-
-  /* ---------------- SCROLL HANDLER ---------------- */
 
   useEffect(() => {
     const el = containerRef.current;
@@ -90,7 +68,6 @@ export default function TradeHistoryWidget() {
 
     const onScroll = () => {
       if (!hasMore || loadingMore) return;
-
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
         loadPage(offset + PAGE_SIZE, true);
       }
@@ -100,19 +77,13 @@ export default function TradeHistoryWidget() {
     return () => el.removeEventListener("scroll", onScroll);
   }, [offset, hasMore, loadingMore]);
 
-  /* ---------------- SAFE HELPERS ---------------- */
-
   const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-
   const safeNum = (v: any) =>
     Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
-
   const safeDate = (d: any) => {
     const dt = new Date(d);
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
   };
-
-  /* ---------------- RENDER ---------------- */
 
   return (
     <Card
@@ -127,7 +98,6 @@ export default function TradeHistoryWidget() {
           📜 Trade History
         </h2>
 
-        {/* SUMMARY — SERVER TRUTH */}
         <Typography
           sx={{
             mt: 1,
@@ -147,25 +117,19 @@ export default function TradeHistoryWidget() {
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
 
-        {/* SCROLL CONTAINER */}
         <div
           ref={containerRef}
           className="trade-history-scroll"
-          style={{
-            maxHeight: 520,
-            overflowY: "auto",
-            paddingRight: 6,
-          }}
+          style={{ maxHeight: 520, overflowY: "auto", paddingRight: 6 }}
         >
           {items.map((t) => {
             const isOpen = openRow === t.trade_id;
             const entry = n(t.entry_fill_price ?? t.entry_price);
-            const exit =
-              t.exit_fill_price !== null ? n(t.exit_fill_price) : null;
             const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
-
             const pnlPct =
-              pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
+              pl !== null
+                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
+                : null;
 
             return (
               <div
@@ -180,11 +144,6 @@ export default function TradeHistoryWidget() {
                     <div className="font-bold">{t.symbol}</div>
                     <div className="text-sm opacity-70">
                       {t.side} • Qty {t.qty}
-                      {t.strategy && (
-                        <span className="ml-2 text-xs opacity-60">
-                          ({t.strategy})
-                        </span>
-                      )}
                     </div>
                   </div>
 
@@ -196,7 +155,9 @@ export default function TradeHistoryWidget() {
                         }`}
                       >
                         £{safeNum(pl)}{" "}
-                        <span className="opacity-70 text-xs">({pnlPct}%)</span>
+                        <span className="opacity-70 text-xs">
+                          ({pnlPct}%)
+                        </span>
                       </div>
                     )}
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
@@ -205,23 +166,32 @@ export default function TradeHistoryWidget() {
 
                 <Collapse in={isOpen}>
                   <div className="mt-2 ml-2 text-sm opacity-80">
-                    {t.executions.map((e) => (
-                      <div
-                        key={e.exec_id}
-                        className="flex justify-between py-1 border-b border-omega-dark-gold/20"
-                      >
-                        <div>
-                          {e.side} @ £{safeNum(e.price)}
+                    {t.executions.map((e) => {
+                      const label =
+                        e.side === t.side ? "Entry" : "Exit";
+
+                      return (
+                        <div
+                          key={e.exec_id}
+                          className="flex justify-between py-1 border-b border-omega-dark-gold/20"
+                        >
+                          <div>
+                            <span className="mr-2 opacity-60 text-xs">
+                              {label}
+                            </span>
+                            {e.side} @ £{safeNum(e.price)}
+                          </div>
+
+                          <div className="text-right">
+                            Qty {e.qty} • {e.broker}
+                            <br />
+                            <span className="opacity-60 text-xs">
+                              {safeDate(e.time)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          Qty {e.qty} • {e.broker}
-                          <br />
-                          <span className="opacity-60 text-xs">
-                            {safeDate(e.time)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </Collapse>
               </div>
