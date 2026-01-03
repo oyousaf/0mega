@@ -14,6 +14,7 @@ export default function ChartWrapper({
         height,
         minHeight: height,
         position: "relative",
+        contain: "layout",
       }}
     >
       {children}
