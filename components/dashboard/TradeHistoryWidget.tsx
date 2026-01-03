@@ -127,9 +127,7 @@ export default function TradeHistoryWidget() {
             const entry = n(t.entry_fill_price ?? t.entry_price);
             const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
             const pnlPct =
-              pl !== null
-                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
-                : null;
+              pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
 
             return (
               <div
@@ -155,9 +153,7 @@ export default function TradeHistoryWidget() {
                         }`}
                       >
                         £{safeNum(pl)}{" "}
-                        <span className="opacity-70 text-xs">
-                          ({pnlPct}%)
-                        </span>
+                        <span className="opacity-70 text-xs">({pnlPct}%)</span>
                       </div>
                     )}
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
@@ -167,8 +163,7 @@ export default function TradeHistoryWidget() {
                 <Collapse in={isOpen}>
                   <div className="mt-2 ml-2 text-sm opacity-80">
                     {t.executions.map((e) => {
-                      const label =
-                        e.side === t.side ? "Entry" : "Exit";
+                      const label = e.side === "OPEN" ? "Entry" : "Exit";
 
                       return (
                         <div
