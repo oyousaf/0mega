@@ -1,53 +1,33 @@
-/* --------------------
-   Fonts
--------------------- */
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /* --------------------
-Tailwind Theme Bridge
--------------------- */
-@theme inline {
-  --color-background: #202123;
-  --color-foreground: #eaeaea;
-
-  --color-omega-green: #004830;
-  --color-omega-gold: #d4af37;
-  --color-omega-dark-gold: #b8860b;
-
-  --font-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-
-/* stylelint-enable at-rule-no-unknown */
-
-/* --------------------
-   Global CSS Variables
+   Omega-Alpha Theme
 -------------------- */
 :root {
-  --background: #202123;
-  --foreground: #eaeaea;
-
-  --omega-green: #004830;
-  --omega-gold: #d4af37;
-  --omega-dark-gold: #b8860b;
-
+  --background: #202123; /* Dark base */
+  --foreground: #eaeaea; /* Light text */
+  --omega-green: #004830; /* Dial green */
+  --omega-gold: #d4af37; /* Main gold */
+  --omega-dark-gold: #b8860b; /* Accent gold */
   --font-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* --------------------
-   Reset (minimal)
--------------------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-omega-green: var(--omega-green);
+  --color-omega-gold: var(--omega-gold);
+  --color-omega-dark-gold: var(--omega-dark-gold);
+  --font-sans: var(--font-sans);
+}
+
+/* Ensure MUI and all elements use Poppins */
 *,
 *::before,
 *::after {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
+  font-family: var(--font-sans) !important;
 }
 
 /* --------------------
@@ -68,49 +48,34 @@ body {
 }
 
 /* --------------------
-   Omega utilities
+   Utility classes
 -------------------- */
 .omega-border {
-  border: 1px solid var(--omega-gold);
+  border-color: var(--omega-gold);
 }
 
 .omega-card {
   background-color: var(--omega-green);
   color: var(--omega-gold);
-
   border: 1px solid var(--omega-dark-gold);
   border-radius: 0.75rem;
-
   padding: 1rem;
-
   box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
 }
 
 .omega-button {
   background-color: var(--omega-gold);
   color: var(--omega-green);
-
-  border: none;
   border-radius: 0.5rem;
-
   padding: 0.5rem 1rem;
-
-  font-weight: 600;
-  cursor: pointer;
-
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: all 0.2s ease;
 }
-
 .omega-button:hover {
   background-color: var(--omega-dark-gold);
 }
 
-.omega-button:active {
-  transform: translateY(1px);
-}
-
 /* --------------------
-   Pulse animation
+   Animation pulse
 -------------------- */
 @keyframes omegaPulse {
   0%,
