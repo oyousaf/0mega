@@ -176,16 +176,21 @@ export default function TradeHistoryWidget() {
             const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
 
             const pnlPct =
-              pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
+              pl !== null
+                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
+                : null;
 
             return (
-              <div
-                key={`${t.trade_id}-${t.opened_at}`}
-                className="border-b border-omega-dark-gold/40 py-2"
-              >
+<div
+  key={`${t.trade_id}-${t.opened_at}`}
+  className="border-b border-omega-dark-gold/40 py-2"
+>
+
                 <div
                   className="flex justify-between items-center cursor-pointer"
-                  onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
+                  onClick={() =>
+                    setOpenRow(isOpen ? null : t.trade_id)
+                  }
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
@@ -203,11 +208,15 @@ export default function TradeHistoryWidget() {
                     {pl !== null && (
                       <div
                         className={`font-bold ${
-                          pl >= 0 ? "text-green-400" : "text-red-400"
+                          pl >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
                         }`}
                       >
                         £{safeNum(pl)}{" "}
-                        <span className="opacity-70 text-xs">({pnlPct}%)</span>
+                        <span className="opacity-70 text-xs">
+                          ({pnlPct}%)
+                        </span>
                       </div>
                     )}
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
