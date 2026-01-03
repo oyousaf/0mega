@@ -1,33 +1,57 @@
+/* --------------------
+   Fonts
+-------------------- */
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /* --------------------
-   Omega-Alpha Theme
+   Omega-Alpha Global Theme
 -------------------- */
 :root {
-  --background: #202123; /* Dark base */
-  --foreground: #eaeaea; /* Light text */
-  --omega-green: #004830; /* Dial green */
-  --omega-gold: #d4af37; /* Main gold */
-  --omega-dark-gold: #b8860b; /* Accent gold */
+  /* Core colors */
+  --background: #202123;
+  --foreground: #eaeaea;
+
+  /* Brand */
+  --omega-green: #004830;
+  --omega-gold: #d4af37;
+  --omega-dark-gold: #b8860b;
+
+  /* Typography */
   --font-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-omega-green: var(--omega-green);
-  --color-omega-gold: var(--omega-gold);
-  --color-omega-dark-gold: var(--omega-dark-gold);
-  --font-sans: var(--font-sans);
-}
-
-/* Ensure MUI and all elements use Poppins */
+/* --------------------
+   Global reset
+-------------------- */
 *,
 *::before,
 *::after {
-  font-family: var(--font-sans) !important;
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* --------------------
+   Base styling
+-------------------- */
+body {
+  margin: 0;
+  padding: 0;
+
+  background-color: var(--background);
+  color: var(--foreground);
+
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* --------------------
@@ -41,48 +65,49 @@
 }
 
 /* --------------------
-   Base styling
--------------------- */
-body {
-  @apply bg-background text-foreground;
-  font-family: var(--font-sans);
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
-  letter-spacing: 0.02em;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* --------------------
-   Utility classes
+   Omega utilities
 -------------------- */
 .omega-border {
-  border-color: var(--omega-gold);
+  border: 1px solid var(--omega-gold);
 }
 
 .omega-card {
   background-color: var(--omega-green);
   color: var(--omega-gold);
+
   border: 1px solid var(--omega-dark-gold);
   border-radius: 0.75rem;
+
   padding: 1rem;
+
   box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
 }
 
 .omega-button {
   background-color: var(--omega-gold);
   color: var(--omega-green);
+
+  border: none;
   border-radius: 0.5rem;
+
   padding: 0.5rem 1rem;
-  transition: all 0.2s ease;
+
+  font-weight: 600;
+  cursor: pointer;
+
+  transition: background-color 0.2s ease, transform 0.1s ease;
 }
+
 .omega-button:hover {
   background-color: var(--omega-dark-gold);
 }
 
+.omega-button:active {
+  transform: translateY(1px);
+}
+
 /* --------------------
-   Animation pulse
+   Pulse animation
 -------------------- */
 @keyframes omegaPulse {
   0%,
@@ -98,8 +123,11 @@ body {
   animation: omegaPulse 2s infinite ease-in-out;
 }
 
-/* Hide scrollbar but keep scrolling */
+/* --------------------
+   Scrollbar hiding
+-------------------- */
 .trade-history-scroll {
+  overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
