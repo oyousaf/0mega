@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { Trade } from "@/app/types/trade";
+import { usePnlSummary } from "@/hooks/usePnlSummary";
 
 const PAGE_SIZE = 20;
 const POLL_INTERVAL = 5000;
@@ -22,6 +23,10 @@ export default function TradeHistoryWidget() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  /* ---------------- SERVER-SIDE SUMMARY ---------------- */
+
+  const pnlSummary = usePnlSummary(POLL_INTERVAL);
 
   /* ---------------- DEDUPE MERGE ---------------- */
 
@@ -98,6 +103,7 @@ export default function TradeHistoryWidget() {
   /* ---------------- SAFE HELPERS ---------------- */
 
   const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
   const safeNum = (v: any) =>
     Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
 
@@ -105,36 +111,6 @@ export default function TradeHistoryWidget() {
     const dt = new Date(d);
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
   };
-
-  /* ---------------- PNL SUMMARY ---------------- */
-
-  const pnlSummary = useMemo(() => {
-    const today = new Date().toDateString();
-    const now = new Date();
-
-    let daily = 0;
-    let weekly = 0;
-    let monthly = 0;
-
-    for (const t of items) {
-      if (!t.realised_pl || !t.closed_at) continue;
-
-      const pl = n(t.realised_pl);
-      const closed = new Date(t.closed_at);
-
-      if (closed.toDateString() === today) daily += pl;
-
-      const diffDays = (now.getTime() - closed.getTime()) / 86400000;
-      if (diffDays <= 7) weekly += pl;
-      if (diffDays <= 30) monthly += pl;
-    }
-
-    return {
-      daily: daily.toFixed(2),
-      weekly: weekly.toFixed(2),
-      monthly: monthly.toFixed(2),
-    };
-  }, [items]);
 
   /* ---------------- RENDER ---------------- */
 
@@ -151,14 +127,16 @@ export default function TradeHistoryWidget() {
           Trade History
         </Typography>
 
+        {/* SUMMARY — SERVER TRUTH */}
         <div className="mt-2 text-sm flex justify-center gap-6 opacity-90">
-          <span>Daily: £{pnlSummary.daily}</span>
-          <span>Weekly: £{pnlSummary.weekly}</span>
-          <span>Monthly: £{pnlSummary.monthly}</span>
+          <span>Daily: £{pnlSummary.daily.toFixed(2)}</span>
+          <span>Weekly: £{pnlSummary.weekly.toFixed(2)}</span>
+          <span>Monthly: £{pnlSummary.monthly.toFixed(2)}</span>
         </div>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
 
+        {/* SCROLL CONTAINER */}
         <div
           ref={containerRef}
           className="trade-history-scroll"
@@ -176,7 +154,9 @@ export default function TradeHistoryWidget() {
             const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
 
             const pnlPct =
-              pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
+              pl !== null
+                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
+                : null;
 
             return (
               <div
@@ -185,7 +165,9 @@ export default function TradeHistoryWidget() {
               >
                 <div
                   className="flex justify-between items-center cursor-pointer"
-                  onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
+                  onClick={() =>
+                    setOpenRow(isOpen ? null : t.trade_id)
+                  }
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
@@ -207,7 +189,9 @@ export default function TradeHistoryWidget() {
                         }`}
                       >
                         £{safeNum(pl)}{" "}
-                        <span className="opacity-70 text-xs">({pnlPct}%)</span>
+                        <span className="opacity-70 text-xs">
+                          ({pnlPct}%)
+                        </span>
                       </div>
                     )}
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
@@ -242,6 +226,12 @@ export default function TradeHistoryWidget() {
           {loadingMore && (
             <div className="text-center py-3 text-sm opacity-60">
               Loading more…
+            </div>
+          )}
+
+          {!hasMore && items.length > 0 && (
+            <div className="text-center py-3 text-xs opacity-50">
+              End of history
             </div>
           )}
         </div>
