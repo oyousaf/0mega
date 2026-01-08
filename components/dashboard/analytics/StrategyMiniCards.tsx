@@ -3,43 +3,59 @@
 import { motion } from "framer-motion";
 import { omegaAnalytics as omega } from "./theme";
 import { Trade } from "@/app/types/trade";
+import { useMemo } from "react";
 
 interface Props {
   trades: Trade[];
 }
 
 export default function StrategyMiniCards({ trades }: Props) {
-  if (!trades.length) return null;
+  const stats = useMemo(() => {
+    let total = 0;
+    let wins = 0;
+    let losses = 0;
+    let rrSum = 0;
+    let rrCount = 0;
 
-  const closed = trades.filter((t) => t.realised_pl !== null);
+    for (const t of trades) {
+      if (
+        !t.is_closed ||
+        t.realised_pl === null ||
+        !Number.isFinite(Number(t.realised_pl)) ||
+        Number(t.realised_pl) === 0
+      ) {
+        continue;
+      }
 
-  const scored = closed.filter((t) => Number(t.realised_pl) !== 0);
-  const total = scored.length;
-  const wins = scored.filter((t) => Number(t.realised_pl) > 0).length;
-  const losses = scored.filter((t) => Number(t.realised_pl) < 0).length;
+      total++;
+      const pl = Number(t.realised_pl);
 
-  const winRate = total ? (wins / total) * 100 : 0;
+      if (pl > 0) wins++;
+      else losses++;
 
-  const avgRR = (() => {
-    let sum = 0;
-    let count = 0;
-
-    for (const t of closed) {
-      if (t.rr !== null && !isNaN(t.rr)) {
-        sum += t.rr;
-        count++;
+      if (t.rr !== null && Number.isFinite(Number(t.rr))) {
+        rrSum += Number(t.rr);
+        rrCount++;
       }
     }
 
-    return count ? sum / count : 0;
-  })();
+    return {
+      total,
+      wins,
+      losses,
+      winRate: total ? (wins / total) * 100 : 0,
+      avgRR: rrCount ? rrSum / rrCount : 0,
+    };
+  }, [trades]);
+
+  if (!stats.total) return null;
 
   const cards = [
-    { label: "TRADES", value: total },
-    { label: "WIN RATE", value: winRate.toFixed(1) + "%" },
-    { label: "WINS", value: wins },
-    { label: "LOSSES", value: losses },
-    { label: "AVG R:R", value: avgRR.toFixed(2) },
+    { label: "TRADES", value: stats.total },
+    { label: "WIN RATE", value: stats.winRate.toFixed(1) + "%" },
+    { label: "WINS", value: stats.wins },
+    { label: "LOSSES", value: stats.losses },
+    { label: "AVG R:R", value: stats.avgRR.toFixed(2) },
   ];
 
   return (

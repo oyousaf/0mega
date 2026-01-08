@@ -5,7 +5,7 @@ import { Card, CardContent, Typography, Divider } from "@mui/material";
 import { Trade } from "@/app/types/trade";
 
 type OpenTradesPayload = {
-  trades: Trade[];
+  positions: Trade[];
   balance: number;
 };
 
@@ -13,33 +13,41 @@ export default function OpenTradesWidget() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [balance, setBalance] = useState(0);
 
-  async function load() {
-    try {
-      const res = await fetch("/api/trading/open", { cache: "no-store" });
-      if (!res.ok) return;
-
-      const json: OpenTradesPayload = await res.json();
-      setTrades(Array.isArray(json.trades) ? json.trades : []);
-      setBalance(Number(json.balance) || 0);
-    } catch (err) {
-      console.error("Open trades load failed", err);
-    }
-  }
-
   useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      try {
+        const res = await fetch("/api/trading/open", { cache: "no-store" });
+        if (!res.ok) return;
+
+        const json: OpenTradesPayload = await res.json();
+        if (!alive) return;
+
+        setTrades(Array.isArray(json.positions) ? json.positions : []);
+        setBalance(Number(json.balance) || 0);
+      } catch (err) {
+        console.error("Open trades load failed", err);
+      }
+    }
+
     load();
     const id = setInterval(load, 3000);
-    return () => clearInterval(id);
-  }, []);
 
-  const n = (v: any) => {
-    const x = Number(v);
-    return Number.isFinite(x) ? x : 0;
-  };
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const safeNum = (v: any) => {
     const x = Number(v);
     return Number.isFinite(x) ? x.toFixed(2) : "—";
+  };
+
+  const num = (v: any) => {
+    const x = Number(v);
+    return Number.isFinite(x) ? x : 0;
   };
 
   return (
@@ -56,7 +64,7 @@ export default function OpenTradesWidget() {
         </h2>
 
         <p className="text-sm text-omega-gold/70 mb-2 text-center">
-          Balance: £{safeNum(balance)}
+          Balance (free): £{safeNum(balance)}
         </p>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
@@ -68,12 +76,13 @@ export default function OpenTradesWidget() {
         )}
 
         {trades.map((t) => {
-          const entry = n(t.entry_price);
-          const qty = n(t.qty);
+          const entry = num(t.entry_price);
+          const qty = num(t.qty);
+          const rowKey = `${t.trade_id}-${t.opened_at}`;
 
           return (
             <div
-              key={t.trade_id}
+              key={rowKey}
               className="
                 flex justify-between items-center
                 border-b border-omega-dark-gold/40 py-2
