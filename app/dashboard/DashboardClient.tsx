@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
 
+import SettingsIcon from "@mui/icons-material/Settings";
+
 import { Trade } from "@/app/types/trade";
 import { computeMetricsFromTrades } from "@/lib/metrics";
 import { buildEquityAndDrawdown } from "@/lib/analytics/equity";
@@ -23,6 +25,7 @@ import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
 import TradeHistoryWidget from "@/components/dashboard/TradeHistoryWidget";
 import TodayStatusWidget from "@/components/dashboard/TodayStatusWidget";
+import AutomationBadge from "@/components/dashboard/AutomationBadge";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -39,27 +42,20 @@ export default function DashboardClient() {
   const [openSettings, setOpenSettings] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
 
-  /* ----------------------------------------------------------
-     LOAD FULL HISTORY (ANALYTICS TRUTH)
-  ---------------------------------------------------------- */
   async function loadHistory() {
     try {
       const res = await fetch("/api/trading/history?analytics=1&limit=10000", {
         cache: "no-store",
       });
-
       const json = await res.json();
       setHistory(Array.isArray(json.trades) ? json.trades : []);
-
       setLastUpdated(
         new Date().toLocaleTimeString("en-GB", {
           hour: "2-digit",
           minute: "2-digit",
         })
       );
-    } catch (err) {
-      console.error("Failed to load trade history", err);
-    }
+    } catch {}
   }
 
   useEffect(() => {
@@ -68,9 +64,6 @@ export default function DashboardClient() {
     return () => clearInterval(id);
   }, []);
 
-  /* ----------------------------------------------------------
-     EQUITY + DRAWDOWN (CLOSED TRADES ONLY)
-  ---------------------------------------------------------- */
   const equitySeries = useMemo(() => {
     const closed = history.filter(
       (t) => t.is_closed && t.closed_at && t.realised_pl !== null
@@ -86,25 +79,23 @@ export default function DashboardClient() {
 
   const metrics = computeMetricsFromTrades(history);
 
-  /* ----------------------------------------------------------
-     RENDER
-  ---------------------------------------------------------- */
   return (
     <>
-      {/* SETTINGS PANEL */}
+      {/* SETTINGS MODAL */}
       <Modal open={openSettings} onClose={() => setOpenSettings(false)}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="absolute top-1/2 left-1/2 w-[90%] max-w-lg -translate-x-1/2 -translate-y-1/2 bg-omega-green border border-neutral-700 rounded-xl p-6 shadow-xl"
+          className="absolute top-1/2 left-1/2 w-[90%] max-w-lg
+            -translate-x-1/2 -translate-y-1/2
+            bg-omega-green border border-neutral-700
+            rounded-xl p-6 shadow-xl"
         >
-          <h2 className="text-2xl font-semibold text-omega-gold mb-4">
+          <h2 className="text-2xl font-semibold text-omega-gold mb-4 text-center">
             Settings
           </h2>
-
           <NotificationsPanel />
-
           <div className="text-right mt-6">
             <Button
               onClick={() => setOpenSettings(false)}
@@ -119,34 +110,51 @@ export default function DashboardClient() {
         </motion.div>
       </Modal>
 
-      {/* MAIN DASHBOARD */}
+      {/* DASHBOARD */}
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-7xl mx-auto text-center p-6 space-y-10"
+        transition={{ duration: 0.4 }}
+        className="max-w-7xl mx-auto p-6 space-y-10 text-center"
       >
-        <motion.h1
-          className="text-3xl font-semibold text-omega-gold"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+        {/* HEADER */}
+        <div
+          className="sticky top-0 z-50
+            grid grid-cols-3 items-center
+            bg-black/40 backdrop-blur
+            rounded-xl px-4 py-3
+            border border-omega-dark-gold"
         >
-          𝛀mega
-        </motion.h1>
+          <div />
 
-        {/* SYSTEM & RISK */}
+          <motion.h1
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-2xl sm:text-3xl font-semibold text-omega-gold"
+          >
+            𝛀mega
+          </motion.h1>
+
+          <div className="flex justify-end gap-2">
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setOpenSettings(true)}
+              className="p-2 rounded-full bg-black/50
+                border border-omega-dark-gold
+                text-omega-gold hover:scale-105 transition"
+            >
+              <SettingsIcon fontSize="small" />
+            </motion.button>
+
+            <AutomationBadge />
+          </div>
+        </div>
+
         <TodayStatusWidget />
-
-        {/* PERFORMANCE SNAPSHOT */}
         <MetricsCards metrics={metrics} />
-
-        {/* FORWARD-TEST REVIEW */}
         <ForwardTestReview trades={history} />
-
-        {/* LIVE EXPOSURE */}
         <OpenTradesWidget />
 
-        {/* EQUITY */}
         <ChartWrapper height={300}>
           <PerformanceChart
             data={equitySeries.map((e) => ({
@@ -156,7 +164,6 @@ export default function DashboardClient() {
           />
         </ChartWrapper>
 
-        {/* DRAWDOWN */}
         <ChartWrapper height={220}>
           <DrawdownChart
             data={equitySeries.map((e) => ({
@@ -166,31 +173,20 @@ export default function DashboardClient() {
           />
         </ChartWrapper>
 
-        <div className="flex justify-center mt-2">
+        <div className="flex justify-center">
           <div
-            className="px-4 py-1 rounded-lg text-xs font-bold tracking-widest"
-            style={{
-              background: "rgba(0,0,0,0.25)",
-              border: "1px solid var(--omega-dark-gold)",
-              color: "var(--omega-gold)",
-            }}
+            className="px-4 py-1 rounded-lg text-xs font-bold tracking-widest
+            border border-omega-dark-gold text-omega-gold bg-black/25"
           >
             LAST UPDATED: {lastUpdated}
           </div>
         </div>
 
-        {/* BEHAVIOUR */}
         <StrategyMiniCards trades={history} />
-
-        {/* ANALYTICS */}
         <StrategyLeaderboard trades={history} />
         <SymbolLeaderboard trades={history} />
         <MarketBreakdown trades={history} />
-
-        {/* COMPLIANCE */}
         <HalaalTracker trades={history} />
-
-        {/* FORENSICS */}
         <TradeHistoryWidget />
       </motion.main>
     </>
