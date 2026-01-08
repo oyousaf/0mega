@@ -9,14 +9,14 @@ import { omegaAnalytics as omega } from "./theme";
 
 interface SymbolSummary {
   symbol: string;
-  trades: number; // non-breakeven only
+  trades: number;
   wins: number;
   losses: number;
   winRate: number;
 }
 
 /* ----------------------------------------------------------
-   AGGREGATION (SAME LOGIC, EXPLICIT)
+   AGGREGATION
 ---------------------------------------------------------- */
 function computeSymbols(trades: Trade[]): SymbolSummary[] {
   const map = new Map<string, SymbolSummary>();
