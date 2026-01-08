@@ -9,7 +9,6 @@ export default function ChartWrapper({
 }) {
   return (
     <div
-      className="w-full overflow-hidden rounded-xl"
       style={{
         height,
         minHeight: height,
@@ -17,7 +16,9 @@ export default function ChartWrapper({
         contain: "layout",
       }}
     >
-      {children}
+      <div className="w-full h-full rounded-xl" style={{ overflow: "visible" }}>
+        {children}
+      </div>
     </div>
   );
 }
