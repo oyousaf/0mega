@@ -3,7 +3,7 @@ import { Trade } from "@/app/types/trade";
 export interface DashboardMetrics {
   winRate: number;
   expectancy: number;
-  profitFactor: string; // ← FIXED
+  profitFactor: string;
   halaalRatio: number;
 }
 
