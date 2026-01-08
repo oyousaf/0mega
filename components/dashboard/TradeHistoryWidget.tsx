@@ -23,7 +23,6 @@ export default function TradeHistoryWidget() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-
   const pnlSummary = usePnlSummary(POLL_INTERVAL);
 
   function mergeTrades(prev: Trade[], next: Trade[]) {
@@ -94,7 +93,7 @@ export default function TradeHistoryWidget() {
       }}
     >
       <CardContent sx={{ color: "var(--omega-gold)" }}>
-        <h2 className="text-xl font-semibold text-omega-gold mb-1">
+        <h2 className="text-xl font-semibold text-omega-gold mb-1 text-center">
           📜 Trade History
         </h2>
 
@@ -110,9 +109,9 @@ export default function TradeHistoryWidget() {
             letterSpacing: "0.02em",
           }}
         >
-          <span>Daily: £{pnlSummary.daily.toFixed(2)}</span>
-          <span>Weekly: £{pnlSummary.weekly.toFixed(2)}</span>
-          <span>Monthly: £{pnlSummary.monthly.toFixed(2)}</span>
+          <span>Daily: £{safeNum(pnlSummary?.daily)}</span>
+          <span>Weekly: £{safeNum(pnlSummary?.weekly)}</span>
+          <span>Monthly: £{safeNum(pnlSummary?.monthly)}</span>
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
@@ -127,7 +126,9 @@ export default function TradeHistoryWidget() {
             const entry = n(t.entry_fill_price ?? t.entry_price);
             const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
             const pnlPct =
-              pl !== null ? ((pl / (entry * t.qty)) * 100).toFixed(2) : null;
+              pl !== null && entry > 0 && t.qty > 0
+                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
+                : null;
 
             return (
               <div
@@ -153,7 +154,11 @@ export default function TradeHistoryWidget() {
                         }`}
                       >
                         £{safeNum(pl)}{" "}
-                        <span className="opacity-70 text-xs">({pnlPct}%)</span>
+                        {pnlPct && (
+                          <span className="opacity-70 text-xs">
+                            ({pnlPct}%)
+                          </span>
+                        )}
                       </div>
                     )}
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
@@ -162,8 +167,8 @@ export default function TradeHistoryWidget() {
 
                 <Collapse in={isOpen}>
                   <div className="mt-2 ml-2 text-sm opacity-80">
-                    {t.executions.map((e) => {
-                      const label = e.side === "OPEN" ? "Entry" : "Exit";
+                    {(t.executions ?? []).map((e) => {
+                      const label = e.side === "BUY" ? "Entry" : "Exit";
 
                       return (
                         <div
