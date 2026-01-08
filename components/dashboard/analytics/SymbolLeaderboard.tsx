@@ -1,45 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trade } from "@/app/types/trade";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Box,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableSortLabel,
-} from "@mui/material";
+import { Box } from "@mui/material";
 
+import { Trade } from "@/app/types/trade";
 import { omegaAnalytics as omega } from "./theme";
-
-type Order = "asc" | "desc";
 
 interface SymbolSummary {
   symbol: string;
-  trades: number;
+  trades: number; // non-breakeven only
   wins: number;
   losses: number;
   winRate: number;
 }
 
-interface HeadCell {
-  key: keyof SymbolSummary;
-  label: string;
-  numeric?: boolean;
-}
-
+/* ----------------------------------------------------------
+   AGGREGATION (SAME LOGIC, EXPLICIT)
+---------------------------------------------------------- */
 function computeSymbols(trades: Trade[]): SymbolSummary[] {
   const map = new Map<string, SymbolSummary>();
 
   for (const t of trades) {
-    const sym = t.symbol || "Unknown";
+    const symbol = (t.symbol && t.symbol.trim()) || "Unknown";
 
-    if (!map.has(sym)) {
-      map.set(sym, {
-        symbol: sym,
+    if (!map.has(symbol)) {
+      map.set(symbol, {
+        symbol,
         trades: 0,
         wins: 0,
         losses: 0,
@@ -47,62 +34,41 @@ function computeSymbols(trades: Trade[]): SymbolSummary[] {
       });
     }
 
-    const row = map.get(sym)!;
+    if (t.realised_pl == null) continue;
 
-    if (t.realised_pl !== null) {
-      const pl = Number(t.realised_pl);
+    const pl = Number(t.realised_pl);
+    if (!Number.isFinite(pl) || pl === 0) continue
 
-      // exclude breakeven from win-rate denominator
-      if (pl !== 0) row.trades++;
+    const row = map.get(symbol)!;
 
-      if (pl > 0) row.wins++;
-      if (pl < 0) row.losses++;
-    }
+    row.trades++;
+    if (pl > 0) row.wins++;
+    if (pl < 0) row.losses++;
   }
 
-  return [...map.values()].map((r) => ({
-    ...r,
-    winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
-  }));
+  return [...map.values()]
+    .map((r) => ({
+      ...r,
+      winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
+    }))
+    .sort((a, b) => b.winRate - a.winRate);
 }
 
+/* ----------------------------------------------------------
+   COMPONENT
+---------------------------------------------------------- */
 export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
-  const [order, setOrder] = useState<Order>("desc");
-  const [orderBy, setOrderBy] = useState<keyof SymbolSummary>("winRate");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const data = useMemo(() => computeSymbols(trades), [trades]);
-
-  const sorted = useMemo(() => {
-    return [...data].sort((a, b) => {
-      const A = a[orderBy];
-      const B = b[orderBy];
-      return order === "asc" ? (A < B ? -1 : 1) : A > B ? -1 : 1;
-    });
-  }, [data, orderBy, order]);
-
-  const headCells: HeadCell[] = [
-    { key: "symbol", label: "Symbol" },
-    { key: "trades", label: "Trades", numeric: true },
-    { key: "winRate", label: "Win Rate %", numeric: true },
-  ];
-
-  const handleSort = (key: keyof SymbolSummary) => {
-    if (orderBy === key) {
-      setOrder(order === "asc" ? "desc" : "asc");
-    } else {
-      setOrderBy(key);
-      setOrder("desc");
-    }
-  };
 
   return (
     <Box
       sx={{
         background: omega.bg,
         borderRadius: "1rem",
-        padding: "1.2rem",
+        padding: "1rem",
         border: `1px solid ${omega.sep}`,
-        boxShadow: "0 0 14px rgba(212,175,55,0.18)",
         marginTop: "2rem",
       }}
     >
@@ -110,106 +76,89 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
         📊 Symbol Performance
       </h2>
 
-      <Table>
-        <TableHead>
-          <TableRow>
-            {headCells.map((h) => {
-              const isActive = orderBy === h.key;
+      <div className="space-y-3">
+        {data.map((row, index) => {
+          const open = expanded === row.symbol;
 
-              return (
-                <TableCell
-                  key={h.key}
-                  align={h.numeric ? "right" : "left"}
-                  sx={{
-                    color: isActive ? omega.text : omega.dim,
-                    fontWeight: isActive ? 700 : 600,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  <TableSortLabel
-                    active={isActive}
-                    direction={isActive ? order : "asc"}
-                    onClick={() => handleSort(h.key)}
-                    IconComponent={() => (
-                      <motion.span
-                        animate={{
-                          rotate: isActive && order === "desc" ? 180 : 0,
-                        }}
-                        transition={{ duration: 0.25 }}
-                        style={{ display: "inline-block" }}
-                      >
-                        ▼
-                      </motion.span>
-                    )}
-                    sx={{
-                      color: isActive ? omega.text : omega.dim,
-                      "&.Mui-active": { color: omega.text },
-                    }}
+          return (
+            <motion.div
+              key={row.symbol}
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.15 }}
+              className="rounded-lg border border-omega-dark-gold bg-black/40 p-4 cursor-pointer"
+              onClick={() =>
+                setExpanded(open ? null : row.symbol)
+              }
+            >
+              {/* HEADER */}
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-omega-gold truncate">
+                  {index + 1}. {row.symbol}
+                </p>
+
+                <span className="text-xs text-omega-gold/70 shrink-0">
+                  {row.trades} trades
+                </span>
+              </div>
+
+              {/* METRICS (MOBILE-FIRST STACK) */}
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                <div className="text-omega-gold">
+                  Win
+                  <span className="ml-1 font-semibold">
+                    {row.winRate.toFixed(1)}%
+                  </span>
+                </div>
+
+                <div className="text-omega-gold sm:text-center">
+                  Wins
+                  <span className="ml-1 font-semibold">
+                    {row.wins}
+                  </span>
+                </div>
+
+                <div className="text-omega-gold sm:text-right">
+                  Losses
+                  <span className="ml-1 font-semibold">
+                    {row.losses}
+                  </span>
+                </div>
+              </div>
+
+              {/* EXPAND DETAILS */}
+              <AnimatePresence>
+                {open && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="mt-4 text-sm text-omega-gold/80"
                   >
-                    {h.label}
-                  </TableSortLabel>
-                </TableCell>
-              );
-            })}
-          </TableRow>
-        </TableHead>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        Total Trades
+                        <span className="ml-1 font-semibold">
+                          {row.trades}
+                        </span>
+                      </div>
 
-        <TableBody>
-          <AnimatePresence initial={false}>
-            {sorted.map((row, i) => (
-              <motion.tr
-                key={row.symbol}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.03 }}
-                whileHover={{ backgroundColor: omega.rowHover }}
-                style={{ color: omega.text }}
-              >
-                <TableCell
-                  sx={{
-                    color: omega.text,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="opacity-60">{i + 1}.</span>
-                    {row.symbol}
-                    {i === 0 && (
-                      <span className="px-2 py-0.5 text-xs rounded bg-omega-gold text-omega-green font-bold">
-                        TOP
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: omega.text,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.trades}
-                </TableCell>
-
-                <TableCell
-                  align="right"
-                  sx={{
-                    color: row.winRate >= 50 ? omega.win : omega.loss,
-                    background: omega.row,
-                    borderBottom: `1px solid ${omega.sep}`,
-                  }}
-                >
-                  {row.winRate.toFixed(1)}%
-                </TableCell>
-              </motion.tr>
-            ))}
-          </AnimatePresence>
-        </TableBody>
-      </Table>
+                      <div className="text-right">
+                        Win Rate
+                        <span className="ml-1 font-semibold">
+                          {row.winRate.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+        })}
+      </div>
     </Box>
   );
 }
