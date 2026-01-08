@@ -20,7 +20,6 @@ export class PaperBroker implements Broker {
     );
 
     const balance = rows.length ? Number(rows[0].balance) : 100_000;
-
     return { equity: balance, cash: balance };
   }
 
@@ -67,8 +66,15 @@ export class PaperBroker implements Broker {
 
     await pool.query(
       `
-      INSERT INTO trade_executions (trade_id, side, qty, price, timestamp)
-      VALUES ($1, $2, $3, $4, now())
+      INSERT INTO trade_executions (
+        trade_id,
+        side,
+        qty,
+        price,
+        status,
+        timestamp
+      )
+      VALUES ($1, $2, $3, $4, 'FILLED', NOW())
       `,
       [tradeId, side, qty, price]
     );
@@ -96,8 +102,15 @@ export class PaperBroker implements Broker {
 
     await pool.query(
       `
-      INSERT INTO trade_executions (trade_id, side, qty, price, timestamp)
-      VALUES ($1, $2, $3, $4, now())
+      INSERT INTO trade_executions (
+        trade_id,
+        side,
+        qty,
+        price,
+        status,
+        timestamp
+      )
+      VALUES ($1, $2, $3, $4, 'FILLED', NOW())
       `,
       [orderId, closeSide, closeQty, price]
     );

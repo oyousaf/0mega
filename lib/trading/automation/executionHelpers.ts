@@ -7,7 +7,7 @@ function reverseSide(side: OrderSide): OrderSide {
 }
 
 /* -------------------------------------------------
-   OPEN TRADE (FILL LEVEL)
+   OPEN TRADE (FILL-LEVEL)
 -------------------------------------------------- */
 export async function executeTradeIntent(intent: {
   signalId: string;
@@ -20,12 +20,7 @@ export async function executeTradeIntent(intent: {
   }
 
   const broker = getBroker();
-
-  const res = await broker.placeOrder(
-    intent.symbol,
-    intent.qty,
-    intent.side
-  );
+  const res = await broker.placeOrder(intent.symbol, intent.qty, intent.side);
 
   if (!res.success || !res.price) {
     return { success: false, error: res.error ?? "ORDER_FAILED" };
@@ -33,23 +28,11 @@ export async function executeTradeIntent(intent: {
 
   const { rows } = await pool.query(
     `
-    INSERT INTO paper_trades (
-      signal_id,
-      symbol,
-      side,
-      entry_price,
-      qty
-    )
+    INSERT INTO paper_trades (signal_id, symbol, side, entry_price, qty)
     VALUES ($1, $2, $3, $4, $5)
     RETURNING id
     `,
-    [
-      intent.signalId,
-      intent.symbol,
-      intent.side,
-      res.price,
-      intent.qty,
-    ]
+    [intent.signalId, intent.symbol, intent.side, res.price, intent.qty]
   );
 
   const tradeId = rows[0].id;
@@ -63,36 +46,25 @@ export async function executeTradeIntent(intent: {
       price,
       broker,
       order_id,
-      status
+      status,
+      timestamp
     )
-    VALUES ($1, $2, $3, $4, $5, $6, 'SUCCESS')
+    VALUES ($1, $2, $3, $4, $5, $6, 'FILLED', NOW())
     `,
-    [
-      tradeId,
-      intent.side,
-      intent.qty,
-      res.price,
-      "paper",
-      res.orderId ?? null,
-    ]
+    [tradeId, intent.side, intent.qty, res.price, "paper", res.orderId ?? null]
   );
 
   return { success: true, tradeId };
 }
 
 /* -------------------------------------------------
-   CLOSE TRADE (FILL LEVEL)
+   CLOSE TRADE (FILL-LEVEL)
 -------------------------------------------------- */
 export async function closeTrade(tradeId: string, qty?: number) {
   const broker = getBroker();
 
   const { rows } = await pool.query(
-    `
-    SELECT id, side, qty
-    FROM paper_trades
-    WHERE id = $1
-    FOR UPDATE
-    `,
+    `SELECT side, qty FROM paper_trades WHERE id = $1 FOR UPDATE`,
     [tradeId]
   );
 
@@ -122,9 +94,10 @@ export async function closeTrade(tradeId: string, qty?: number) {
       price,
       broker,
       order_id,
-      status
+      status,
+      timestamp
     )
-    VALUES ($1, $2, $3, $4, $5, $6, 'SUCCESS')
+    VALUES ($1, $2, $3, $4, $5, $6, 'FILLED', NOW())
     `,
     [
       tradeId,
@@ -137,15 +110,12 @@ export async function closeTrade(tradeId: string, qty?: number) {
   );
 
   if (closeQty < Number(trade.qty)) {
-    await pool.query(
-      `UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`,
-      [closeQty, tradeId]
-    );
+    await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
+      closeQty,
+      tradeId,
+    ]);
   } else {
-    await pool.query(
-      `DELETE FROM paper_trades WHERE id = $1`,
-      [tradeId]
-    );
+    await pool.query(`DELETE FROM paper_trades WHERE id = $1`, [tradeId]);
   }
 
   return { success: true };
