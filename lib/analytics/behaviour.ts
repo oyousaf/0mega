@@ -5,8 +5,9 @@ export function analyseBehaviour(trades: Trade[]) {
     .filter(
       (t) =>
         t.is_closed &&
-        t.closed_at !== null &&
-        Number.isFinite(Number(t.realised_pl))
+        t.closed_at &&
+        Number.isFinite(Number(t.realised_pl)) &&
+        Number(t.realised_pl) !== 0
     )
     .sort(
       (a, b) =>
@@ -27,11 +28,14 @@ export function analyseBehaviour(trades: Trade[]) {
     }
   }
 
-  const uniqueDays = new Set(closed.map((t) => t.closed_at!.slice(0, 10))).size;
+  const uniqueDays = new Set(
+    closed.map((t) => new Date(t.closed_at!).toISOString().slice(0, 10))
+  ).size;
 
   return {
     trades: closed.length,
     maxLossStreak,
-    avgTradesPerDay: uniqueDays === 0 ? 0 : closed.length / uniqueDays,
+    avgTradesPerDay:
+      uniqueDays === 0 ? 0 : Number((closed.length / uniqueDays).toFixed(2)),
   };
 }
