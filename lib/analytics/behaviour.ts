@@ -1,30 +1,36 @@
 import { Trade } from "@/app/types/trade";
-import { isClosedExecuted } from "@/lib/tradeGuards";
 
 export function analyseBehaviour(trades: Trade[]) {
-  const closed = trades.filter(isClosedExecuted);
+  const closed = trades
+    .filter((t) => t.is_closed && t.closed_at && t.realised_pl !== null)
+    .sort(
+      (a, b) =>
+        new Date(a.closed_at!).getTime() - new Date(b.closed_at!).getTime()
+    );
 
   let maxLossStreak = 0;
   let current = 0;
 
   for (const t of closed) {
-    const pl = Number(t.realised_pl) || 0;
+    const pl = Number(t.realised_pl);
+    if (!isFinite(pl)) continue;
+
     if (pl < 0) {
       current++;
-      maxLossStreak = Math.max(maxLossStreak, current);
+      if (current > maxLossStreak) maxLossStreak = current;
     } else {
       current = 0;
     }
   }
 
+  const uniqueDays = new Set(
+    closed.map((t) => new Date(t.closed_at!).toISOString().slice(0, 10))
+  ).size;
+
   return {
     trades: closed.length,
     maxLossStreak,
     avgTradesPerDay:
-      closed.length === 0
-        ? 0
-        : closed.length /
-          new Set(closed.map((t) => new Date(t.closed_at!).toDateString()))
-            .size,
+      closed.length === 0 || uniqueDays === 0 ? 0 : closed.length / uniqueDays,
   };
 }

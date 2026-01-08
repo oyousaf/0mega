@@ -2,7 +2,7 @@ export interface TradeExecution {
   exec_id: string;
   price: number;
   qty: number;
-  side: "OPEN" | "CLOSE";
+  side: "BUY" | "SELL";
   time: string;
   broker: string;
 }
