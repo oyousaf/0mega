@@ -8,11 +8,11 @@ export interface DashboardMetrics {
 }
 
 /* -------------------------------------------------------
-   Compute metrics from executed trades only
+   Compute metrics from CLOSED, EXECUTED trades only
+   - Breakevens excluded
+   - Expectancy uses real R multiples
 ------------------------------------------------------- */
-export function computeMetricsFromTrades(
-  trades: Trade[]
-): DashboardMetrics {
+export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
   if (!trades || trades.length === 0) {
     return {
       winRate: 0,
@@ -40,31 +40,38 @@ export function computeMetricsFromTrades(
 
     if (!isFinite(pl) || !isFinite(entry) || !isFinite(qty)) continue;
     if (entry <= 0 || qty <= 0) continue;
+    if (pl === 0) continue;
 
-    /* -------- R MULTIPLE (Expectancy) -------- */
+    /* -------- R MULTIPLE -------- */
     const r = pl / (entry * qty);
 
     if (r > 0) {
       wins++;
       totalWinR += r;
       if (t.halaal) halaalWins++;
-    } else if (r < 0) {
+    } else {
       losses++;
       totalLossR += Math.abs(r);
     }
 
-    /* -------- CASH (Profit Factor) -------- */
+    /* -------- CASH -------- */
     if (pl > 0) grossProfit += pl;
-    else if (pl < 0) grossLoss += Math.abs(pl);
+    else grossLoss += Math.abs(pl);
   }
 
   const total = wins + losses;
 
   const winRate = total ? Math.round((wins / total) * 100) : 0;
 
+  /* -------- EXPECTANCY (CORRECT) -------- */
+  const avgWinR = wins ? totalWinR / wins : 0;
+  const avgLossR = losses ? totalLossR / losses : 0;
+
   const expectancy =
     total > 0
-      ? Number(((wins / total) * 1 - (losses / total) * 1).toFixed(2))
+      ? Number(
+          ((wins / total) * avgWinR - (losses / total) * avgLossR).toFixed(2)
+        )
       : 0;
 
   /* -------- PROFIT FACTOR -------- */
@@ -76,8 +83,8 @@ export function computeMetricsFromTrades(
     profitFactor = (grossProfit / grossLoss).toFixed(2);
   }
 
-  const halaalRatio =
-    wins > 0 ? Math.round((halaalWins / wins) * 100) : 100;
+  /* -------- HALAAL RATIO -------- */
+  const halaalRatio = wins > 0 ? Math.round((halaalWins / wins) * 100) : 100;
 
   return {
     winRate,
