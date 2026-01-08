@@ -20,38 +20,39 @@ export async function GET() {
   let tradingAllowed = true;
 
   /* -----------------------------------------
-     1. OPEN TRADES (CURRENT STATE)
+     1. OPEN TRADES
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(`
       SELECT COUNT(*) AS open_trades
       FROM paper_trades
-      WHERE status = 'OPEN'
     `);
 
     openTrades = Number(rows[0]?.open_trades ?? 0);
-  } catch {}
+  } catch (err) {
+    console.error("Open trades query failed", err);
+  }
 
   /* -----------------------------------------
-     2. TRADES TODAY (FILLED EXECUTIONS)
+     2. TRADES TOUCHED TODAY (execution truth)
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(
       `
       SELECT COUNT(DISTINCT trade_id) AS trades_today
       FROM trade_executions
-      WHERE
-        timestamp >= $1
-        AND status = 'FILLED'
+      WHERE timestamp >= $1
       `,
       [start.toISOString()]
     );
 
     tradesToday = Number(rows[0]?.trades_today ?? 0);
-  } catch {}
+  } catch (err) {
+    console.error("Trades today query failed", err);
+  }
 
   /* -----------------------------------------
-     3. REALISED PNL TODAY (CLOSE FILLS ONLY)
+     3. REALISED PNL TODAY (close executions)
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(
@@ -66,7 +67,6 @@ export async function GET() {
       WHERE
         e.timestamp >= $1
         AND e.intent = 'CLOSE'
-        AND e.status = 'FILLED'
       `,
       [start.toISOString()]
     );
@@ -81,10 +81,12 @@ export async function GET() {
       pnlToday +=
         r.trade_side === "LONG" ? (exit - entry) * qty : (entry - exit) * qty;
     }
-  } catch {}
+  } catch (err) {
+    console.error("PnL query failed", err);
+  }
 
   /* -----------------------------------------
-     4. DAILY RISK (ENGINE STATE)
+     4. DAILY RISK (engine state)
   ------------------------------------------ */
   try {
     const risk = getDailyRisk("GLOBAL");
@@ -97,7 +99,9 @@ export async function GET() {
 
       tradingAllowed = !risk.frozen;
     }
-  } catch {}
+  } catch (err) {
+    console.error("Risk state read failed", err);
+  }
 
   return NextResponse.json({
     pnlToday,
