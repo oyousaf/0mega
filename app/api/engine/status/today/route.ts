@@ -52,22 +52,31 @@ export async function GET() {
   }
 
   /* -----------------------------------------
-     3. REALISED PNL TODAY (close executions)
-  ------------------------------------------ */
+   3. REALISED PNL TODAY
+------------------------------------------ */
   try {
     const { rows } = await pool.query(
       `
-      SELECT
-        t.side AS trade_side,
-        t.entry_price,
-        t.qty,
-        e.price AS exit_price
-      FROM trade_executions e
-      JOIN paper_trades t ON t.id = e.trade_id
-      WHERE
-        e.timestamp >= $1
-        AND e.intent = 'CLOSE'
-      `,
+    SELECT
+      e.trade_id,
+      e.price AS exit_price,
+      e.qty,
+      entry.price AS entry_price
+    FROM trade_executions e
+    JOIN LATERAL (
+      SELECT price
+      FROM trade_executions
+      WHERE trade_id = e.trade_id
+        AND side = 'BUY'
+        AND status = 'FILLED'
+      ORDER BY timestamp ASC
+      LIMIT 1
+    ) entry ON true
+    WHERE
+      e.side = 'SELL'
+      AND e.status = 'FILLED'
+      AND e.timestamp >= $1
+    `,
       [start.toISOString()]
     );
 
@@ -78,12 +87,9 @@ export async function GET() {
 
       if (!isFinite(entry) || !isFinite(exit) || !isFinite(qty)) continue;
 
-      pnlToday +=
-        r.trade_side === "LONG" ? (exit - entry) * qty : (entry - exit) * qty;
+      pnlToday += (exit - entry) * qty;
     }
-  } catch (err) {
-    console.error("PnL query failed", err);
-  }
+  } catch {}
 
   /* -----------------------------------------
      4. DAILY RISK (engine state)
