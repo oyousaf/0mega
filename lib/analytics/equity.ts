@@ -1,8 +1,18 @@
 const STARTING_EQUITY = 100000;
 
-export function buildEquityAndDrawdown(
-  trades: { closed_at: string; realised_pl: number }[]
-) {
+type TradePoint = {
+  closed_at: string;
+  realised_pl: number;
+};
+
+export function buildEquityAndDrawdown(trades: TradePoint[]) {
+  // 1. Enforce chronological order (oldest → newest)
+  const ordered = [...trades].sort(
+    (a, b) =>
+      new Date(a.closed_at).getTime() -
+      new Date(b.closed_at).getTime()
+  );
+
   let equity = STARTING_EQUITY;
   let peak = STARTING_EQUITY;
 
@@ -12,19 +22,18 @@ export function buildEquityAndDrawdown(
     drawdown: number;
   }[] = [];
 
+  // Optional anchor point
   series.push({
-    date: "START",
+    date: ordered[0]?.closed_at ?? "START",
     equity,
     drawdown: 0,
   });
 
-  for (const t of trades) {
+  for (const t of ordered) {
     const pnl = Number(t.realised_pl) || 0;
     equity += pnl;
 
-    if (equity > peak) {
-      peak = equity;
-    }
+    if (equity > peak) peak = equity;
 
     const drawdown =
       peak > 0 ? ((equity - peak) / peak) * 100 : 0;
