@@ -7,7 +7,6 @@ import { useEffect, useState, useMemo } from "react";
 
 import { Trade } from "@/app/types/trade";
 import { computeMetricsFromTrades } from "@/lib/metrics";
-import { isClosedExecuted } from "@/lib/tradeGuards";
 import { buildEquityAndDrawdown } from "@/lib/analytics/equity";
 
 import NotificationsPanel from "@/components/settings/NotificationsPanel";
@@ -41,11 +40,11 @@ export default function DashboardClient() {
   const [lastUpdated, setLastUpdated] = useState("");
 
   /* ----------------------------------------------------------
-     LOAD TRADE HISTORY (EXECUTION TRUTH)
+     LOAD FULL HISTORY (ANALYTICS TRUTH)
   ---------------------------------------------------------- */
   async function loadHistory() {
     try {
-      const res = await fetch("/api/trading/history?limit=500&offset=0", {
+      const res = await fetch("/api/trading/history?analytics=1&limit=10000", {
         cache: "no-store",
       });
 
@@ -70,10 +69,12 @@ export default function DashboardClient() {
   }, []);
 
   /* ----------------------------------------------------------
-     EQUITY + DRAWDOWN (STRICT, CLOSED & EXECUTED)
+     EQUITY + DRAWDOWN (CLOSED TRADES ONLY)
   ---------------------------------------------------------- */
   const equitySeries = useMemo(() => {
-    const closed = history.filter(isClosedExecuted);
+    const closed = history.filter(
+      (t) => t.is_closed && t.closed_at && t.realised_pl !== null
+    );
 
     return buildEquityAndDrawdown(
       closed.map((t) => ({

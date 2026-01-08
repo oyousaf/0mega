@@ -17,7 +17,11 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const limit = Math.min(n(searchParams.get("limit") ?? 20), 50);
+    const isAnalytics = searchParams.get("analytics") === "1";
+    const rawLimit = n(searchParams.get("limit") ?? 20);
+
+    const limit = isAnalytics ? rawLimit || 10_000 : Math.min(rawLimit, 50);
+
     const offset = Math.max(n(searchParams.get("offset") ?? 0), 0);
 
     /* -------------------------------------------------
@@ -41,9 +45,7 @@ export async function GET(req: Request) {
     }
 
     const hasMore = tradeRows.length > limit;
-    const pageTradeIds = tradeRows
-      .slice(0, limit)
-      .map((r) => r.trade_id);
+    const pageTradeIds = tradeRows.slice(0, limit).map((r) => r.trade_id);
 
     /* -------------------------------------------------
        2. Fetch executions for those trade_ids
@@ -91,19 +93,16 @@ export async function GET(req: Request) {
       const executions = tradeMap[String(trade_id)] ?? [];
       const entry = executions[0];
       const exit =
-        executions.length > 1
-          ? executions[executions.length - 1]
-          : null;
+        executions.length > 1 ? executions[executions.length - 1] : null;
 
       const isBuy = entry.side === "BUY";
       const qty = entry.qty;
 
-      const realised_pl =
-        exit
-          ? isBuy
-            ? (exit.price - entry.price) * qty
-            : (entry.price - exit.price) * qty
-          : null;
+      const realised_pl = exit
+        ? isBuy
+          ? (exit.price - entry.price) * qty
+          : (entry.price - exit.price) * qty
+        : null;
 
       return {
         trade_id,
