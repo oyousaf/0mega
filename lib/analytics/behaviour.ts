@@ -2,7 +2,12 @@ import { Trade } from "@/app/types/trade";
 
 export function analyseBehaviour(trades: Trade[]) {
   const closed = trades
-    .filter((t) => t.is_closed && t.closed_at && t.realised_pl !== null)
+    .filter(
+      (t) =>
+        t.is_closed &&
+        t.closed_at !== null &&
+        Number.isFinite(Number(t.realised_pl))
+    )
     .sort(
       (a, b) =>
         new Date(a.closed_at!).getTime() - new Date(b.closed_at!).getTime()
@@ -13,7 +18,6 @@ export function analyseBehaviour(trades: Trade[]) {
 
   for (const t of closed) {
     const pl = Number(t.realised_pl);
-    if (!isFinite(pl)) continue;
 
     if (pl < 0) {
       current++;
@@ -23,14 +27,11 @@ export function analyseBehaviour(trades: Trade[]) {
     }
   }
 
-  const uniqueDays = new Set(
-    closed.map((t) => new Date(t.closed_at!).toISOString().slice(0, 10))
-  ).size;
+  const uniqueDays = new Set(closed.map((t) => t.closed_at!.slice(0, 10))).size;
 
   return {
     trades: closed.length,
     maxLossStreak,
-    avgTradesPerDay:
-      closed.length === 0 || uniqueDays === 0 ? 0 : closed.length / uniqueDays,
+    avgTradesPerDay: uniqueDays === 0 ? 0 : closed.length / uniqueDays,
   };
 }
