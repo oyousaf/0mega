@@ -28,6 +28,7 @@ export interface Trade {
   symbol: string;
   side: "BUY" | "SELL";
 
+  strategy?: string | null;
   entry_price: number;
   sl: number;
   tp1: number | null;
