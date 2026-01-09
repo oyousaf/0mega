@@ -120,28 +120,60 @@ export default function DashboardClient() {
         {/* HEADER */}
         <div
           className="sticky top-0 z-50
-            grid grid-cols-3 items-center
-            bg-black/40 backdrop-blur
-            rounded-xl px-4 py-3
-            border border-omega-dark-gold"
+    grid grid-cols-3 items-center
+    bg-black/40 backdrop-blur
+    rounded-xl px-4 py-3
+    border border-omega-dark-gold"
         >
           <div />
 
+          {/* TITLE → scroll to top */}
           <motion.h1
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-2xl sm:text-3xl font-semibold text-omega-gold"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="
+      text-2xl sm:text-3xl font-semibold text-omega-gold
+      cursor-pointer select-none
+    "
           >
             𝛀mega
           </motion.h1>
 
+          {/* ACTIONS */}
           <div className="flex justify-end gap-2">
+            {/* HOME */}
             <motion.button
-              whileTap={{ scale: 0.95 }}
+              whileTap={{ scale: 0.92 }}
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="
+        w-9 h-9
+        flex items-center justify-center
+        rounded-full
+        bg-black/50
+        border border-omega-dark-gold
+        text-omega-gold
+        hover:scale-105 transition
+      "
+              aria-label="Scroll to top"
+            >
+              🏠
+            </motion.button>
+
+            {/* SETTINGS */}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
               onClick={() => setOpenSettings(true)}
-              className="p-2 rounded-full bg-black/50
-                border border-omega-dark-gold
-                text-omega-gold hover:scale-105 transition"
+              className="
+        w-9 h-9
+        flex items-center justify-center
+        rounded-full
+        bg-black/50
+        border border-omega-dark-gold
+        text-omega-gold
+        hover:scale-105 transition
+      "
+              aria-label="Settings"
             >
               <SettingsIcon fontSize="small" />
             </motion.button>
