@@ -10,11 +10,11 @@ type Trade = {
   entry_price: number;
   qty: number;
   opened_at: string;
-  sl?: number | null;
-  tp1?: number | null;
-  rr?: number | null;
-  mark_price?: number;
-  unrealised_pl?: number;
+  sl: number | null;
+  tp1: number | null;
+  rr: number | null;
+  mark_price: number | null;
+  unrealised_pl: number | null;
 };
 
 type OpenTradesPayload = {
@@ -80,9 +80,11 @@ export default function OpenTradesWidget() {
 
         <div className="space-y-2">
           {trades.map((t) => {
-            const pnl = t.unrealised_pl ?? 0;
+            const pnl = t.unrealised_pl;
             const pnlColor =
-              pnl > 0
+              pnl == null
+                ? "opacity-60"
+                : pnl > 0
                 ? "text-green-400"
                 : pnl < 0
                 ? "text-red-400"
@@ -91,14 +93,8 @@ export default function OpenTradesWidget() {
             return (
               <div
                 key={`${t.trade_id}-${t.opened_at}`}
-                className="
-                  rounded-lg
-                  border border-omega-dark-gold/40
-                  px-3 py-2
-                  flex flex-col gap-2
-                "
+                className="rounded-lg border border-omega-dark-gold/40 px-3 py-2 flex flex-col gap-2"
               >
-                {/* HEADER */}
                 <div className="flex justify-between items-center">
                   <div className="font-semibold">{t.symbol}</div>
                   <div className="text-xs opacity-70">
@@ -106,7 +102,6 @@ export default function OpenTradesWidget() {
                   </div>
                 </div>
 
-                {/* PRICES */}
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div>
                     <div className="opacity-50">Entry</div>
@@ -128,12 +123,13 @@ export default function OpenTradesWidget() {
                   </div>
                 </div>
 
-                {/* FOOTER */}
                 <div className="flex justify-between items-end text-xs">
-                  <div className="opacity-60">Mark £{fmt(t.mark_price)}</div>
+                  <div className="opacity-60">
+                    Mark {t.mark_price != null ? `£${fmt(t.mark_price)}` : "—"}
+                  </div>
 
                   <div className={`font-bold ${pnlColor}`}>
-                    £{fmt(pnl)}
+                    {pnl != null ? `£${fmt(pnl)}` : "—"}
                     <div className="text-[0.65rem] opacity-60">unrealised</div>
                   </div>
                 </div>

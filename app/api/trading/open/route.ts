@@ -2,43 +2,35 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
 /* ---------------------------------------------
-   Canonical mark price resolver (FINAL)
+   Canonical mark price resolver
 --------------------------------------------- */
-async function getMarkPrice(symbol: string): Promise<number> {
+async function getMarkPrice(symbol: string): Promise<number | null> {
   try {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_BASE_URL}/api/prices/crypto/${symbol}`,
       { cache: "no-store" }
     );
 
-    if (!res.ok) return 0;
+    if (!res.ok) return null;
+
     const json = await res.json();
 
-    /*
-      Omega-safe resolution.
-      Covers:
-      - { price: "90380.12" }
-      - { last: 90380.12 }
-      - { data: { price / last } }
-      - { result: { price } }
-    */
     const price =
       Number(json.price) ||
       Number(json.last) ||
       Number(json.close) ||
       Number(json?.data?.price) ||
       Number(json?.data?.last) ||
-      Number(json?.result?.price) ||
-      0;
+      Number(json?.result?.price);
 
-    return Number.isFinite(price) ? price : 0;
+    return Number.isFinite(price) ? price : null;
   } catch {
-    return 0;
+    return null;
   }
 }
 
 /* ---------------------------------------------
-   OPEN TRADES (PAPER + LIVE MARK)
+   OPEN TRADES (CANONICAL)
 --------------------------------------------- */
 export async function GET() {
   try {
@@ -58,33 +50,35 @@ export async function GET() {
       ORDER BY opened_at DESC
     `);
 
-    const trades = await Promise.all(
+    const positions = await Promise.all(
       rows.map(async (t: any) => {
         const mark = await getMarkPrice(t.symbol);
 
         const unrealised =
-          t.side === "BUY"
-            ? (mark - t.entry_price) * t.qty
-            : (t.entry_price - mark) * t.qty;
+          mark != null
+            ? t.side === "BUY"
+              ? (mark - Number(t.entry_price)) * Number(t.qty)
+              : (Number(t.entry_price) - mark) * Number(t.qty)
+            : null;
 
         return {
-          trade_id: t.trade_id,
+          trade_id: Number(t.trade_id),
           symbol: t.symbol,
           side: t.side,
           entry_price: Number(t.entry_price),
           qty: Number(t.qty),
           opened_at: t.opened_at,
-          sl: t.sl,
-          tp1: t.tp1,
-          rr: t.rr,
+          sl: t.sl != null ? Number(t.sl) : null,
+          tp1: t.tp1 != null ? Number(t.tp1) : null,
+          rr: t.rr != null ? Number(t.rr) : null,
           mark_price: mark,
-          unrealised_pl: Number.isFinite(unrealised) ? unrealised : 0,
+          unrealised_pl: unrealised,
         };
       })
     );
 
     return NextResponse.json({
-      positions: trades,
+      positions,
       balance: 100000,
     });
   } catch (err: any) {
