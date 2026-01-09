@@ -7,33 +7,14 @@ function reverseSide(side: OrderSide): OrderSide {
 }
 
 /* ---------------------------------------------
-   RR COMPUTATION (INTENT LEVEL)
----------------------------------------------- */
-function computeRR(
-  side: OrderSide,
-  entry: number,
-  sl: number | null,
-  tp: number | null
-): number | null {
-  if (!entry || sl == null || tp == null) return null;
-
-  if (side === "BUY") {
-    if (entry <= sl) return null;
-    return (tp - entry) / (entry - sl);
-  }
-
-  if (entry >= sl) return null;
-  return (entry - tp) / (sl - entry);
-}
-
-/* ---------------------------------------------
-   OPEN TRADE
+   OPEN TRADE (EXECUTION ONLY)
 ---------------------------------------------- */
 export async function executeTradeIntent(intent: {
   signalId: string;
   symbol: string;
   qty: number;
   side: OrderSide;
+  rr?: number | null;
 }) {
   if (intent.qty <= 0) {
     return { success: false, error: "INVALID_QTY" };
@@ -45,17 +26,6 @@ export async function executeTradeIntent(intent: {
   if (!res.success || !res.price) {
     return { success: false, error: res.error ?? "ORDER_FAILED" };
   }
-
-  // Pull SL / TP from signal (strategy intent source)
-  const { rows: sigRows } = await pool.query(
-    `SELECT sl, tp1 FROM signals WHERE id = $1`,
-    [intent.signalId]
-  );
-
-  const sl = sigRows[0]?.sl ?? null;
-  const tp = sigRows[0]?.tp1 ?? null;
-
-  const rr = computeRR(intent.side, res.price, sl, tp);
 
   const { rows } = await pool.query(
     `
@@ -71,7 +41,14 @@ export async function executeTradeIntent(intent: {
     VALUES ($1, $2, $3, $4, $5, $6, false)
     RETURNING id
     `,
-    [intent.signalId, intent.symbol, intent.side, res.price, intent.qty, rr]
+    [
+      intent.signalId,
+      intent.symbol,
+      intent.side,
+      res.price,
+      intent.qty,
+      intent.rr ?? null,
+    ]
   );
 
   const tradeId = rows[0].id;
@@ -153,18 +130,12 @@ export async function closeTrade(tradeId: string, qty?: number) {
     ]
   );
 
-  // Partial close
   if (closeQty < Number(trade.qty)) {
-    await pool.query(
-      `
-      UPDATE paper_trades
-      SET qty = qty - $1
-      WHERE id = $2
-      `,
-      [closeQty, tradeId]
-    );
+    await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
+      closeQty,
+      tradeId,
+    ]);
   } else {
-    // Final close — KEEP ROW
     const realised =
       trade.side === "BUY"
         ? (res.price - trade.entry_price) * trade.qty
