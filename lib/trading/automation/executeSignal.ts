@@ -20,7 +20,6 @@ export async function executeSignal(
   try {
     await client.query("BEGIN");
 
-    /* 1) Lock signal */
     const { rows: signals } = await client.query(
       `SELECT * FROM signals WHERE id = $1 FOR UPDATE`,
       [signalId]
@@ -38,133 +37,81 @@ export async function executeSignal(
       return { success: false, reason: "SIGNAL_NOT_ACTIVE" };
     }
 
-    /* 2) Lock open trades */
     const { rows: openTrades } = await client.query(
-      `SELECT * FROM paper_trades WHERE signal_id = $1 FOR UPDATE`,
-      [signalId]
+      `SELECT * FROM paper_trades WHERE is_closed = false LIMIT 1 FOR UPDATE`
     );
 
     const hasOpenTrade = openTrades.length > 0;
 
-    /* 3) Intent */
     const intent = evaluateSignal(signal, price, hasOpenTrade);
-
     if (!intent) {
       await client.query("ROLLBACK");
       return { success: true, action: "NOOP" };
     }
 
-    /* 🔒 Prevent duplicate OPENs */
     if (intent.type === "OPEN" && hasOpenTrade) {
       await client.query("ROLLBACK");
       return { success: true, action: "ALREADY_OPEN" };
     }
 
-    /* 4) Log execution */
-    const { rows: execRows } = await client.query(
-      `
-      INSERT INTO trade_executions (signal_id, intent, status)
-      VALUES ($1, $2, 'PENDING')
-      RETURNING id
-      `,
-      [signalId, intent.type]
-    );
-
-    const executionId = execRows[0].id;
-
-    /* 5) Risk gate */
     if (intent.type === "OPEN") {
       const risk = await riskGate(signal, price);
       if (!risk.allowed) {
-        await client.query(
-          `
-          UPDATE trade_executions
-          SET status = 'FAILED', error = $2
-          WHERE id = $1
-          `,
-          [executionId, risk.reason]
-        );
         await client.query("ROLLBACK");
         return { success: false, reason: risk.reason };
       }
-    }
 
-    /* 6) Halaal gate */
-    if (intent.type === "OPEN") {
       const halaal = await halaalGate(signal);
       if (!halaal.allowed) {
-        await client.query(
-          `
-          UPDATE trade_executions
-          SET status = 'FAILED', error = $2
-          WHERE id = $1
-          `,
-          [executionId, halaal.reason]
-        );
         await client.query("ROLLBACK");
         return { success: false, reason: halaal.reason };
       }
     }
 
-    /* 7) Execute */
-    let result;
-    if (intent.type !== "OPEN" && !openTrades.length) {
-      await client.query("ROLLBACK");
-      return { success: false, reason: "NO_OPEN_TRADE" };
-    }
+    let actionResult:
+      | { success: true; tradeId?: number }
+      | { success: false; error: string };
 
     switch (intent.type) {
-      case "OPEN":
-        result = await executeTradeIntent({
+      case "OPEN": {
+        const rawSl = Number(signal.sl);
+        const rawTp1 = signal.tp1 != null ? Number(signal.tp1) : null;
+
+        actionResult = await executeTradeIntent({
           signalId,
           symbol: signal.symbol,
           qty: PAPER_QTY,
           side: signal.direction,
+          rawSl,
+          rawTp1,
         });
         break;
+      }
 
-      case "TP1_PARTIAL":
-        result = await closeTrade(
-          openTrades[0].id,
-          signal.tp1_qty ?? undefined
-        );
+      case "TP1_PARTIAL": {
+        const tradeId = Number(openTrades[0].id);
+        const qty = signal.tp1_qty != null ? Number(signal.tp1_qty) : undefined;
+
+        actionResult = await closeTrade(tradeId, qty);
         break;
+      }
 
       case "TP2_CLOSE":
       case "SL_CLOSE":
-      case "EXPIRED_CLOSE":
-        result = await closeTrade(openTrades[0].id);
+      case "EXPIRED_CLOSE": {
+        const tradeId = Number(openTrades[0].id);
+        actionResult = await closeTrade(tradeId);
         break;
+      }
 
       default:
-        result = { success: false, error: "UNKNOWN_INTENT" };
+        actionResult = { success: false, error: "UNKNOWN_INTENT" };
     }
 
-    if (!result?.success) {
-      await client.query(
-        `
-        UPDATE trade_executions
-        SET status = 'FAILED', error = $2
-        WHERE id = $1
-        `,
-        [executionId, result?.error ?? "EXECUTION_FAILED"]
-      );
+    if (!actionResult.success) {
       await client.query("ROLLBACK");
-      return { success: false, reason: "EXECUTION_FAILED" };
+      return { success: false, reason: actionResult.error };
     }
-
-    /* 8) Finalise */
-    const riskAmount =
-      signal.sl !== null ? Math.abs(price - Number(signal.sl)) * PAPER_QTY : 0;
-
-    await client.query(
-      `
-      UPDATE trade_executions
-      SET status = 'SUCCESS', risk_amount = $2
-      WHERE id = $1
-      `,
-      [executionId, riskAmount]
-    );
 
     await client.query("COMMIT");
     return { success: true, action: intent.type };

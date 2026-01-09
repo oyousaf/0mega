@@ -11,7 +11,7 @@ export interface Trade {
   trade_id: string;
 
   symbol: string;
-  side: "LONG" | "SHORT";
+  side: "BUY" | "SELL";
 
   strategy: string;
 

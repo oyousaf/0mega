@@ -8,12 +8,13 @@ export interface DashboardMetrics {
 }
 
 /* -------------------------------------------------------
-   Compute metrics from CLOSED, EXECUTED trades only
+   Compute metrics from CLOSED trades only
+   - Uses realised PnL
+   - Uses TRUE R multiple (PnL / risk_amount)
    - Breakevens excluded
-   - Expectancy uses real R multiples
 ------------------------------------------------------- */
 export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
-  if (!trades || trades.length === 0) {
+  if (!Array.isArray(trades) || trades.length === 0) {
     return {
       winRate: 0,
       expectancy: 0,
@@ -34,38 +35,37 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
   let halaalWins = 0;
 
   for (const t of trades) {
-    const pl = Number(t.realised_pl);
-    const entry = Number(t.entry_price);
-    const qty = Number(t.qty);
+    if (!t.is_closed) continue;
 
-    if (!isFinite(pl) || !isFinite(entry) || !isFinite(qty)) continue;
-    if (entry <= 0 || qty <= 0) continue;
+    const pl = Number(t.realised_pl);
+    const risk = Number((t as any).risk_amount);
+
+    if (!Number.isFinite(pl) || !Number.isFinite(risk)) continue;
+    if (risk <= 0) continue;
     if (pl === 0) continue;
 
     /* -------- R MULTIPLE -------- */
-    const r = pl / (entry * qty);
+    const r = pl / risk;
 
     if (r > 0) {
       wins++;
       totalWinR += r;
-      if (t.halaal) halaalWins++;
+      if ((t as any).halaal !== false) halaalWins++;
+      grossProfit += pl;
     } else {
       losses++;
       totalLossR += Math.abs(r);
+      grossLoss += Math.abs(pl);
     }
-
-    /* -------- CASH -------- */
-    if (pl > 0) grossProfit += pl;
-    else grossLoss += Math.abs(pl);
   }
 
   const total = wins + losses;
 
-  const winRate = total ? Math.round((wins / total) * 100) : 0;
+  const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
 
-  /* -------- EXPECTANCY (CORRECT) -------- */
-  const avgWinR = wins ? totalWinR / wins : 0;
-  const avgLossR = losses ? totalLossR / losses : 0;
+  /* -------- EXPECTANCY -------- */
+  const avgWinR = wins > 0 ? totalWinR / wins : 0;
+  const avgLossR = losses > 0 ? totalLossR / losses : 0;
 
   const expectancy =
     total > 0
@@ -75,13 +75,12 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
       : 0;
 
   /* -------- PROFIT FACTOR -------- */
-  let profitFactor: string;
-
-  if (grossLoss === 0) {
-    profitFactor = grossProfit > 0 ? "∞" : "—";
-  } else {
-    profitFactor = (grossProfit / grossLoss).toFixed(2);
-  }
+  const profitFactor =
+    grossLoss === 0
+      ? grossProfit > 0
+        ? "∞"
+        : "—"
+      : (grossProfit / grossLoss).toFixed(2);
 
   /* -------- HALAAL RATIO -------- */
   const halaalRatio = wins > 0 ? Math.round((halaalWins / wins) * 100) : 100;

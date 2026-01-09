@@ -1,9 +1,9 @@
 import { getPriceProvider } from "@/lib/prices/provider";
 import { runStructureCheck } from "@/lib/strategies/marketStructure";
 import { riskGate } from "@/lib/trading/risk/riskGate";
-import { getBroker } from "@/providers/execution/router";
 import { pool } from "@/lib/neon";
 import { runExitWatcher } from "./exitWatcher";
+import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 
 type PriceLoopConfig = {
   symbol: string;
@@ -17,9 +17,6 @@ const DEFAULT_CONFIG: PriceLoopConfig = {
   pollMs: 5000,
 };
 
-/* -----------------------------
-   COOLDOWN CONFIG
------------------------------- */
 const COOLDOWN_CANDLES = 5;
 let cooldownUntilTs: number | null = null;
 
@@ -39,32 +36,6 @@ function currentLoopId() {
 }
 
 let lastCandleTs: number | null = null;
-
-/* -----------------------------
-   SL / TP NORMALISATION
------------------------------- */
-function normaliseLevels(params: {
-  side: "BUY" | "SELL";
-  entry: number;
-  rawSl: number;
-  rawTp1?: number | null;
-}) {
-  const riskDist = Math.abs(params.entry - params.rawSl);
-  const rewardDist =
-    params.rawTp1 != null ? Math.abs(params.rawTp1 - params.entry) : null;
-
-  if (params.side === "BUY") {
-    return {
-      sl: params.entry - riskDist,
-      tp1: rewardDist ? params.entry + rewardDist : null,
-    };
-  }
-
-  return {
-    sl: params.entry + riskDist,
-    tp1: rewardDist ? params.entry - rewardDist : null,
-  };
-}
 
 export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
   const loopId = nextLoopId();
@@ -109,9 +80,7 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     close: latest.close,
   });
 
-  /* -----------------------------
-     EXIT WATCHER
-  ------------------------------ */
+  // exits always run
   const exited = await runExitWatcher(latest.close);
   if (exited) {
     cooldownUntilTs = latest.timestamp + COOLDOWN_CANDLES * cfg.pollMs;
@@ -123,9 +92,6 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     return;
   }
 
-  /* -----------------------------
-     ENTRY LOGIC
-  ------------------------------ */
   const signal = await runStructureCheck({
     symbol: cfg.symbol,
     timeframe: cfg.timeframe,
@@ -146,49 +112,35 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
   }
 
   await withDbLock(async () => {
-    const { rows } = await pool.query(`SELECT 1 FROM paper_trades LIMIT 1`);
+    if (currentLoopId() !== loopId) return;
+
+    const { rows } = await pool.query(
+      `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
+    );
+
     if (rows.length) {
       console.log("[PRICE_LOOP] trade already active");
       return;
     }
 
-    const broker = getBroker();
-    const res = await broker.placeOrder(signal.symbol, 1, signal.direction);
-
-    const entry = latest.close;
-
-    const { sl, tp1 } = normaliseLevels({
+    // executionHelpers is the only authority
+    const openRes = await executeTradeIntent({
+      signalId: String(signal.reason), // if you have a numeric signal id elsewhere, pass that instead
+      symbol: signal.symbol,
+      qty: 1,
       side: signal.direction,
-      entry,
       rawSl: signal.sl,
       rawTp1: signal.tp1 ?? null,
     });
 
-    // Hard invariant check
-    if (
-      (signal.direction === "BUY" &&
-        !(sl < entry && (tp1 ?? Infinity) > entry)) ||
-      (signal.direction === "SELL" &&
-        !(sl > entry && (tp1 ?? -Infinity) < entry))
-    ) {
-      throw new Error("INVALID_TRADE_GEOMETRY");
+    if (!openRes.success) {
+      console.warn("[ENTRY_FAILED]", openRes.error);
+      return;
     }
 
-    await pool.query(
-      `
-      UPDATE paper_trades
-      SET sl = $1, tp1 = $2
-      WHERE id = $3
-      `,
-      [sl, tp1, res.orderId]
-    );
-
     console.log("[PRICE_LOOP] trade opened", {
-      id: res.orderId,
+      tradeId: openRes.tradeId,
       side: signal.direction,
-      entry,
-      sl,
-      tp1,
     });
   });
 }
