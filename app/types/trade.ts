@@ -42,6 +42,7 @@ export interface Trade {
   opened_at: string;
   closed_at: string | null;
   is_closed: boolean;
+  halaal?: boolean;
 
   executions: TradeExecution[];
 }
