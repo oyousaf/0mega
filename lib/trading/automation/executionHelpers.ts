@@ -23,12 +23,14 @@ export async function executeTradeIntent(intent: {
   const broker = getBroker();
   const res = await broker.placeOrder(intent.symbol, intent.qty, intent.side);
 
-  if (!res.success || !Number.isFinite(res.price)) {
+  if (!res.success || res.price == null || !Number.isFinite(res.price)) {
     return { success: false, error: res.error ?? "ORDER_FAILED" };
   }
 
+  const price: number = res.price;
+
   /* -----------------------------
-     Persist trade
+     Persist paper trade
   ------------------------------ */
   const { rows } = await pool.query(
     `
@@ -49,7 +51,7 @@ export async function executeTradeIntent(intent: {
       intent.signalId,
       intent.symbol,
       intent.side,
-      res.price,
+      price,
       intent.qty,
       intent.rr ?? null,
     ]
@@ -74,7 +76,7 @@ export async function executeTradeIntent(intent: {
     )
     VALUES ($1, $2, $3, $4, $5, $6, 'FILLED', NOW())
     `,
-    [tradeId, intent.side, intent.qty, res.price, "paper", res.orderId ?? null]
+    [tradeId, intent.side, intent.qty, price, "paper", res.orderId ?? null]
   );
 
   return { success: true, tradeId };
@@ -137,7 +139,7 @@ export async function closeTrade(tradeId: string, qty?: number) {
       tradeId,
       reverseSide(trade.side),
       closeQty,
-      res.price,
+      price,
       "paper",
       res.orderId ?? null,
     ]
@@ -158,8 +160,8 @@ export async function closeTrade(tradeId: string, qty?: number) {
   } else {
     const realised =
       trade.side === "BUY"
-        ? (res.price - trade.entry_price) * trade.qty
-        : (trade.entry_price - res.price) * trade.qty;
+        ? (price - trade.entry_price) * trade.qty
+        : (trade.entry_price - price) * trade.qty;
 
     await pool.query(
       `
