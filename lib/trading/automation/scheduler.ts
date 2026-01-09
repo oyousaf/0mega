@@ -1,28 +1,13 @@
-import { executeSignal } from "./executeSignal";
 import { isAutomationEnabled } from "./automationState";
 import { unattendedRun } from "./unattendedRunner";
 
 let running = false;
 
 /* ---------------------------------------
-   Pure dispatcher (used by runner)
----------------------------------------- */
-export async function automationTick(
-  signalIds: string[],
-  priceMap: Record<string, number>
-) {
-  if (!isAutomationEnabled()) return;
-
-  for (const id of signalIds) {
-    const price = priceMap[id];
-    if (!price) continue;
-
-    await executeSignal(id, price);
-  }
-}
-
-/* ---------------------------------------
-   Unattended loop controls
+   Scheduler
+   Responsibility:
+   - Check automation state
+   - Start unattended runner loop
 ---------------------------------------- */
 export async function startUnattended() {
   if (running) return;
@@ -30,15 +15,26 @@ export async function startUnattended() {
 
   while (running) {
     try {
-      await unattendedRun();
-      await new Promise((r) => setTimeout(r, 5000));
+      const enabled = await isAutomationEnabled();
+      if (enabled) {
+        await unattendedRun();
+      }
+
+      await sleep(5000);
     } catch (err) {
-      console.error("unattended loop error:", err);
-      await new Promise((r) => setTimeout(r, 10_000));
+      console.error("[SCHEDULER] unattended error:", err);
+      await sleep(10_000);
     }
   }
 }
 
 export function stopUnattended() {
   running = false;
+}
+
+/* ---------------------------------------
+   Utils
+---------------------------------------- */
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
