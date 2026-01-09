@@ -40,26 +40,6 @@ function currentLoopId() {
 
 let lastCandleTs: number | null = null;
 
-/* -----------------------------
-   RR (PRICE LEVEL)
------------------------------- */
-function computeRR(
-  side: "BUY" | "SELL",
-  entry: number,
-  sl: number,
-  tp: number | null
-): number | null {
-  if (!entry || !sl || tp == null) return null;
-
-  if (side === "BUY") {
-    if (entry <= sl) return null;
-    return (tp - entry) / (entry - sl);
-  }
-
-  if (entry >= sl) return null;
-  return (entry - tp) / (sl - entry);
-}
-
 export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
   const loopId = nextLoopId();
   const cfg = { ...DEFAULT_CONFIG, ...config };
@@ -107,18 +87,22 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
   });
 
   /* -----------------------------
-     EXIT WATCHER
+     EXIT WATCHER (ALWAYS RUNS)
   ------------------------------ */
   const exited = await runExitWatcher(latest.close);
 
   if (exited) {
     cooldownUntilTs = latest.timestamp + COOLDOWN_CANDLES * cfg.pollMs;
+
     console.log(
       "[COOLDOWN] started until",
       new Date(cooldownUntilTs).toISOString()
     );
   }
 
+  /* -----------------------------
+     COOLDOWN ENFORCEMENT
+  ------------------------------ */
   if (cooldownUntilTs && latest.timestamp < cooldownUntilTs) {
     console.log("[COOLDOWN] active, skipping entry");
     return;
@@ -149,9 +133,8 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
   await withDbLock(async () => {
     if (currentLoopId() !== loopId) return;
 
-    const { rows } = await pool.query(
-      `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
-    );
+    const { rows } = await pool.query(`SELECT 1 FROM paper_trades LIMIT 1`);
+
     if (rows.length) {
       console.log("[PRICE_LOOP] trade already active");
       return;
@@ -160,70 +143,21 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     const broker = getBroker();
 
     const res = await broker.placeOrder(signal.symbol, 1, signal.direction);
-    if (!res.success || !res.price) {
-      throw new Error(res.error ?? "ORDER_FAILED");
-    }
-
-    const rr = computeRR(
-      signal.direction,
-      res.price,
-      signal.sl,
-      signal.tp1 ?? null
-    );
-
-    const { rows: tradeRows } = await pool.query(
-      `
-      INSERT INTO paper_trades (
-        symbol,
-        side,
-        entry_price,
-        qty,
-        sl,
-        tp1,
-        rr,
-        is_closed
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,false)
-      RETURNING id
-      `,
-      [
-        signal.symbol,
-        signal.direction,
-        res.price,
-        1,
-        signal.sl,
-        signal.tp1 ?? null,
-        rr,
-      ]
-    );
-
-    const tradeId = tradeRows[0].id;
 
     await pool.query(
       `
-      INSERT INTO trade_executions (
-        trade_id,
-        side,
-        qty,
-        price,
-        broker,
-        order_id,
-        status,
-        timestamp
-      )
-      VALUES ($1,$2,$3,$4,'paper',$5,'FILLED',NOW())
+      UPDATE paper_trades
+      SET sl = $1, tp1 = $2
+      WHERE id = $3
       `,
-      [tradeId, signal.direction, 1, res.price, res.orderId ?? null]
+      [signal.sl, signal.tp1 ?? null, res.orderId]
     );
 
     console.log("[PRICE_LOOP] trade opened", {
-      tradeId,
-      symbol: signal.symbol,
+      id: res.orderId,
       side: signal.direction,
-      entry: res.price,
       sl: signal.sl,
       tp1: signal.tp1 ?? null,
-      rr,
     });
   });
 }
