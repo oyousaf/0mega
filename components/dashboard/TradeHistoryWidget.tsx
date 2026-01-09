@@ -17,7 +17,8 @@ const POLL_INTERVAL = 5000;
 
 export default function TradeHistoryWidget() {
   const [items, setItems] = useState<Trade[]>([]);
-  const [openRow, setOpenRow] = useState<string | null>(null);
+  const [openRow, setOpenRow] = useState<number | null>(null);
+
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -25,13 +26,29 @@ export default function TradeHistoryWidget() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pnlSummary = usePnlSummary(POLL_INTERVAL);
 
+  /* ---------------------------------------------
+     Helpers
+  --------------------------------------------- */
+  const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+  const fmt = (v: unknown) =>
+    Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
+
+  const fmtDate = (d: unknown) => {
+    const dt = new Date(String(d));
+    return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
+  };
+
   function mergeTrades(prev: Trade[], next: Trade[]) {
-    const map = new Map<string, Trade>();
-    for (const t of prev) map.set(`${t.trade_id}-${t.opened_at}`, t);
-    for (const t of next) map.set(`${t.trade_id}-${t.opened_at}`, t);
+    const map = new Map<number, Trade>();
+    for (const t of prev) map.set(t.trade_id, t);
+    for (const t of next) map.set(t.trade_id, t);
     return Array.from(map.values());
   }
 
+  /* ---------------------------------------------
+     Data loading
+  --------------------------------------------- */
   async function loadPage(nextOffset = 0, append = false) {
     if (loadingMore) return;
     setLoadingMore(true);
@@ -45,7 +62,8 @@ export default function TradeHistoryWidget() {
       const json = await res.json();
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
-      setItems((prev) => (!append ? trades : mergeTrades(prev, trades)));
+      setItems((prev) => (append ? mergeTrades(prev, trades) : trades));
+
       setHasMore(Boolean(json.hasMore));
       setOffset(nextOffset);
     } catch (err) {
@@ -76,14 +94,9 @@ export default function TradeHistoryWidget() {
     return () => el.removeEventListener("scroll", onScroll);
   }, [offset, hasMore, loadingMore]);
 
-  const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  const safeNum = (v: any) =>
-    Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
-  const safeDate = (d: any) => {
-    const dt = new Date(d);
-    return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
-  };
-
+  /* ---------------------------------------------
+     Render
+  --------------------------------------------- */
   return (
     <Card
       sx={{
@@ -92,48 +105,47 @@ export default function TradeHistoryWidget() {
         borderRadius: "1rem",
       }}
     >
-      <CardContent sx={{ color: "var(--omega-gold)" }}>
-        <h2 className="text-xl font-semibold text-omega-gold mb-1 text-center">
+      <CardContent sx={{ color: "var(--omega-gold)", p: 2 }}>
+        <h2 className="text-lg font-semibold text-omega-gold text-center mb-1">
           📜 Trade History
         </h2>
 
         <Typography
           sx={{
-            mt: 1,
-            fontSize: 13,
+            mt: 0.5,
+            fontSize: 12,
             display: "flex",
             justifyContent: "center",
-            gap: 3,
+            gap: 2,
             opacity: 0.9,
             color: "var(--omega-gold)",
-            letterSpacing: "0.02em",
           }}
         >
-          <span>Daily: £{safeNum(pnlSummary?.daily)}</span>
-          <span>Weekly: £{safeNum(pnlSummary?.weekly)}</span>
-          <span>Monthly: £{safeNum(pnlSummary?.monthly)}</span>
+          <span>Daily £{fmt(pnlSummary?.daily)}</span>
+          <span>Weekly £{fmt(pnlSummary?.weekly)}</span>
+          <span>Monthly £{fmt(pnlSummary?.monthly)}</span>
         </Typography>
 
-        <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 2 }} />
+        <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 1.5 }} />
 
         <div
           ref={containerRef}
-          className="trade-history-scroll"
           style={{ maxHeight: 520, overflowY: "auto", paddingRight: 6 }}
         >
           {items.map((t) => {
             const isOpen = openRow === t.trade_id;
-            const entry = n(t.entry_fill_price ?? t.entry_price);
-            const pl = t.realised_pl !== null ? n(t.realised_pl) : null;
+            const entry = n(t.entry_price);
+            const pl = t.realised_pl != null ? n(t.realised_pl) : null;
+
             const pnlPct =
-              pl !== null && entry > 0 && t.qty > 0
+              pl != null && entry > 0 && t.qty > 0
                 ? ((pl / (entry * t.qty)) * 100).toFixed(2)
                 : null;
 
             return (
               <div
-                key={`${t.trade_id}-${t.opened_at}`}
-                className="border-b border-omega-dark-gold/40 py-2"
+                key={t.trade_id}
+                className="border-b border-omega-dark-gold/30 py-2"
               >
                 <div
                   className="flex justify-between items-center cursor-pointer"
@@ -141,21 +153,21 @@ export default function TradeHistoryWidget() {
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
-                    <div className="text-sm opacity-70">
+                    <div className="text-xs opacity-70">
                       {t.side} • Qty {t.qty}
                     </div>
                   </div>
 
                   <div className="text-right">
-                    {pl !== null && (
+                    {pl != null && (
                       <div
                         className={`font-bold ${
                           pl >= 0 ? "text-green-400" : "text-red-400"
                         }`}
                       >
-                        £{safeNum(pl)}{" "}
+                        £{fmt(pl)}
                         {pnlPct && (
-                          <span className="opacity-70 text-xs">
+                          <span className="ml-1 text-xs opacity-70">
                             ({pnlPct}%)
                           </span>
                         )}
@@ -166,32 +178,24 @@ export default function TradeHistoryWidget() {
                 </div>
 
                 <Collapse in={isOpen}>
-                  <div className="mt-2 ml-2 text-sm opacity-80">
-                    {(t.executions ?? []).map((e) => {
-                      const label = e.side === "BUY" ? "Entry" : "Exit";
-
-                      return (
-                        <div
-                          key={e.exec_id}
-                          className="flex justify-between py-1 border-b border-omega-dark-gold/20"
-                        >
-                          <div>
-                            <span className="mr-2 opacity-60 text-xs">
-                              {label}
-                            </span>
-                            {e.side} @ £{safeNum(e.price)}
-                          </div>
-
-                          <div className="text-right">
-                            Qty {e.qty} • {e.broker}
-                            <br />
-                            <span className="opacity-60 text-xs">
-                              {safeDate(e.time)}
-                            </span>
-                          </div>
+                  <div className="mt-2 text-xs opacity-80">
+                    {(t.executions ?? []).map((e) => (
+                      <div
+                        key={e.exec_id}
+                        className="flex justify-between py-1 border-b border-omega-dark-gold/20"
+                      >
+                        <div>
+                          {e.side} @ £{fmt(e.price)}
                         </div>
-                      );
-                    })}
+                        <div className="text-right">
+                          Qty {e.qty} • {e.broker}
+                          <br />
+                          <span className="opacity-60">
+                            {fmtDate(e.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </Collapse>
               </div>
@@ -199,13 +203,11 @@ export default function TradeHistoryWidget() {
           })}
 
           {loadingMore && (
-            <div className="text-center py-3 text-sm opacity-60">
-              Loading more…
-            </div>
+            <div className="text-center py-2 text-xs opacity-60">Loading…</div>
           )}
 
           {!hasMore && items.length > 0 && (
-            <div className="text-center py-3 text-xs opacity-50">
+            <div className="text-center py-2 text-xs opacity-50">
               End of history
             </div>
           )}
