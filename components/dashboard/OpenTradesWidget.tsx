@@ -1,8 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, Typography, Divider } from "@mui/material";
-import { Trade } from "@/app/types/trade";
+import { Card, CardContent, Divider, Typography } from "@mui/material";
+
+type Trade = {
+  trade_id: number;
+  symbol: string;
+  side: "BUY" | "SELL";
+  entry_price: number;
+  qty: number;
+  opened_at: string;
+  sl?: number | null;
+  tp1?: number | null;
+  rr?: number | null;
+  realised_pl?: number | null;
+};
 
 type OpenTradesPayload = {
   positions: Trade[];
@@ -26,28 +38,20 @@ export default function OpenTradesWidget() {
 
         setTrades(Array.isArray(json.positions) ? json.positions : []);
         setBalance(Number(json.balance) || 0);
-      } catch (err) {
-        console.error("Open trades load failed", err);
-      }
+      } catch {}
     }
 
     load();
     const id = setInterval(load, 3000);
-
     return () => {
       alive = false;
       clearInterval(id);
     };
   }, []);
 
-  const safeNum = (v: any) => {
+  const fmt = (v: any) => {
     const x = Number(v);
     return Number.isFinite(x) ? x.toFixed(2) : "—";
-  };
-
-  const num = (v: any) => {
-    const x = Number(v);
-    return Number.isFinite(x) ? x : 0;
   };
 
   return (
@@ -58,64 +62,85 @@ export default function OpenTradesWidget() {
         borderRadius: "1rem",
       }}
     >
-      <CardContent sx={{ color: "var(--omega-gold)" }}>
-        <h2 className="text-xl font-semibold text-omega-gold mb-1 text-center">
+      <CardContent className="p-3 sm:p-4 text-omega-gold">
+        <h2 className="text-lg font-semibold text-center mb-1">
           ⏳ Open Trades
         </h2>
 
-        <p className="text-sm text-omega-gold/70 mb-2 text-center">
-          Balance (free): £{safeNum(balance)}
+        <p className="text-xs text-center opacity-70 mb-2">
+          Balance (free): £{fmt(balance)}
         </p>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
 
         {trades.length === 0 && (
-          <Typography sx={{ color: "var(--omega-gold)", textAlign: "center" }}>
+          <Typography sx={{ textAlign: "center", opacity: 0.7 }}>
             No open trades
           </Typography>
         )}
 
-        {trades.map((t) => {
-          const entry = num(t.entry_price);
-          const qty = num(t.qty);
-          const rowKey = `${t.trade_id}-${t.opened_at}`;
-
-          return (
+        <div className="space-y-2">
+          {trades.map((t) => (
             <div
-              key={rowKey}
+              key={`${t.trade_id}-${t.opened_at}`}
               className="
-                flex justify-between items-center
-                border-b border-omega-dark-gold/40 py-2
-                text-omega-gold last:border-0
+                rounded-lg
+                border border-omega-dark-gold/40
+                px-3 py-2
+                flex flex-col gap-2
               "
             >
-              <div>
-                <div className="font-bold">{t.symbol}</div>
+              {/* HEADER */}
+              <div className="flex justify-between items-center">
+                <div className="font-semibold">{t.symbol}</div>
 
-                <div className="text-sm opacity-70">
-                  {t.side} • Qty {qty}
-                  {t.strategy && (
-                    <span className="ml-2 text-xs opacity-60">
-                      ({t.strategy})
-                    </span>
-                  )}
-                </div>
-
-                <div className="text-xs opacity-60 mt-1">
-                  Entry: £{safeNum(entry)}
-                  {t.rr !== null && (
-                    <span className="ml-2">R:R {safeNum(t.rr)}</span>
-                  )}
+                <div className="text-xs opacity-70">
+                  {t.side} • Qty {fmt(t.qty)}
                 </div>
               </div>
 
-              <div className="text-right">
-                <div className="font-bold opacity-60">—</div>
-                <div className="text-xs opacity-50">unrealised</div>
+              {/* PRICE ROW */}
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="flex flex-col">
+                  <span className="opacity-50">Entry</span>
+                  <span className="font-semibold">£{fmt(t.entry_price)}</span>
+                </div>
+
+                <div className="flex flex-col">
+                  <span className="opacity-50">SL</span>
+                  <span className="font-semibold">
+                    {t.sl != null ? `£${fmt(t.sl)}` : "—"}
+                  </span>
+                </div>
+
+                <div className="flex flex-col">
+                  <span className="opacity-50">TP</span>
+                  <span className="font-semibold">
+                    {t.tp1 != null ? `£${fmt(t.tp1)}` : "—"}
+                  </span>
+                </div>
               </div>
+
+              {/* META */}
+              <div className="flex justify-between items-center text-[0.65rem] opacity-60">
+                <div>
+                  Opened{" "}
+                  {new Date(t.opened_at).toLocaleString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </div>
+
+                {t.rr != null && <div>R:R {fmt(t.rr)}</div>}
+              </div>
+
+              {/* PNL PLACEHOLDER */}
+              <div className="text-right text-xs opacity-50">— unrealised</div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
