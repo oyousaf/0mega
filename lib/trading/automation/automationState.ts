@@ -1,13 +1,13 @@
 let enabled = true;
 
-export function isAutomationEnabled() {
+export async function isAutomationEnabled(): Promise<boolean> {
   return enabled;
 }
 
-export function enableAutomation() {
+export async function enableAutomation() {
   enabled = true;
 }
 
-export function disableAutomation() {
+export async function disableAutomation() {
   enabled = false;
 }
