@@ -1,34 +1,47 @@
+/* -------------------------------------------------
+   EXECUTION
+-------------------------------------------------- */
 export interface TradeExecution {
-  exec_id: string;
-  price: number;
-  qty: number;
+  exec_id: number;
+
+  trade_id: number;
+
   side: "BUY" | "SELL";
-  time: string;
+  qty: number;
+  price: number;
+
   broker: string;
+  status: "FILLED" | "FAILED";
+
+  risk_amount: number;
+  error: string | null;
+
+  timestamp: string;
 }
 
+/* -------------------------------------------------
+   TRADE
+-------------------------------------------------- */
 export interface Trade {
-  trade_id: string;
+  trade_id: number;
 
   symbol: string;
   side: "BUY" | "SELL";
 
-  strategy: string;
-
   entry_price: number;
-  entry_fill_price: number;
-  exit_fill_price: number | null;
-
-  realised_pl: number | null;
-  rr: number | null;
+  sl: number;
+  tp1: number | null;
 
   qty: number;
+
+  rr: number | null;
+  risk_amount: number;
+
+  realised_pl: number | null;
 
   opened_at: string;
   closed_at: string | null;
   is_closed: boolean;
 
   executions: TradeExecution[];
-
-  halaal: boolean;
 }
