@@ -24,34 +24,11 @@ function assertFinite(n: unknown, err: string): number {
   return v;
 }
 
-function normaliseLevels(params: {
-  side: OrderSide;
-  entry: number;
-  rawSl: number;
-  rawTp1: number | null;
-}) {
-  const entry = assertFinite(params.entry, "INVALID_ENTRY");
-  const rawSl = assertFinite(params.rawSl, "INVALID_SL");
-
-  const risk = Math.abs(entry - rawSl);
-  if (risk <= 0) throw new Error("INVALID_RISK_DISTANCE");
-
-  const reward =
-    params.rawTp1 != null
-      ? Math.abs(assertFinite(params.rawTp1, "INVALID_TP") - entry)
-      : null;
-
-  if (params.side === "BUY") {
-    return {
-      sl: entry - risk,
-      tp1: reward != null ? entry + reward : null,
-    };
+function assertAbsoluteLevel(level: number, entry: number, label: string) {
+  if (level <= 0) throw new Error(`${label}_NON_POSITIVE`);
+  if (level < entry * 0.5 || level > entry * 1.5) {
+    throw new Error(`${label}_NOT_ABSOLUTE_PRICE`);
   }
-
-  return {
-    sl: entry + risk,
-    tp1: reward != null ? entry - reward : null,
-  };
 }
 
 /* -------------------------------------------------
@@ -62,8 +39,8 @@ export async function executeTradeIntent(intent: {
   symbol: string;
   qty: number;
   side: OrderSide;
-  rawSl: number;
-  rawTp1?: number | null;
+  rawSl: number; // ABSOLUTE PRICE
+  rawTp1?: number | null; // ABSOLUTE PRICE
 }): Promise<OpenResult> {
   try {
     const qty = assertFinite(intent.qty, "INVALID_QTY");
@@ -72,18 +49,21 @@ export async function executeTradeIntent(intent: {
     const broker = getBroker();
     const res = await broker.placeOrder(intent.symbol, qty, intent.side);
 
-    if (!res.success) {
+    if (!res.success || !Number.isFinite(res.price)) {
       return { success: false, error: res.error ?? "ORDER_FAILED" };
     }
 
     const entry = assertFinite(res.price, "NO_ENTRY_PRICE");
 
-    const { sl, tp1 } = normaliseLevels({
-      side: intent.side,
-      entry,
-      rawSl: intent.rawSl,
-      rawTp1: intent.rawTp1 ?? null,
-    });
+    const sl = assertFinite(intent.rawSl, "INVALID_SL");
+    assertAbsoluteLevel(sl, entry, "SL");
+
+    const tp1 =
+      intent.rawTp1 != null ? assertFinite(intent.rawTp1, "INVALID_TP") : null;
+
+    if (tp1 != null) {
+      assertAbsoluteLevel(tp1, entry, "TP1");
+    }
 
     const geometryOk =
       intent.side === "BUY"
@@ -193,7 +173,7 @@ export async function closeTrade(
     const broker = getBroker();
     const res = await broker.closeOrder(String(id), closeQty);
 
-    if (!res.success) {
+    if (!res.success || !Number.isFinite(res.price)) {
       return { success: false, error: res.error ?? "CLOSE_FAILED" };
     }
 

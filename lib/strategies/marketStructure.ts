@@ -16,7 +16,6 @@ type StructureInput = {
 type StructureSignal = {
   symbol: string;
   direction: "BUY" | "SELL";
-  entry: number;
   sl: number;
   tp1: number;
   reason: string;
@@ -50,34 +49,46 @@ export async function runStructureCheck(
 
   const lastBody = Math.abs(last.close - last.open);
 
-  // BUY breakout
+  /* -------------------------------------------------
+     BUY BREAKOUT
+  -------------------------------------------------- */
   if (
     last.close > rangeHigh &&
     last.close > prev.close &&
     lastBody > avgBody * MOMENTUM_MULT
   ) {
+    const sl = rangeLow;
+    const tp1 = last.close + (last.close - rangeLow);
+
+    if (!(sl < last.close && tp1 > last.close)) return null;
+
     return {
       symbol,
       direction: "BUY",
-      entry: last.close,
-      sl: rangeLow,
-      tp1: last.close + (last.close - rangeLow),
+      sl,
+      tp1,
       reason: "STRUCTURE_BREAKOUT_UP",
     };
   }
 
-  // SELL breakout
+  /* -------------------------------------------------
+     SELL BREAKOUT
+  -------------------------------------------------- */
   if (
     last.close < rangeLow &&
     last.close < prev.close &&
     lastBody > avgBody * MOMENTUM_MULT
   ) {
+    const sl = rangeHigh;
+    const tp1 = last.close - (rangeHigh - last.close);
+
+    if (!(sl > last.close && tp1 < last.close)) return null;
+
     return {
       symbol,
       direction: "SELL",
-      entry: last.close,
-      sl: rangeHigh,
-      tp1: last.close - (rangeHigh - last.close),
+      sl,
+      tp1,
       reason: "STRUCTURE_BREAKOUT_DOWN",
     };
   }
