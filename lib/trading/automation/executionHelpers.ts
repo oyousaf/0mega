@@ -6,9 +6,29 @@ function reverseSide(side: OrderSide): OrderSide {
   return side === "BUY" ? "SELL" : "BUY";
 }
 
-/* -------------------------------------------------
-   OPEN TRADE (FILL-LEVEL)
--------------------------------------------------- */
+/* ---------------------------------------------
+   RR COMPUTATION (INTENT LEVEL)
+---------------------------------------------- */
+function computeRR(
+  side: OrderSide,
+  entry: number,
+  sl: number | null,
+  tp: number | null
+): number | null {
+  if (!entry || sl == null || tp == null) return null;
+
+  if (side === "BUY") {
+    if (entry <= sl) return null;
+    return (tp - entry) / (entry - sl);
+  }
+
+  if (entry >= sl) return null;
+  return (entry - tp) / (sl - entry);
+}
+
+/* ---------------------------------------------
+   OPEN TRADE
+---------------------------------------------- */
 export async function executeTradeIntent(intent: {
   signalId: string;
   symbol: string;
@@ -26,13 +46,32 @@ export async function executeTradeIntent(intent: {
     return { success: false, error: res.error ?? "ORDER_FAILED" };
   }
 
+  // Pull SL / TP from signal (strategy intent source)
+  const { rows: sigRows } = await pool.query(
+    `SELECT sl, tp1 FROM signals WHERE id = $1`,
+    [intent.signalId]
+  );
+
+  const sl = sigRows[0]?.sl ?? null;
+  const tp = sigRows[0]?.tp1 ?? null;
+
+  const rr = computeRR(intent.side, res.price, sl, tp);
+
   const { rows } = await pool.query(
     `
-    INSERT INTO paper_trades (signal_id, symbol, side, entry_price, qty)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO paper_trades (
+      signal_id,
+      symbol,
+      side,
+      entry_price,
+      qty,
+      rr,
+      is_closed
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, false)
     RETURNING id
     `,
-    [intent.signalId, intent.symbol, intent.side, res.price, intent.qty]
+    [intent.signalId, intent.symbol, intent.side, res.price, intent.qty, rr]
   );
 
   const tradeId = rows[0].id;
@@ -57,14 +96,19 @@ export async function executeTradeIntent(intent: {
   return { success: true, tradeId };
 }
 
-/* -------------------------------------------------
-   CLOSE TRADE (FILL-LEVEL)
--------------------------------------------------- */
+/* ---------------------------------------------
+   CLOSE / PARTIAL CLOSE
+---------------------------------------------- */
 export async function closeTrade(tradeId: string, qty?: number) {
   const broker = getBroker();
 
   const { rows } = await pool.query(
-    `SELECT side, qty FROM paper_trades WHERE id = $1 FOR UPDATE`,
+    `
+    SELECT side, qty, entry_price
+    FROM paper_trades
+    WHERE id = $1
+    FOR UPDATE
+    `,
     [tradeId]
   );
 
@@ -109,13 +153,34 @@ export async function closeTrade(tradeId: string, qty?: number) {
     ]
   );
 
+  // Partial close
   if (closeQty < Number(trade.qty)) {
-    await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
-      closeQty,
-      tradeId,
-    ]);
+    await pool.query(
+      `
+      UPDATE paper_trades
+      SET qty = qty - $1
+      WHERE id = $2
+      `,
+      [closeQty, tradeId]
+    );
   } else {
-    await pool.query(`DELETE FROM paper_trades WHERE id = $1`, [tradeId]);
+    // Final close — KEEP ROW
+    const realised =
+      trade.side === "BUY"
+        ? (res.price - trade.entry_price) * trade.qty
+        : (trade.entry_price - res.price) * trade.qty;
+
+    await pool.query(
+      `
+      UPDATE paper_trades
+      SET
+        qty = 0,
+        is_closed = true,
+        realised_pl = $1
+      WHERE id = $2
+      `,
+      [realised, tradeId]
+    );
   }
 
   return { success: true };
