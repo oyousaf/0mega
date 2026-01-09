@@ -4,8 +4,7 @@ import { Button, Modal } from "@mui/material";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
-
-import SettingsIcon from "@mui/icons-material/Settings";
+import { FiHome, FiSettings, FiCpu } from "react-icons/fi";
 
 import { Trade } from "@/app/types/trade";
 import { computeMetricsFromTrades } from "@/lib/metrics";
@@ -25,7 +24,6 @@ import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
 import TradeHistoryWidget from "@/components/dashboard/TradeHistoryWidget";
 import TodayStatusWidget from "@/components/dashboard/TodayStatusWidget";
-import AutomationBadge from "@/components/dashboard/AutomationBadge";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -119,23 +117,19 @@ export default function DashboardClient() {
       >
         {/* HEADER */}
         <div
-          className="sticky top-0 z-50
-    grid grid-cols-3 items-center
-    bg-black/40 backdrop-blur
-    rounded-xl px-4 py-3
-    border border-omega-dark-gold"
+          className="sticky top-0 z-50 grid grid-cols-3 items-center
+          rounded-xl px-4 py-3 backdrop-blur bg-omega-green/70
+          border border-omega-dark-gold"
         >
           <div />
 
-          {/* TITLE → scroll to top */}
+          {/* TITLE */}
           <motion.h1
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="
-      text-2xl sm:text-3xl font-semibold text-omega-gold
-      cursor-pointer select-none
-    "
+            className="text-2xl sm:text-3xl font-semibold text-omega-gold
+              cursor-pointer select-none text-center"
           >
             𝛀mega
           </motion.h1>
@@ -146,39 +140,35 @@ export default function DashboardClient() {
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="
-        w-9 h-9
-        flex items-center justify-center
-        rounded-full
-        bg-black/50
-        border border-omega-dark-gold
-        text-omega-gold
-        hover:scale-105 transition
-      "
               aria-label="Scroll to top"
+              className="w-9 h-9 flex items-center justify-center rounded-full
+                border border-omega-dark-gold text-omega-gold
+                bg-transparent hover:bg-omega-dark-gold/10 transition"
             >
-              🏠
+              <FiHome size={16} />
             </motion.button>
+
+            {/* AUTOMATION STATUS */}
+            <div
+              title="Automation running"
+              className="w-9 h-9 flex items-center justify-center rounded-full
+                border border-omega-dark-gold text-omega-gold
+                bg-transparent opacity-80"
+            >
+              <FiCpu size={16} />
+            </div>
 
             {/* SETTINGS */}
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => setOpenSettings(true)}
-              className="
-        w-9 h-9
-        flex items-center justify-center
-        rounded-full
-        bg-black/50
-        border border-omega-dark-gold
-        text-omega-gold
-        hover:scale-105 transition
-      "
               aria-label="Settings"
+              className="w-9 h-9 flex items-center justify-center rounded-full
+                border border-omega-dark-gold text-omega-gold
+                bg-transparent hover:bg-omega-dark-gold/10 transition"
             >
-              <SettingsIcon fontSize="small" />
+              <FiSettings size={16} />
             </motion.button>
-
-            <AutomationBadge />
           </div>
         </div>
 
