@@ -9,7 +9,6 @@ type ExecResult =
   | { success: true; action: string }
   | { success: false; reason: string };
 
-// Sprint-18 paper size
 const PAPER_QTY = 0.01;
 
 export async function executeSignal(
