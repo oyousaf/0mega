@@ -5,8 +5,9 @@ type ExitResult = "SL_HIT" | "TP_HIT" | null;
 
 /**
  * Exit watcher
- * - Always evaluates the most recent open trade
- * - Deterministic behaviour under fast demo conditions
+ * - Evaluates most recent open trade
+ * - One close attempt per trade
+ * - Idempotent under fast price loops
  */
 export async function runExitWatcher(currentPrice: number): Promise<boolean> {
   const { rows } = await pool.query(`
@@ -23,7 +24,8 @@ export async function runExitWatcher(currentPrice: number): Promise<boolean> {
   const exit = checkExit(trade, currentPrice);
   if (!exit) return false;
 
-  await closeTrade(Number(trade.id));
+  const res = await closeTrade(Number(trade.id), exit);
+  if (!res.success) return false;
 
   console.log("[EXIT]", {
     tradeId: trade.id,

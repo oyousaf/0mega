@@ -178,12 +178,16 @@ export async function executeTradeIntent(intent: {
 -------------------------------------------------- */
 export async function closeTrade(
   tradeId: number,
-  qty?: number
+  reason: "SL_HIT" | "TP_HIT" | "MANUAL" = "MANUAL"
 ): Promise<CloseResult> {
+  const client = await pool.connect();
+
   try {
     const id = assertFinite(tradeId, "INVALID_TRADE_ID");
 
-    const { rows } = await pool.query(
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
       `
       SELECT side, qty, entry_price, risk_amount
       FROM paper_trades
@@ -194,29 +198,44 @@ export async function closeTrade(
     );
 
     if (!rows.length) {
-      return { success: false, error: "TRADE_NOT_FOUND" };
+      await client.query("ROLLBACK");
+      return { success: false, error: "TRADE_ALREADY_CLOSED" };
     }
 
     const trade = rows[0];
-    const openQty = assertFinite(trade.qty, "INVALID_QTY");
-
-    const closeQty =
-      qty != null ? assertFinite(qty, "INVALID_CLOSE_QTY") : openQty;
-
-    if (closeQty <= 0 || closeQty > openQty) {
-      return { success: false, error: "INVALID_CLOSE_QTY" };
-    }
+    const qty = assertFinite(trade.qty, "INVALID_QTY");
 
     const broker = getBroker();
-    const res = await broker.closeOrder(String(id), closeQty);
+    const res = await broker.closeOrder(String(id), qty);
 
     if (!res.success || !Number.isFinite(res.price)) {
+      await client.query("ROLLBACK");
       return { success: false, error: res.error ?? "CLOSE_FAILED" };
     }
 
     const exitPrice = assertFinite(res.price, "NO_EXIT_PRICE");
 
-    await pool.query(
+    const realised =
+      trade.side === "BUY"
+        ? (exitPrice - trade.entry_price) * qty
+        : (trade.entry_price - exitPrice) * qty;
+
+    await client.query(
+      `
+      UPDATE paper_trades
+      SET
+        qty = 0,
+        is_closed = true,
+        realised_pl = $1,
+        exit_price = $2,
+        exit_reason = $3,
+        closed_at = NOW()
+      WHERE id = $4
+      `,
+      [realised, exitPrice, reason, id]
+    );
+
+    await client.query(
       `
       INSERT INTO trade_executions (
         trade_id,
@@ -224,47 +243,21 @@ export async function closeTrade(
         qty,
         price,
         broker,
-        order_id,
         status,
         risk_amount,
-        error,
         timestamp
       )
-      VALUES ($1,$2,$3,$4,'paper',$5,'FILLED',$6,NULL,NOW())
+      VALUES ($1,$2,$3,$4,'paper','FILLED',$5,NOW())
       `,
-      [
-        id,
-        reverseSide(trade.side),
-        closeQty,
-        exitPrice,
-        res.orderId ?? null,
-        trade.risk_amount,
-      ]
+      [id, reverseSide(trade.side), qty, exitPrice, trade.risk_amount]
     );
 
-    if (closeQty < openQty) {
-      await pool.query(`UPDATE paper_trades SET qty = qty - $1 WHERE id = $2`, [
-        closeQty,
-        id,
-      ]);
-    } else {
-      const realised =
-        trade.side === "BUY"
-          ? (exitPrice - trade.entry_price) * openQty
-          : (trade.entry_price - exitPrice) * openQty;
-
-      await pool.query(
-        `
-        UPDATE paper_trades
-        SET qty = 0, is_closed = true, realised_pl = $1
-        WHERE id = $2
-        `,
-        [realised, id]
-      );
-    }
-
+    await client.query("COMMIT");
     return { success: true };
   } catch (err: any) {
+    await client.query("ROLLBACK");
     return { success: false, error: err.message ?? "CLOSE_FAILED" };
+  } finally {
+    client.release();
   }
 }
