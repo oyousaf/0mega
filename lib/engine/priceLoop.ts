@@ -79,6 +79,17 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
   if (!candles.length) return;
 
   const latest = candles[candles.length - 1];
+
+  /* ---------- EXIT (runs every poll) ---------- */
+  const exitPrice = latest.close; // conservative but deterministic
+  const exited = await runExitWatcher(exitPrice);
+  if (exited) {
+    cooldownUntilTs =
+      Date.now() + COOLDOWN_CANDLES * timeframeMs(cfg.timeframe);
+    return;
+  }
+
+  /* ---------- CANDLE GATE ---------- */
   if (lastCandleTs === latest.timestamp) return;
   lastCandleTs = latest.timestamp;
 
@@ -87,16 +98,7 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     close: latest.close,
   });
 
-  /* ---------- EXIT ---------- */
-  const exited = await runExitWatcher(latest.close);
-  if (exited) {
-    cooldownUntilTs = latest.timestamp + COOLDOWN_CANDLES * cfg.pollMs;
-    return;
-  }
-
-  if (cooldownUntilTs && latest.timestamp < cooldownUntilTs) {
-    return;
-  }
+  if (cooldownUntilTs && Date.now() < cooldownUntilTs) return;
 
   /* ---------- STRUCTURE ---------- */
   const signal = await runStructureCheck({
@@ -110,7 +112,6 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
   const entry = latest.close;
   const sl = signal.sl;
 
-  // Direction-safe risk
   const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
 
   if (!Number.isFinite(riskDist) || riskDist <= entry * 0.0003) {
@@ -167,5 +168,19 @@ async function withDbLock(fn: () => Promise<void>) {
   } catch (e) {
     await pool.query("ROLLBACK");
     throw e;
+  }
+}
+
+/* ---------------------------------------
+   UTILS
+---------------------------------------- */
+function timeframeMs(tf: "1m" | "5m" | "15m") {
+  switch (tf) {
+    case "1m":
+      return 60_000;
+    case "5m":
+      return 300_000;
+    case "15m":
+      return 900_000;
   }
 }
