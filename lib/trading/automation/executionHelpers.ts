@@ -29,9 +29,7 @@ function assertPositive(n: number, err: string) {
 }
 
 /**
- * Demo-safe validation:
- * - min distance avoids thrashing
- * - max distance widened for synthetic candles
+ * Demo-safe validation
  */
 function validateLevelDistance(params: {
   entry: number;
@@ -45,13 +43,10 @@ function validateLevelDistance(params: {
 
   const dist = Math.abs(entry - level);
 
-  // too close → noise
   if (dist < entry * 0.0003) {
     throw new Error(`${label}_TOO_CLOSE`);
   }
 
-  // too far → bug or broken feed
-  // widened to 50% for demo realism
   if (dist > entry * 0.5) {
     throw new Error(`${label}_TOO_FAR`);
   }
@@ -80,7 +75,6 @@ export async function executeTradeIntent(intent: {
       return { success: false, error: res.error ?? "ORDER_FAILED" };
     }
 
-    // entry: candle-aligned if supplied, otherwise broker price
     const entry =
       intent.entryPrice != null
         ? assertFinite(intent.entryPrice, "INVALID_ENTRY")
@@ -90,13 +84,11 @@ export async function executeTradeIntent(intent: {
     const tp1 =
       intent.rawTp1 != null ? assertFinite(intent.rawTp1, "INVALID_TP") : null;
 
-    // distance sanity
     validateLevelDistance({ entry, level: sl, label: "SL" });
     if (tp1 != null) {
       validateLevelDistance({ entry, level: tp1, label: "TP1" });
     }
 
-    // geometry
     const geometryOk =
       intent.side === "BUY"
         ? sl < entry && (tp1 ?? Infinity) > entry
@@ -174,16 +166,18 @@ export async function executeTradeIntent(intent: {
 }
 
 /* -------------------------------------------------
-   CLOSE TRADE
+   CLOSE TRADE (FAST PAPER SAFE)
 -------------------------------------------------- */
 export async function closeTrade(
   tradeId: number,
-  reason: "SL_HIT" | "TP_HIT" | "MANUAL" = "MANUAL"
+  reason: "SL_HIT" | "TP_HIT" | "MANUAL",
+  exitPrice: number
 ): Promise<CloseResult> {
   const client = await pool.connect();
 
   try {
     const id = assertFinite(tradeId, "INVALID_TRADE_ID");
+    const exit = assertFinite(exitPrice, "INVALID_EXIT_PRICE");
 
     await client.query("BEGIN");
 
@@ -205,20 +199,10 @@ export async function closeTrade(
     const trade = rows[0];
     const qty = assertFinite(trade.qty, "INVALID_QTY");
 
-    const broker = getBroker();
-    const res = await broker.closeOrder(String(id), qty);
-
-    if (!res.success || !Number.isFinite(res.price)) {
-      await client.query("ROLLBACK");
-      return { success: false, error: res.error ?? "CLOSE_FAILED" };
-    }
-
-    const exitPrice = assertFinite(res.price, "NO_EXIT_PRICE");
-
     const realised =
       trade.side === "BUY"
-        ? (exitPrice - trade.entry_price) * qty
-        : (trade.entry_price - exitPrice) * qty;
+        ? (exit - trade.entry_price) * qty
+        : (trade.entry_price - exit) * qty;
 
     await client.query(
       `
@@ -232,7 +216,7 @@ export async function closeTrade(
         closed_at = NOW()
       WHERE id = $4
       `,
-      [realised, exitPrice, reason, id]
+      [realised, exit, reason, id]
     );
 
     await client.query(
@@ -249,7 +233,7 @@ export async function closeTrade(
       )
       VALUES ($1,$2,$3,$4,'paper','FILLED',$5,NOW())
       `,
-      [id, reverseSide(trade.side), qty, exitPrice, trade.risk_amount]
+      [id, reverseSide(trade.side), qty, exit, trade.risk_amount]
     );
 
     await client.query("COMMIT");

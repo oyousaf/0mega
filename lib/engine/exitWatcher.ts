@@ -3,12 +3,6 @@ import { closeTrade } from "@/lib/trading/automation/executionHelpers";
 
 type ExitResult = "SL_HIT" | "TP_HIT" | null;
 
-/**
- * Exit watcher
- * - Evaluates most recent open trade
- * - One close attempt per trade
- * - Idempotent under fast price loops
- */
 export async function runExitWatcher(currentPrice: number): Promise<boolean> {
   const { rows } = await pool.query(`
     SELECT id, side, sl, tp1
@@ -24,15 +18,23 @@ export async function runExitWatcher(currentPrice: number): Promise<boolean> {
   const exit = checkExit(trade, currentPrice);
   if (!exit) return false;
 
-  const res = await closeTrade(Number(trade.id), exit);
-  if (!res.success) return false;
+  const res = await closeTrade(Number(trade.id), exit, currentPrice);
+
+  if (!res.success) {
+    console.warn("[EXIT_FAILED]", {
+      tradeId: trade.id,
+      exit,
+      error: res.error,
+    });
+    return false;
+  }
 
   console.log("[EXIT]", {
     tradeId: trade.id,
     reason: exit,
     price: currentPrice,
-    sl: trade.sl,
-    tp1: trade.tp1,
+    sl: Number(trade.sl),
+    tp1: trade.tp1 != null ? Number(trade.tp1) : null,
   });
 
   return true;
