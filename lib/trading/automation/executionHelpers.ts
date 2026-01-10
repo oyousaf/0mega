@@ -39,8 +39,9 @@ export async function executeTradeIntent(intent: {
   symbol: string;
   qty: number;
   side: OrderSide;
-  rawSl: number; // ABSOLUTE PRICE
-  rawTp1?: number | null; // ABSOLUTE PRICE
+  rawSl: number;
+  rawTp1?: number | null;
+  entryPrice?: number; // 👈 ADDED
 }): Promise<OpenResult> {
   try {
     const qty = assertFinite(intent.qty, "INVALID_QTY");
@@ -49,11 +50,15 @@ export async function executeTradeIntent(intent: {
     const broker = getBroker();
     const res = await broker.placeOrder(intent.symbol, qty, intent.side);
 
-    if (!res.success || !Number.isFinite(res.price)) {
+    if (!res.success) {
       return { success: false, error: res.error ?? "ORDER_FAILED" };
     }
 
-    const entry = assertFinite(res.price, "NO_ENTRY_PRICE");
+    // 🔑 SINGLE SOURCE OF TRUTH FOR ENTRY
+    const entry =
+      intent.entryPrice != null
+        ? assertFinite(intent.entryPrice, "INVALID_ENTRY")
+        : assertFinite(res.price, "NO_ENTRY_PRICE");
 
     const sl = assertFinite(intent.rawSl, "INVALID_SL");
     assertAbsoluteLevel(sl, entry, "SL");

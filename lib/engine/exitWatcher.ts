@@ -1,11 +1,16 @@
 import { pool } from "@/lib/neon";
 import { closeTrade } from "@/lib/trading/automation/executionHelpers";
 
-type ExitResult = "SL_HIT" | "TP1_HIT" | null;
+type ExitResult = "SL_HIT" | "TP_HIT" | null;
 
+/**
+ * Exit watcher
+ * - Always evaluates the most recent open trade
+ * - Deterministic behaviour under fast demo conditions
+ */
 export async function runExitWatcher(currentPrice: number): Promise<boolean> {
   const { rows } = await pool.query(`
-    SELECT id, side, sl, tp1, entry_price
+    SELECT id, side, sl, tp1
     FROM paper_trades
     WHERE is_closed = false
     ORDER BY id DESC
@@ -32,19 +37,19 @@ export async function runExitWatcher(currentPrice: number): Promise<boolean> {
 }
 
 function checkExit(
-  trade: {
-    side: "BUY" | "SELL";
-    sl: number;
-    tp1: number | null;
-  },
+  trade: { side: "BUY" | "SELL"; sl: number; tp1: number | null },
   price: number
 ): ExitResult {
+  const sl = Number(trade.sl);
+  const tp1 = trade.tp1 != null ? Number(trade.tp1) : null;
+
   if (trade.side === "BUY") {
-    if (price <= trade.sl) return "SL_HIT";
-    if (trade.tp1 != null && price >= trade.tp1) return "TP1_HIT";
+    if (price <= sl) return "SL_HIT";
+    if (tp1 != null && price >= tp1) return "TP_HIT";
   } else {
-    if (price >= trade.sl) return "SL_HIT";
-    if (trade.tp1 != null && price <= trade.tp1) return "TP1_HIT";
+    if (price >= sl) return "SL_HIT";
+    if (tp1 != null && price <= tp1) return "TP_HIT";
   }
+
   return null;
 }

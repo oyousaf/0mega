@@ -123,7 +123,7 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
       return;
     }
 
-    // executionHelpers is the only authority
+    // 🔑 CRITICAL FIX: entry price = candle close
     const openRes = await executeTradeIntent({
       signalId: String(signal.reason),
       symbol: signal.symbol,
@@ -131,6 +131,7 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
       side: signal.direction,
       rawSl: signal.sl,
       rawTp1: signal.tp1 ?? null,
+      entryPrice: latest.close,
     });
 
     if (!openRes.success) {

@@ -8,33 +8,32 @@ type Candle = {
 };
 
 const CACHE: Record<string, Candle[]> = {};
-const LAST_ADVANCE: Record<string, number> = {};
+const BASE_PRICE: Record<string, number> = {};
 
+/**
+ * Fast demo crypto provider
+ * - Advances candle every fetch (high frequency)
+ * - Uses % volatility instead of absolute jumps
+ * - Produces geometry-safe candles for SL/TP
+ */
 export function getCryptoProvider(
   symbol: string,
   timeframe: "1m" | "5m" | "15m"
 ) {
   const key = `${symbol}:${timeframe}`;
-
   const tfMs =
     timeframe === "1m" ? 60_000 : timeframe === "5m" ? 300_000 : 900_000;
 
   return {
     async fetchCandles(): Promise<Candle[]> {
-      const now = Date.now();
-
       if (!CACHE[key]) {
-        CACHE[key] = seedCandles(tfMs);
-        LAST_ADVANCE[key] = now;
+        const start = BASE_PRICE[symbol] ?? 50_000;
+        BASE_PRICE[symbol] = start;
+        CACHE[key] = seedCandles(start, tfMs);
         return CACHE[key];
       }
 
-      // advance ONLY when a full candle duration has elapsed
-      if (now - LAST_ADVANCE[key] >= tfMs) {
-        advanceCandle(CACHE[key], tfMs);
-        LAST_ADVANCE[key] = now;
-      }
-
+      advanceCandle(CACHE[key], tfMs);
       return CACHE[key];
     },
   };
@@ -44,16 +43,16 @@ export function getCryptoProvider(
    Helpers
 -------------------------------------------------- */
 
-function seedCandles(tfMs: number): Candle[] {
+function seedCandles(startPrice: number, tfMs: number): Candle[] {
   const now = Date.now();
-  let price = 50_000;
+  let price = startPrice;
 
   return Array.from({ length: 50 }).map((_, i) => {
     const ts = now - (50 - i) * tfMs;
     const open = price;
-    const close = price + randomStep();
-    const high = Math.max(open, close) + Math.random() * 20;
-    const low = Math.min(open, close) - Math.random() * 20;
+    const close = open + randomStep(open);
+    const high = Math.max(open, close) + Math.abs(randomStep(open) * 0.25);
+    const low = Math.min(open, close) - Math.abs(randomStep(open) * 0.25);
 
     price = close;
 
@@ -63,7 +62,7 @@ function seedCandles(tfMs: number): Candle[] {
       high,
       low,
       close,
-      volume: Math.random() * 10,
+      volume: 1 + Math.random() * 5,
     };
   });
 }
@@ -71,20 +70,26 @@ function seedCandles(tfMs: number): Candle[] {
 function advanceCandle(candles: Candle[], tfMs: number) {
   const last = candles[candles.length - 1];
   const open = last.close;
-  const close = open + randomStep();
+
+  const close = open + randomStep(open);
+  const wick = Math.abs(randomStep(open) * 0.25);
 
   candles.push({
     timestamp: last.timestamp + tfMs,
     open,
-    high: Math.max(open, close) + Math.random() * 10,
-    low: Math.min(open, close) - Math.random() * 10,
+    high: Math.max(open, close) + wick,
+    low: Math.min(open, close) - wick,
     close,
-    volume: Math.random() * 10,
+    volume: 1 + Math.random() * 5,
   });
 
   candles.shift();
 }
 
-function randomStep() {
-  return (Math.random() - 0.5) * 200;
+/**
+ * Percentage-based volatility
+ * ~ ±0.05% per candle
+ */
+function randomStep(price: number) {
+  return price * ((Math.random() - 0.5) * 0.001);
 }

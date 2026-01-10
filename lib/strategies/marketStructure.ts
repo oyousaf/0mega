@@ -22,7 +22,9 @@ type StructureSignal = {
 };
 
 const LOOKBACK = 20;
-const MOMENTUM_MULT = 1.2;
+
+// 🔑 Reduced to match %-based volatility
+const MOMENTUM_MULT = 1.05;
 
 export async function runStructureCheck(
   input: StructureInput
@@ -55,12 +57,15 @@ export async function runStructureCheck(
   if (
     last.close > rangeHigh &&
     last.close > prev.close &&
-    lastBody > avgBody * MOMENTUM_MULT
+    lastBody >= avgBody * MOMENTUM_MULT
   ) {
     const sl = rangeLow;
-    const tp1 = last.close + (last.close - rangeLow);
+    const risk = last.close - sl;
 
-    if (!(sl < last.close && tp1 > last.close)) return null;
+    // Guard against microscopic ranges
+    if (risk <= last.close * 0.0003) return null;
+
+    const tp1 = last.close + risk;
 
     return {
       symbol,
@@ -77,12 +82,14 @@ export async function runStructureCheck(
   if (
     last.close < rangeLow &&
     last.close < prev.close &&
-    lastBody > avgBody * MOMENTUM_MULT
+    lastBody >= avgBody * MOMENTUM_MULT
   ) {
     const sl = rangeHigh;
-    const tp1 = last.close - (rangeHigh - last.close);
+    const risk = sl - last.close;
 
-    if (!(sl > last.close && tp1 < last.close)) return null;
+    if (risk <= last.close * 0.0003) return null;
+
+    const tp1 = last.close - risk;
 
     return {
       symbol,
