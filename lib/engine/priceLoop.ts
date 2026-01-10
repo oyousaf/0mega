@@ -5,19 +5,11 @@ import { pool } from "@/lib/neon";
 import { runExitWatcher } from "./exitWatcher";
 import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 
-type PriceLoopConfig = {
-  symbol: string;
-  timeframe: "1m" | "5m" | "15m";
-  pollMs: number;
-};
-
-const DEFAULT_CONFIG: PriceLoopConfig = {
-  symbol: "BTCUSDT",
-  timeframe: "5m",
-  pollMs: 5000,
-};
-
-const COOLDOWN_CANDLES = 1;
+/* ---------------------------------------
+   CONFIG — FAST PAPER MODE
+---------------------------------------- */
+const SYMBOL = "BTCUSDT";
+const POLL_MS = 5000;
 
 /* ---------------------------------------
    LOOP CONTROL
@@ -37,123 +29,94 @@ function currentLoopId() {
   return globalThis.__OMEGA_PRICE_LOOP_ID__ ?? 0;
 }
 
-let lastCandleTs: number | null = null;
-let cooldownUntilTs: number | null = null;
-
 /* ---------------------------------------
    PUBLIC API
 ---------------------------------------- */
-export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
+export async function startPriceLoop() {
   const loopId = nextLoopId();
-  const cfg = { ...DEFAULT_CONFIG, ...config };
+  console.log("[PRICE_LOOP] started loopId=", loopId);
 
-  console.log("[PRICE_LOOP] started", cfg, "loopId=", loopId);
+  const provider = getPriceProvider(SYMBOL, "1m");
 
   while (currentLoopId() === loopId) {
     const started = Date.now();
 
     try {
-      await tick(cfg, loopId);
+      const candles = await provider.fetchCandles();
+      const latest = candles[candles.length - 1];
+
+      /* EXIT — every tick */
+      const exited = await runExitWatcher(latest.close);
+      if (exited) {
+        console.log("[EXIT] trade closed");
+      }
+
+      console.log("[PRICE_LOOP] tick", {
+        ts: latest.timestamp,
+        close: latest.close,
+      });
+
+      /* ENTRY */
+      const signal = await runStructureCheck({
+        symbol: SYMBOL,
+        timeframe: "1m",
+        candles,
+      });
+
+      if (signal) {
+        const entry = latest.close;
+        const sl = signal.sl;
+        const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
+
+        if (Number.isFinite(riskDist) && riskDist > entry * 0.0002) {
+          const tp1 =
+            signal.direction === "BUY" ? entry + riskDist : entry - riskDist;
+
+          const risk = await riskGate(signal, entry);
+          if (risk.allowed) {
+            await withDbLock(async () => {
+              const { rows } = await pool.query(
+                `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
+              );
+              if (rows.length) return;
+
+              const res = await executeTradeIntent({
+                signalId: signal.reason,
+                symbol: SYMBOL,
+                qty: 1,
+                side: signal.direction,
+                rawSl: sl,
+                rawTp1: tp1,
+                entryPrice: entry,
+              });
+
+              if (res.success) {
+                console.log("[TRADE_OPENED]", {
+                  tradeId: res.tradeId,
+                  side: signal.direction,
+                  entry,
+                  sl,
+                  tp1,
+                });
+              }
+            });
+          }
+        }
+      }
     } catch (err) {
-      console.error("[PRICE_LOOP] tick error", err);
+      console.error("[PRICE_LOOP] error", err);
     }
 
-    const sleep = Math.max(cfg.pollMs - (Date.now() - started), 0);
+    const sleep = Math.max(POLL_MS - (Date.now() - started), 0);
     await new Promise((r) => setTimeout(r, sleep));
   }
+
+  console.log("[PRICE_LOOP] exited cleanly");
 }
 
 export function stopPriceLoop() {
   nextLoopId();
   console.log("[PRICE_LOOP] stop requested");
-}
-
-/* ---------------------------------------
-   CORE TICK
----------------------------------------- */
-async function tick(cfg: PriceLoopConfig, loopId: number) {
-  if (currentLoopId() !== loopId) return;
-
-  const provider = getPriceProvider(cfg.symbol, cfg.timeframe);
-  const candles = await provider.fetchCandles();
-  if (!candles.length) return;
-
-  const latest = candles[candles.length - 1];
-
-  /* ---------- EXIT (runs every poll) ---------- */
-  const exitPrice = latest.close; // conservative but deterministic
-  const exited = await runExitWatcher(exitPrice);
-  if (exited) {
-    cooldownUntilTs =
-      Date.now() + COOLDOWN_CANDLES * timeframeMs(cfg.timeframe);
-    return;
-  }
-
-  /* ---------- CANDLE GATE ---------- */
-  if (lastCandleTs === latest.timestamp) return;
-  lastCandleTs = latest.timestamp;
-
-  console.log("[PRICE_LOOP] new candle", {
-    ts: latest.timestamp,
-    close: latest.close,
-  });
-
-  if (cooldownUntilTs && Date.now() < cooldownUntilTs) return;
-
-  /* ---------- STRUCTURE ---------- */
-  const signal = await runStructureCheck({
-    symbol: cfg.symbol,
-    timeframe: cfg.timeframe,
-    candles,
-  });
-
-  if (!signal) return;
-
-  const entry = latest.close;
-  const sl = signal.sl;
-
-  const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
-
-  if (!Number.isFinite(riskDist) || riskDist <= entry * 0.0003) {
-    console.warn("[SKIP] invalid risk distance", { entry, sl });
-    return;
-  }
-
-  const tp1 = signal.direction === "BUY" ? entry + riskDist : entry - riskDist;
-
-  const risk = await riskGate(signal, entry);
-  if (!risk.allowed) return;
-
-  await withDbLock(async () => {
-    if (currentLoopId() !== loopId) return;
-
-    const { rows } = await pool.query(
-      `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
-    );
-    if (rows.length) return;
-
-    const openRes = await executeTradeIntent({
-      signalId: signal.reason,
-      symbol: signal.symbol,
-      qty: 1,
-      side: signal.direction,
-      rawSl: sl,
-      rawTp1: tp1,
-      entryPrice: entry,
-    });
-
-    if (!openRes.success) {
-      console.warn("[ENTRY_FAILED]", openRes.error);
-      return;
-    }
-
-    console.log("[TRADE_OPENED]", {
-      side: signal.direction,
-      entry,
-      sl,
-      tp1,
-    });
-  });
 }
 
 /* ---------------------------------------
@@ -168,19 +131,5 @@ async function withDbLock(fn: () => Promise<void>) {
   } catch (e) {
     await pool.query("ROLLBACK");
     throw e;
-  }
-}
-
-/* ---------------------------------------
-   UTILS
----------------------------------------- */
-function timeframeMs(tf: "1m" | "5m" | "15m") {
-  switch (tf) {
-    case "1m":
-      return 60_000;
-    case "5m":
-      return 300_000;
-    case "15m":
-      return 900_000;
   }
 }

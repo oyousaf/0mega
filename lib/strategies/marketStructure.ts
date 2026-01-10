@@ -21,92 +21,59 @@ type StructureSignal = {
   reason: string;
 };
 
-const LOOKBACK = 20;
-
-// tuned for %-based synthetic candles
-const MOMENTUM_MULT = 1.05;
-
-// risk bounds (strategy responsibility)
-const MIN_RISK_PCT = 0.001; // 0.1%
-const MAX_RISK_PCT = 0.01;  // 1%
+/* FAST DEBUG MODE */
+const LOOKBACK = 6;
+const MIN_RISK_PCT = 0.00015; // 0.015%
+const MAX_RISK_PCT = 0.05;    // 5%
 
 export async function runStructureCheck(
   input: StructureInput
 ): Promise<StructureSignal | null> {
   const { symbol, candles } = input;
+  if (candles.length < LOOKBACK + 1) return null;
 
-  if (candles.length < LOOKBACK + 2) return null;
+  const recent = candles.slice(-LOOKBACK);
+  const last = recent.at(-1)!;
+  const prev = recent.at(-2)!;
 
-  const recent = candles.slice(-LOOKBACK - 1);
-  const last = recent[recent.length - 1];
-  const prev = recent[recent.length - 2];
-
-  const highs = recent.slice(0, -1).map((c) => c.high);
-  const lows = recent.slice(0, -1).map((c) => c.low);
+  const highs = recent.map(c => c.high);
+  const lows = recent.map(c => c.low);
 
   const rangeHigh = Math.max(...highs);
   const rangeLow = Math.min(...lows);
 
-  const avgBody =
-    recent
-      .slice(0, -1)
-      .map((c) => Math.abs(c.close - c.open))
-      .reduce((a, b) => a + b, 0) / LOOKBACK;
-
-  const lastBody = Math.abs(last.close - last.open);
-
-  /* -------------------------------------------------
-     BUY BREAKOUT
-  -------------------------------------------------- */
-  if (
-    last.close > rangeHigh &&
-    last.close > prev.close &&
-    lastBody >= avgBody * MOMENTUM_MULT
-  ) {
+  /* BUY momentum */
+  if (last.close > prev.close) {
     const sl = rangeLow;
     const risk = last.close - sl;
     const riskPct = risk / last.close;
 
-    if (riskPct < MIN_RISK_PCT || riskPct > MAX_RISK_PCT) return null;
-
-    const tp1 = last.close + risk;
-
-    if (!(sl < last.close && tp1 > last.close)) return null;
-
-    return {
-      symbol,
-      direction: "BUY",
-      sl,
-      tp1,
-      reason: "STRUCTURE_BREAKOUT_UP",
-    };
+    if (riskPct >= MIN_RISK_PCT && riskPct <= MAX_RISK_PCT) {
+      return {
+        symbol,
+        direction: "BUY",
+        sl,
+        tp1: last.close + risk,
+        reason: "FAST_MOMENTUM_UP",
+      };
+    }
   }
 
-  /* -------------------------------------------------
-     SELL BREAKOUT
-  -------------------------------------------------- */
-  if (
-    last.close < rangeLow &&
-    last.close < prev.close &&
-    lastBody >= avgBody * MOMENTUM_MULT
-  ) {
+  /* SELL momentum */
+  if (last.close < prev.close) {
     const sl = rangeHigh;
     const risk = sl - last.close;
     const riskPct = risk / last.close;
 
-    if (riskPct < MIN_RISK_PCT || riskPct > MAX_RISK_PCT) return null;
-
-    const tp1 = last.close - risk;
-
-    if (!(sl > last.close && tp1 < last.close)) return null;
-
-    return {
-      symbol,
-      direction: "SELL",
-      sl,
-      tp1,
-      reason: "STRUCTURE_BREAKOUT_DOWN",
-    };
+    if (riskPct >= MIN_RISK_PCT && riskPct <= MAX_RISK_PCT) {
+      return {
+        symbol,
+        direction: "SELL",
+        sl,
+        tp1: last.close - risk,
+        reason: "FAST_MOMENTUM_DOWN",
+      };
+    }
   }
 
   return null;
