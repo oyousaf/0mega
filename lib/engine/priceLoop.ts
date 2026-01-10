@@ -125,7 +125,7 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
 
     // executionHelpers is the only authority
     const openRes = await executeTradeIntent({
-      signalId: String(signal.reason), // if you have a numeric signal id elsewhere, pass that instead
+      signalId: String(signal.reason),
       symbol: signal.symbol,
       qty: 1,
       side: signal.direction,
