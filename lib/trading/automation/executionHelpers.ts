@@ -24,10 +24,36 @@ function assertFinite(n: unknown, err: string): number {
   return v;
 }
 
-function assertAbsoluteLevel(level: number, entry: number, label: string) {
-  if (level <= 0) throw new Error(`${label}_NON_POSITIVE`);
-  if (level < entry * 0.5 || level > entry * 1.5) {
-    throw new Error(`${label}_NOT_ABSOLUTE_PRICE`);
+function assertPositive(n: number, err: string) {
+  if (!(n > 0)) throw new Error(err);
+}
+
+/**
+ * Demo-safe validation:
+ * - min distance avoids thrashing
+ * - max distance widened for synthetic candles
+ */
+function validateLevelDistance(params: {
+  entry: number;
+  level: number;
+  label: "SL" | "TP1";
+}) {
+  const { entry, level, label } = params;
+
+  assertPositive(entry, "ENTRY_NON_POSITIVE");
+  assertPositive(level, `${label}_NON_POSITIVE`);
+
+  const dist = Math.abs(entry - level);
+
+  // too close → noise
+  if (dist < entry * 0.0003) {
+    throw new Error(`${label}_TOO_CLOSE`);
+  }
+
+  // too far → bug or broken feed
+  // widened to 50% for demo realism
+  if (dist > entry * 0.5) {
+    throw new Error(`${label}_TOO_FAR`);
   }
 }
 
@@ -41,7 +67,7 @@ export async function executeTradeIntent(intent: {
   side: OrderSide;
   rawSl: number;
   rawTp1?: number | null;
-  entryPrice?: number; // 👈 ADDED
+  entryPrice?: number;
 }): Promise<OpenResult> {
   try {
     const qty = assertFinite(intent.qty, "INVALID_QTY");
@@ -50,33 +76,39 @@ export async function executeTradeIntent(intent: {
     const broker = getBroker();
     const res = await broker.placeOrder(intent.symbol, qty, intent.side);
 
-    if (!res.success) {
+    if (!res.success || !Number.isFinite(res.price)) {
       return { success: false, error: res.error ?? "ORDER_FAILED" };
     }
 
-    // 🔑 SINGLE SOURCE OF TRUTH FOR ENTRY
+    // entry: candle-aligned if supplied, otherwise broker price
     const entry =
       intent.entryPrice != null
         ? assertFinite(intent.entryPrice, "INVALID_ENTRY")
         : assertFinite(res.price, "NO_ENTRY_PRICE");
 
     const sl = assertFinite(intent.rawSl, "INVALID_SL");
-    assertAbsoluteLevel(sl, entry, "SL");
-
     const tp1 =
       intent.rawTp1 != null ? assertFinite(intent.rawTp1, "INVALID_TP") : null;
 
+    // distance sanity
+    validateLevelDistance({ entry, level: sl, label: "SL" });
     if (tp1 != null) {
-      assertAbsoluteLevel(tp1, entry, "TP1");
+      validateLevelDistance({ entry, level: tp1, label: "TP1" });
     }
 
+    // geometry
     const geometryOk =
       intent.side === "BUY"
         ? sl < entry && (tp1 ?? Infinity) > entry
         : sl > entry && (tp1 ?? -Infinity) < entry;
 
     if (!geometryOk) {
-      return { success: false, error: "INVALID_GEOMETRY" };
+      return {
+        success: false,
+        error: `INVALID_GEOMETRY entry=${entry} sl=${sl} tp1=${
+          tp1 ?? "null"
+        } side=${intent.side}`,
+      };
     }
 
     const riskAmount = Math.abs(entry - sl) * qty;

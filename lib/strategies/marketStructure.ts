@@ -23,11 +23,12 @@ type StructureSignal = {
 
 const LOOKBACK = 20;
 
-// tuned for %-based candles
+// tuned for %-based synthetic candles
 const MOMENTUM_MULT = 1.05;
 
-// absolute minimum risk: 0.1%
-const MIN_RISK_PCT = 0.001;
+// risk bounds (strategy responsibility)
+const MIN_RISK_PCT = 0.001; // 0.1%
+const MAX_RISK_PCT = 0.01;  // 1%
 
 export async function runStructureCheck(
   input: StructureInput
@@ -64,13 +65,12 @@ export async function runStructureCheck(
   ) {
     const sl = rangeLow;
     const risk = last.close - sl;
+    const riskPct = risk / last.close;
 
-    // hard absolute floor
-    if (risk <= last.close * MIN_RISK_PCT) return null;
+    if (riskPct < MIN_RISK_PCT || riskPct > MAX_RISK_PCT) return null;
 
     const tp1 = last.close + risk;
 
-    // final geometry guarantee
     if (!(sl < last.close && tp1 > last.close)) return null;
 
     return {
@@ -92,8 +92,9 @@ export async function runStructureCheck(
   ) {
     const sl = rangeHigh;
     const risk = sl - last.close;
+    const riskPct = risk / last.close;
 
-    if (risk <= last.close * MIN_RISK_PCT) return null;
+    if (riskPct < MIN_RISK_PCT || riskPct > MAX_RISK_PCT) return null;
 
     const tp1 = last.close - risk;
 

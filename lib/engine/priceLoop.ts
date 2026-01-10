@@ -17,26 +17,32 @@ const DEFAULT_CONFIG: PriceLoopConfig = {
   pollMs: 5000,
 };
 
-const COOLDOWN_CANDLES = 5;
-let cooldownUntilTs: number | null = null;
+const COOLDOWN_CANDLES = 1;
 
+/* ---------------------------------------
+   LOOP CONTROL
+---------------------------------------- */
 declare global {
   // eslint-disable-next-line no-var
-  var __OMEGA_27_LOOP_ID__: number | undefined;
+  var __OMEGA_PRICE_LOOP_ID__: number | undefined;
 }
 
 function nextLoopId() {
-  const id = (globalThis.__OMEGA_27_LOOP_ID__ ?? 0) + 1;
-  globalThis.__OMEGA_27_LOOP_ID__ = id;
+  const id = (globalThis.__OMEGA_PRICE_LOOP_ID__ ?? 0) + 1;
+  globalThis.__OMEGA_PRICE_LOOP_ID__ = id;
   return id;
 }
 
 function currentLoopId() {
-  return globalThis.__OMEGA_27_LOOP_ID__ ?? 0;
+  return globalThis.__OMEGA_PRICE_LOOP_ID__ ?? 0;
 }
 
 let lastCandleTs: number | null = null;
+let cooldownUntilTs: number | null = null;
 
+/* ---------------------------------------
+   PUBLIC API
+---------------------------------------- */
 export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
   const loopId = nextLoopId();
   const cfg = { ...DEFAULT_CONFIG, ...config };
@@ -53,10 +59,8 @@ export async function startPriceLoop(config: Partial<PriceLoopConfig> = {}) {
     }
 
     const sleep = Math.max(cfg.pollMs - (Date.now() - started), 0);
-    await delay(sleep);
+    await new Promise((r) => setTimeout(r, sleep));
   }
-
-  console.log("[PRICE_LOOP] exited cleanly", "loopId=", loopId);
 }
 
 export function stopPriceLoop() {
@@ -64,6 +68,9 @@ export function stopPriceLoop() {
   console.log("[PRICE_LOOP] stop requested");
 }
 
+/* ---------------------------------------
+   CORE TICK
+---------------------------------------- */
 async function tick(cfg: PriceLoopConfig, loopId: number) {
   if (currentLoopId() !== loopId) return;
 
@@ -80,36 +87,41 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     close: latest.close,
   });
 
-  // exits always run
+  /* ---------- EXIT ---------- */
   const exited = await runExitWatcher(latest.close);
   if (exited) {
     cooldownUntilTs = latest.timestamp + COOLDOWN_CANDLES * cfg.pollMs;
-    console.log("[COOLDOWN] started");
-  }
-
-  if (cooldownUntilTs && latest.timestamp < cooldownUntilTs) {
-    console.log("[COOLDOWN] active, skipping entry");
     return;
   }
 
+  if (cooldownUntilTs && latest.timestamp < cooldownUntilTs) {
+    return;
+  }
+
+  /* ---------- STRUCTURE ---------- */
   const signal = await runStructureCheck({
     symbol: cfg.symbol,
     timeframe: cfg.timeframe,
     candles,
   });
 
-  if (!signal) {
-    console.log("[PRICE_LOOP] no structure");
+  if (!signal) return;
+
+  const entry = latest.close;
+  const sl = signal.sl;
+
+  // Direction-safe risk
+  const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
+
+  if (!Number.isFinite(riskDist) || riskDist <= entry * 0.0003) {
+    console.warn("[SKIP] invalid risk distance", { entry, sl });
     return;
   }
 
-  console.log("[STRUCTURE_SIGNAL]", signal);
+  const tp1 = signal.direction === "BUY" ? entry + riskDist : entry - riskDist;
 
-  const risk = await riskGate(signal, latest.close);
-  if (!risk.allowed) {
-    console.warn("[RISK_BLOCK]", risk.reason);
-    return;
-  }
+  const risk = await riskGate(signal, entry);
+  if (!risk.allowed) return;
 
   await withDbLock(async () => {
     if (currentLoopId() !== loopId) return;
@@ -117,20 +129,16 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
     const { rows } = await pool.query(
       `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
     );
+    if (rows.length) return;
 
-    if (rows.length) {
-      console.log("[PRICE_LOOP] trade already active");
-      return;
-    }
-
-    // executionHelpers is the only authority
     const openRes = await executeTradeIntent({
-      signalId: String(signal.reason),
+      signalId: signal.reason,
       symbol: signal.symbol,
       qty: 1,
       side: signal.direction,
-      rawSl: signal.sl,
-      rawTp1: signal.tp1 ?? null,
+      rawSl: sl,
+      rawTp1: tp1,
+      entryPrice: entry,
     });
 
     if (!openRes.success) {
@@ -138,13 +146,18 @@ async function tick(cfg: PriceLoopConfig, loopId: number) {
       return;
     }
 
-    console.log("[PRICE_LOOP] trade opened", {
-      tradeId: openRes.tradeId,
+    console.log("[TRADE_OPENED]", {
       side: signal.direction,
+      entry,
+      sl,
+      tp1,
     });
   });
 }
 
+/* ---------------------------------------
+   DB LOCK
+---------------------------------------- */
 async function withDbLock(fn: () => Promise<void>) {
   await pool.query("BEGIN");
   try {
@@ -155,8 +168,4 @@ async function withDbLock(fn: () => Promise<void>) {
     await pool.query("ROLLBACK");
     throw e;
   }
-}
-
-function delay(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
 }

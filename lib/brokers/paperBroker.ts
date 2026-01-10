@@ -1,36 +1,34 @@
-import {
-  BrokerAdapter,
-  Market,
-  PlaceOrderParams,
-} from "./types";
-
-export class PaperBroker implements BrokerAdapter {
-  name = "paper";
-  market: Market;
-
-  constructor(market: Market) {
-    this.market = market;
-  }
-
-  async connect() {}
-
-  async healthCheck() {
-    return true;
-  }
+export class PaperBroker {
+  private lastPrice: number = 50_000;
 
   async fetchBalance() {
-    return [
-      { currency: "USD", free: 10000, used: 0, total: 10000 },
-    ];
+    return { cash: 100_000, equity: 100_000 };
   }
 
   async fetchPositions() {
     return [];
   }
 
-  async placeOrder(params: PlaceOrderParams) {
-    return { orderId: `paper-${Date.now()}` };
+  /**
+   * Price MUST exist.
+   * For demo: assume instant fill at last known price.
+   */
+  async placeOrder(symbol: string, qty: number, side: "BUY" | "SELL") {
+    return {
+      success: true,
+      orderId: `paper-${Date.now()}`,
+      price: this.lastPrice,
+    };
   }
 
-  async cancelOrder() {}
+  /**
+   * Allow price injection from price loop
+   */
+  setPrice(price: number) {
+    this.lastPrice = price;
+  }
+
+  async closeOrder() {
+    return { success: true };
+  }
 }
