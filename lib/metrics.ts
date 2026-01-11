@@ -9,9 +9,9 @@ export interface DashboardMetrics {
 
 /* -------------------------------------------------------
    Compute metrics from CLOSED trades only
-   - Uses realised PnL
-   - Uses TRUE R multiple (PnL / risk_amount)
-   - Breakevens excluded
+   - Uses realised PnL for win/loss
+   - Uses stored RR as R multiple
+   - Breakevens excluded from expectancy
 ------------------------------------------------------- */
 export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
   if (!Array.isArray(trades) || trades.length === 0) {
@@ -38,23 +38,19 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
     if (!t.is_closed) continue;
 
     const pl = Number(t.realised_pl);
-    const risk = Number((t as any).risk_amount);
+    if (!Number.isFinite(pl) || pl === 0) continue;
 
-    if (!Number.isFinite(pl) || !Number.isFinite(risk)) continue;
-    if (risk <= 0) continue;
-    if (pl === 0) continue;
+    const rr = Number(t.rr);
+    if (!Number.isFinite(rr) || rr <= 0) continue;
 
-    /* -------- R MULTIPLE -------- */
-    const r = pl / risk;
-
-    if (r > 0) {
+    if (pl > 0) {
       wins++;
-      totalWinR += r;
-      if ((t as any).halaal !== false) halaalWins++;
+      totalWinR += rr;
       grossProfit += pl;
+      if ((t as any).halaal !== false) halaalWins++;
     } else {
       losses++;
-      totalLossR += Math.abs(r);
+      totalLossR += rr;
       grossLoss += Math.abs(pl);
     }
   }
@@ -63,14 +59,15 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
 
   const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
 
-  /* -------- EXPECTANCY -------- */
+  /* -------- EXPECTANCY (R) -------- */
   const avgWinR = wins > 0 ? totalWinR / wins : 0;
   const avgLossR = losses > 0 ? totalLossR / losses : 0;
 
   const expectancy =
     total > 0
       ? Number(
-          ((wins / total) * avgWinR - (losses / total) * avgLossR).toFixed(2)
+          ((wins / total) * avgWinR -
+            (losses / total) * avgLossR).toFixed(2)
         )
       : 0;
 

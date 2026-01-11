@@ -11,7 +11,7 @@ const iso = (v: any) => {
 };
 
 /* -------------------------------------------------------
-   TRADE HISTORY (EXECUTION-ONLY)
+   TRADE HISTORY (EXECUTION-ONLY + RR/HALAAL PATCH)
 ------------------------------------------------------- */
 export async function GET(req: Request) {
   try {
@@ -19,13 +19,11 @@ export async function GET(req: Request) {
 
     const isAnalytics = searchParams.get("analytics") === "1";
     const rawLimit = n(searchParams.get("limit") ?? 20);
-
     const limit = isAnalytics ? rawLimit || 10_000 : Math.min(rawLimit, 50);
-
     const offset = Math.max(n(searchParams.get("offset") ?? 0), 0);
 
     /* -------------------------------------------------
-       1. Get trade_ids for this page
+       1. Page trade_ids by execution activity
     -------------------------------------------------- */
     const { rows: tradeRows } = await pool.query(
       `
@@ -48,7 +46,7 @@ export async function GET(req: Request) {
     const pageTradeIds = tradeRows.slice(0, limit).map((r) => r.trade_id);
 
     /* -------------------------------------------------
-       2. Fetch executions for those trade_ids
+       2. Fetch executions
     -------------------------------------------------- */
     const { rows: execRows } = await pool.query(
       `
@@ -68,7 +66,27 @@ export async function GET(req: Request) {
     );
 
     /* -------------------------------------------------
-       3. Group executions by trade_id
+       3. Fetch trade metadata (RR + halaal ONLY)
+    -------------------------------------------------- */
+    const { rows: tradeMeta } = await pool.query(
+      `
+      SELECT
+        id,
+        rr,
+        halaal
+      FROM paper_trades
+      WHERE id = ANY($1)
+      `,
+      [pageTradeIds]
+    );
+
+    const metaMap: Record<string, any> = {};
+    for (const r of tradeMeta) {
+      metaMap[String(r.id)] = r;
+    }
+
+    /* -------------------------------------------------
+       4. Group executions by trade_id
     -------------------------------------------------- */
     const tradeMap: Record<string, any[]> = {};
 
@@ -87,7 +105,7 @@ export async function GET(req: Request) {
     }
 
     /* -------------------------------------------------
-       4. Build trade objects
+       5. Build trade objects
     -------------------------------------------------- */
     const trades = pageTradeIds.map((trade_id) => {
       const executions = tradeMap[String(trade_id)] ?? [];
@@ -95,14 +113,16 @@ export async function GET(req: Request) {
       const exit =
         executions.length > 1 ? executions[executions.length - 1] : null;
 
-      const isBuy = entry.side === "BUY";
       const qty = entry.qty;
+      const isBuy = entry.side === "BUY";
 
       const realised_pl = exit
         ? isBuy
           ? (exit.price - entry.price) * qty
           : (entry.price - exit.price) * qty
         : null;
+
+      const meta = metaMap[String(trade_id)] ?? {};
 
       return {
         trade_id,
@@ -120,18 +140,17 @@ export async function GET(req: Request) {
         closed_at: exit?.time ?? null,
         is_closed: Boolean(exit),
 
+        // strategy stays hard-coded (no DB column)
         strategy: "Structure",
-        rr: null,
-        halaal: true,
+
+        rr: Number.isFinite(Number(meta.rr)) ? Number(meta.rr) : null,
+        halaal: meta.halaal ?? true,
 
         executions,
       };
     });
 
-    return NextResponse.json({
-      trades,
-      hasMore,
-    });
+    return NextResponse.json({ trades, hasMore });
   } catch (err: any) {
     console.error("History route error:", err);
     return NextResponse.json(
