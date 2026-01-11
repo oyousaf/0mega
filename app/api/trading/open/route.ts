@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
 /* ---------------------------------------------
-   Canonical mark price resolver
+   Canonical mark price resolver (SERVER SAFE)
 --------------------------------------------- */
-async function getMarkPrice(symbol: string): Promise<number | null> {
+async function getMarkPrice(
+  origin: string,
+  symbol: string
+): Promise<number | null> {
   try {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/api/prices/crypto/${symbol}`,
+      `${origin}/api/prices/crypto/${symbol}`,
       { cache: "no-store" }
     );
 
@@ -32,8 +35,10 @@ async function getMarkPrice(symbol: string): Promise<number | null> {
 /* ---------------------------------------------
    OPEN TRADES (CANONICAL)
 --------------------------------------------- */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const origin = new URL(req.url).origin;
+
     const { rows } = await pool.query(`
       SELECT
         id AS trade_id,
@@ -52,21 +57,24 @@ export async function GET() {
 
     const positions = await Promise.all(
       rows.map(async (t: any) => {
-        const mark = await getMarkPrice(t.symbol);
+        const entry = Number(t.entry_price);
+        const qty = Number(t.qty);
+
+        const mark = await getMarkPrice(origin, t.symbol);
 
         const unrealised =
-          mark != null
+          mark != null && Number.isFinite(entry) && Number.isFinite(qty)
             ? t.side === "BUY"
-              ? (mark - Number(t.entry_price)) * Number(t.qty)
-              : (Number(t.entry_price) - mark) * Number(t.qty)
+              ? (mark - entry) * qty
+              : (entry - mark) * qty
             : null;
 
         return {
           trade_id: Number(t.trade_id),
           symbol: t.symbol,
           side: t.side,
-          entry_price: Number(t.entry_price),
-          qty: Number(t.qty),
+          entry_price: entry,
+          qty,
           opened_at: t.opened_at,
           sl: t.sl != null ? Number(t.sl) : null,
           tp1: t.tp1 != null ? Number(t.tp1) : null,
