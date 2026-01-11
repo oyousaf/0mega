@@ -190,7 +190,7 @@ export default function TradeHistoryWidget() {
                         <div className="text-right">
                           Qty {e.qty} • {e.broker}
                           <br />
-                          <span className="opacity-60">{fmtDate(e.time)}</span>
+                          <span className="opacity-60">{fmtDate(e.timestamp)}</span>
                         </div>
                       </div>
                     ))}
