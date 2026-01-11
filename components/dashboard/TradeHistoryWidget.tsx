@@ -30,7 +30,6 @@ export default function TradeHistoryWidget() {
      Helpers
   --------------------------------------------- */
   const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-
   const fmt = (v: unknown) =>
     Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
 
@@ -63,7 +62,6 @@ export default function TradeHistoryWidget() {
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
       setItems((prev) => (append ? mergeTrades(prev, trades) : trades));
-
       setHasMore(Boolean(json.hasMore));
       setOffset(nextOffset);
     } catch (err) {
@@ -128,9 +126,11 @@ export default function TradeHistoryWidget() {
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 1.5 }} />
 
+        {/* SCROLL CONTAINER */}
         <div
           ref={containerRef}
-          style={{ maxHeight: 520, overflowY: "auto", paddingRight: 6 }}
+          className="trade-history-scroll"
+          style={{ maxHeight: 520, paddingRight: 6 }}
         >
           {items.map((t) => {
             const isOpen = openRow === t.trade_id;
@@ -190,9 +190,7 @@ export default function TradeHistoryWidget() {
                         <div className="text-right">
                           Qty {e.qty} • {e.broker}
                           <br />
-                          <span className="opacity-60">
-                            {fmtDate(e.timestamp)}
-                          </span>
+                          <span className="opacity-60">{fmtDate(e.time)}</span>
                         </div>
                       </div>
                     ))}
