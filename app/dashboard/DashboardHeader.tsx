@@ -64,7 +64,7 @@ export default function DashboardHeader({
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
+              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega transition-colors duration-300"
             >
               <FiHome size={16} />
             </motion.button>
@@ -72,7 +72,6 @@ export default function DashboardHeader({
             <motion.h1
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               className="text-base sm:text-xl md:text-2xl font-semibold text-omega-gold text-center leading-none select-none"
             >
               𝛀mega
@@ -82,8 +81,7 @@ export default function DashboardHeader({
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={toggleAutomation}
-                title={enabled ? "Automation enabled" : "Automation disabled"}
-                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold ${cpuColor} hover-omega`}
+                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold ${cpuColor} hover-omega transition-colors duration-300`}
               >
                 <FiCpu size={16} />
               </motion.button>
@@ -91,7 +89,7 @@ export default function DashboardHeader({
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={onOpenSettings}
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
+                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega transition-colors duration-300"
               >
                 <FiSettings size={16} />
               </motion.button>

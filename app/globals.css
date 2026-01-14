@@ -51,20 +51,32 @@ textarea {
 }
 
 /* =========================================================
-   Omega Utility Classes
+   Omega Utilities
 ========================================================= */
 
 /* Text */
-.text-omega-gold { color: var(--omega-gold); }
-.text-omega-green { color: var(--omega-green); }
-.text-omega-dark-gold { color: var(--omega-dark-gold); }
+.text-omega-gold {
+  color: var(--omega-gold);
+}
+.text-omega-green {
+  color: var(--omega-green);
+}
+.text-omega-dark-gold {
+  color: var(--omega-dark-gold);
+}
 
 /* Backgrounds */
-.bg-omega-green { background-color: var(--omega-green); }
-.bg-omega-green-soft { background-color: var(--omega-green-soft); }
+.bg-omega-green {
+  background-color: var(--omega-green);
+}
+.bg-omega-green-soft {
+  background-color: var(--omega-green-soft);
+}
 
 /* Borders */
-.border-omega-dark-gold { border-color: var(--omega-dark-gold); }
+.border-omega-dark-gold {
+  border-color: var(--omega-dark-gold);
+}
 
 /* Hover */
 .hover-omega:hover {
@@ -91,14 +103,14 @@ textarea {
   font-weight: 600;
   border-radius: 0.5rem;
   padding: 0.6rem 1rem;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 300ms ease, color 300ms ease;
 }
 
 .omega-button:hover {
   background: var(--omega-dark-gold);
 }
 
-/* Diagnostic / test buttons */
+/* Diagnostic buttons */
 .omega-test-btn {
   padding: 0.55rem 0.9rem;
   border-radius: 0.5rem;
@@ -106,7 +118,7 @@ textarea {
   background: var(--omega-green-soft);
   color: var(--omega-gold);
   font-weight: 600;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 300ms ease, color 300ms ease;
 }
 
 .omega-test-btn:hover {
