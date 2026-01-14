@@ -24,10 +24,7 @@ function safeNum(n: any) {
 }
 
 function computeStrategies(trades: Trade[]): StrategySummary[] {
-  const map = new Map<
-    string,
-    StrategySummary & { rrCount: number }
-  >();
+  const map = new Map<string, StrategySummary & { rrCount: number }>();
 
   for (const t of trades) {
     if (
@@ -98,10 +95,9 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
         borderRadius: "1rem",
         padding: "1rem",
         border: `1px solid ${omega.sep}`,
-        marginTop: "2rem",
       }}
     >
-      <h2 className="text-xl font-semibold text-omega-gold mb-4">
+      <h2 className="text-xl font-semibold text-omega-gold mb-4 text-center">
         🔥 Strategy Performance
       </h2>
 
@@ -127,11 +123,17 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
 
               <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
                 <div className="text-omega-gold">
-                  Win <span className="font-semibold">{row.winRate.toFixed(1)}%</span>
+                  Win{" "}
+                  <span className="font-semibold">
+                    {row.winRate.toFixed(1)}%
+                  </span>
                 </div>
+
                 <div className="text-omega-gold text-center">
-                  PnL <span className="font-semibold">{row.pnl.toFixed(2)}%</span>
+                  PnL{" "}
+                  <span className="font-semibold">{row.pnl.toFixed(2)}%</span>
                 </div>
+
                 <div className="text-omega-gold text-right">
                   RR <span className="font-semibold">{row.rr.toFixed(2)}</span>
                 </div>

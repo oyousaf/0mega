@@ -37,10 +37,9 @@ function computeSymbols(trades: Trade[]): SymbolSummary[] {
     if (t.realised_pl == null) continue;
 
     const pl = Number(t.realised_pl);
-    if (!Number.isFinite(pl) || pl === 0) continue
+    if (!Number.isFinite(pl) || pl === 0) continue;
 
     const row = map.get(symbol)!;
-
     row.trades++;
     if (pl > 0) row.wins++;
     if (pl < 0) row.losses++;
@@ -59,7 +58,6 @@ function computeSymbols(trades: Trade[]): SymbolSummary[] {
 ---------------------------------------------------------- */
 export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-
   const data = useMemo(() => computeSymbols(trades), [trades]);
 
   return (
@@ -69,10 +67,9 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
         borderRadius: "1rem",
         padding: "1rem",
         border: `1px solid ${omega.sep}`,
-        marginTop: "2rem",
       }}
     >
-      <h2 className="text-xl font-semibold text-omega-gold mb-4">
+      <h2 className="text-xl font-semibold text-omega-gold mb-4 text-center">
         📊 Symbol Performance
       </h2>
 
@@ -84,13 +81,8 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
             <motion.div
               key={row.symbol}
               layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.15 }}
               className="rounded-lg border border-omega-dark-gold bg-black/40 p-4 cursor-pointer"
-              onClick={() =>
-                setExpanded(open ? null : row.symbol)
-              }
+              onClick={() => setExpanded(open ? null : row.symbol)}
             >
               {/* HEADER */}
               <div className="flex items-center justify-between gap-3">
@@ -103,7 +95,7 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
                 </span>
               </div>
 
-              {/* METRICS (MOBILE-FIRST STACK) */}
+              {/* METRICS */}
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
                 <div className="text-omega-gold">
                   Win
@@ -114,16 +106,12 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
 
                 <div className="text-omega-gold sm:text-center">
                   Wins
-                  <span className="ml-1 font-semibold">
-                    {row.wins}
-                  </span>
+                  <span className="ml-1 font-semibold">{row.wins}</span>
                 </div>
 
                 <div className="text-omega-gold sm:text-right">
                   Losses
-                  <span className="ml-1 font-semibold">
-                    {row.losses}
-                  </span>
+                  <span className="ml-1 font-semibold">{row.losses}</span>
                 </div>
               </div>
 
@@ -140,9 +128,7 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         Total Trades
-                        <span className="ml-1 font-semibold">
-                          {row.trades}
-                        </span>
+                        <span className="ml-1 font-semibold">{row.trades}</span>
                       </div>
 
                       <div className="text-right">

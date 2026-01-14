@@ -8,13 +8,8 @@ import { Box } from "@mui/material";
 function isHalaalTrade(t: Trade): boolean {
   const s = t.symbol.toUpperCase();
 
-  // Crypto
   if (s.endsWith("USDT") || s.endsWith("BTC") || s.endsWith("ETH")) return true;
-
-  // Forex majors (paper trading = no swaps)
   if (/^[A-Z]{6}$/.test(s)) return true;
-
-  // Stocks (placeholder – full screening later)
   if (/^[A-Z]{1,5}$/.test(s)) return true;
 
   return false;
@@ -25,9 +20,7 @@ function hasExecuted(t: Trade): boolean {
 }
 
 export default function HalaalTracker({ trades }: { trades: Trade[] }) {
-  // STRICT: only executed trades count
   const executed = trades.filter(hasExecuted);
-
   const total = executed.length;
 
   const halal = executed.filter((t) =>
@@ -35,7 +28,6 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
   ).length;
 
   const nonHalal = total - halal;
-
   const percent = total > 0 ? Math.round((halal / total) * 100) : 0;
 
   const badgeColor =
@@ -53,16 +45,19 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
           border: omega.cardBorder,
           boxShadow: omega.cardShadow,
           borderRadius: "1rem",
-          padding: "1.2rem",
-          marginTop: "2rem",
+          padding: "1rem",
         }}
       >
-        <h2 className="text-xl font-semibold text-omega-gold mb-3">
+        <h2
+          className="text-xl font-semibold text-omega-gold mb-3 text-center"
+        >
           🕌 Halaal Compliance
         </h2>
 
-        {/* METRICS ROW */}
-        <div className="grid grid-cols-3 gap-4 text-center text-omega-gold">
+        {/* METRICS */}
+        <div
+          className="grid grid-cols-3 gap-4 text-center text-omega-gold"
+        >
           <div>
             <p className="opacity-70 text-sm">EXECUTED</p>
             <p className="font-bold text-lg">{total}</p>
@@ -82,9 +77,9 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
         {/* BADGE */}
         <div className="flex justify-center mt-4">
           <motion.div
-            initial={{ scale: 0.9 }}
+            initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.25 }}
             style={{
               background: badgeColor,
               color: omega.bg,

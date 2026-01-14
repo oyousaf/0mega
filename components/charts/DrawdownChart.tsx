@@ -26,12 +26,15 @@ type DrawdownPoint = {
 export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
   const { ref, size } = useElementSize<HTMLDivElement>();
 
-  const safeData = useMemo(() => {
-    if (!Array.isArray(data)) return [];
-    return data.filter(
-      (d) => typeof d.drawdown === "number" && Number.isFinite(d.drawdown)
-    );
-  }, [data]);
+  const safeData = useMemo(
+    () =>
+      Array.isArray(data)
+        ? data.filter(
+            (d) => typeof d.drawdown === "number" && Number.isFinite(d.drawdown)
+          )
+        : [],
+    [data]
+  );
 
   const maxDD = useMemo(() => {
     if (!safeData.length) return -1;
@@ -53,16 +56,9 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
         flexDirection: "column",
       }}
     >
-      <div style={{ padding: "0.75rem 1rem 0.25rem" }}>
-        <h3
-          style={{
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            color: omega.gold,
-            opacity: 0.85,
-          }}
-        >
-          ↓ Drawdown (%)
+      <div style={{ padding: "0.75rem 1rem 0.25rem", textAlign: "center" }}>
+        <h3 style={{ fontSize: "0.9rem", fontWeight: 600, color: omega.gold }}>
+          📉 Drawdown (%)
         </h3>
       </div>
 
@@ -70,7 +66,9 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
         {size.width > 0 && size.height > 0 && (
           <AreaChart width={size.width} height={size.height} data={safeData}>
             <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
+
             <XAxis dataKey="date" hide />
+
             <YAxis
               stroke={omega.gold}
               tick={{ fill: omega.gold, fontSize: 11 }}
@@ -81,6 +79,7 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               tickFormatter={(v) => `${Math.abs(v)}%`}
               width={40}
             />
+
             <Tooltip
               formatter={(v) =>
                 typeof v === "number" ? `${Math.abs(v).toFixed(2)}%` : "—"
@@ -92,6 +91,7 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
                 fontSize: 12,
               }}
             />
+
             <Area
               type="monotone"
               dataKey="drawdown"

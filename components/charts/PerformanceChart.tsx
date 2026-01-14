@@ -7,7 +7,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  ResponsiveContainer,
 } from "recharts";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
@@ -42,15 +41,16 @@ function fmtMoney(v: any) {
 
 export default function PerformanceChart({ data }: Props) {
   const { ref, size } = useElementSize<HTMLDivElement>();
-
   const compact = size.width > 0 && size.width < 520;
 
   const formatted = useMemo(
     () =>
-      data.map((d) => ({
-        date: fmtShortDate(d.date, compact),
-        cumulative: Number(d.cumulative) || 0,
-      })),
+      Array.isArray(data)
+        ? data.map((d) => ({
+            date: fmtShortDate(d.date, compact),
+            cumulative: Number(d.cumulative) || 0,
+          }))
+        : [],
     [data, compact]
   );
 
@@ -62,8 +62,9 @@ export default function PerformanceChart({ data }: Props) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
-      className="w-full h-full"
       style={{
+        width: "100%",
+        height: "100%",
         background: omega.green,
         border: "1px solid var(--omega-dark-gold)",
         borderRadius: "0.75rem",
@@ -71,59 +72,56 @@ export default function PerformanceChart({ data }: Props) {
         flexDirection: "column",
       }}
     >
-      <div className="px-4 pt-3 pb-1 text-center">
-        <h2 className="text-xl font-semibold text-omega-gold">
+      <div style={{ padding: "0.75rem 1rem 0.25rem", textAlign: "center" }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, color: omega.gold }}>
           📈 Equity Curve
         </h2>
       </div>
 
       <div ref={ref} style={{ flex: 1, padding: "0 1rem 1rem" }}>
         {size.width > 0 && size.height > 0 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={formatted}
-              margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
-            >
-              <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
+          <LineChart
+            width={size.width}
+            height={size.height}
+            data={formatted}
+            margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
 
-              <XAxis
-                dataKey="date"
-                stroke={omega.gold}
-                tick={{ fill: omega.gold, fontSize: compact ? 10 : 11 }}
-                interval="preserveStartEnd"
-                minTickGap={compact ? 18 : 28}
-                tickCount={tickCount}
-              />
+            <XAxis
+              dataKey="date"
+              stroke={omega.gold}
+              tick={{ fill: omega.gold, fontSize: compact ? 10 : 11 }}
+              interval="preserveStartEnd"
+              minTickGap={compact ? 18 : 28}
+              tickCount={tickCount}
+            />
 
-              <YAxis
-                stroke={omega.gold}
-                tick={{ fill: omega.gold, fontSize: compact ? 10 : 11 }}
-                width={yWidth}
-                tickFormatter={fmtMoney}
-              />
+            <YAxis
+              stroke={omega.gold}
+              tick={{ fill: omega.gold, fontSize: compact ? 10 : 11 }}
+              width={yWidth}
+              tickFormatter={fmtMoney}
+            />
 
-              <Tooltip
-                wrapperStyle={{ outline: "none" }}
-                contentStyle={{
-                  background: omega.green,
-                  border: "1px solid var(--omega-dark-gold)",
-                  color: omega.gold,
-                  fontSize: 12,
-                }}
-                labelStyle={{ color: omega.gold, opacity: 0.8 }}
-                formatter={(value: any) => [`£${fmtMoney(value)}`, "Equity"]}
-              />
+            <Tooltip
+              contentStyle={{
+                background: omega.green,
+                border: "1px solid var(--omega-dark-gold)",
+                color: omega.gold,
+                fontSize: 12,
+              }}
+              formatter={(v: any) => [`£${fmtMoney(v)}`, "Equity"]}
+            />
 
-              <Line
-                type="monotone"
-                dataKey="cumulative"
-                stroke={omega.gold}
-                strokeWidth={2.5}
-                dot={false}
-                isAnimationActive
-              />
-            </LineChart>
-          </ResponsiveContainer>
+            <Line
+              type="monotone"
+              dataKey="cumulative"
+              stroke={omega.gold}
+              strokeWidth={2.5}
+              dot={false}
+            />
+          </LineChart>
         )}
       </div>
     </motion.div>
