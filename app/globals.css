@@ -107,15 +107,11 @@ body {
 .omega-test-btn {
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
-
   background-color: #0f2a1f;
   color: #d4af37;
-
   border: 1px solid #7a6325;
-
   font-weight: 600;
   cursor: pointer;
-
   transition: background-color 150ms ease, color 150ms ease;
 }
 
