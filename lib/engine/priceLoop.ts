@@ -11,6 +11,13 @@ import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 const SYMBOL = "BTCUSDT";
 const POLL_MS = 5000;
 
+// Payoff geometry
+const RR_TARGET = 1.25;
+
+// Volatility filter
+const VOL_WINDOW = 20; // candles
+const MIN_VOL_PCT = 0.0012; // 0.12% average abs move per candle
+
 /* ---------------------------------------
    LOOP CONTROL
 ---------------------------------------- */
@@ -27,6 +34,20 @@ function nextLoopId() {
 
 function currentLoopId() {
   return globalThis.__OMEGA_PRICE_LOOP_ID__ ?? 0;
+}
+
+function avgAbsReturnPct(closes: number[]) {
+  if (closes.length < 3) return 0;
+  let sum = 0;
+  let count = 0;
+  for (let i = 1; i < closes.length; i++) {
+    const a = closes[i - 1];
+    const b = closes[i];
+    if (!(a > 0) || !Number.isFinite(a) || !Number.isFinite(b)) continue;
+    sum += Math.abs(b - a) / a;
+    count++;
+  }
+  return count ? sum / count : 0;
 }
 
 /* ---------------------------------------
@@ -47,14 +68,23 @@ export async function startPriceLoop() {
 
       /* EXIT — every tick */
       const exited = await runExitWatcher(latest.close);
-      if (exited) {
-        console.log("[EXIT] trade closed");
-      }
+      if (exited) console.log("[EXIT] trade closed");
 
       console.log("[PRICE_LOOP] tick", {
         ts: latest.timestamp,
         close: latest.close,
       });
+
+      /* VOL FILTER (skip chop) */
+      const closes = candles
+        .slice(-VOL_WINDOW)
+        .map((c) => Number(c.close))
+        .filter((v) => Number.isFinite(v));
+
+      const vol = avgAbsReturnPct(closes);
+      if (vol < MIN_VOL_PCT) {
+        continue;
+      }
 
       /* ENTRY */
       const signal = await runStructureCheck({
@@ -64,43 +94,56 @@ export async function startPriceLoop() {
       });
 
       if (signal) {
-        const entry = latest.close;
-        const sl = signal.sl;
+        const entry = Number(latest.close);
+        const sl = Number(signal.sl);
+
+        if (!Number.isFinite(entry) || !Number.isFinite(sl)) continue;
+
         const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
 
-        if (Number.isFinite(riskDist) && riskDist > entry * 0.0002) {
-          const tp1 =
-            signal.direction === "BUY" ? entry + riskDist : entry - riskDist;
+        // basic sanity: avoid tiny SL distance
+        if (!(Number.isFinite(riskDist) && riskDist > entry * 0.0002)) {
+          continue;
+        }
 
-          const risk = await riskGate(signal, entry);
-          if (risk.allowed) {
-            await withDbLock(async () => {
-              const { rows } = await pool.query(
-                `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
-              );
-              if (rows.length) return;
+        // RR target TP
+        const tp1 =
+          signal.direction === "BUY"
+            ? entry + riskDist * RR_TARGET
+            : entry - riskDist * RR_TARGET;
 
-              const res = await executeTradeIntent({
-                signalId: signal.reason,
-                symbol: SYMBOL,
-                qty: 1,
-                side: signal.direction,
-                rawSl: sl,
-                rawTp1: tp1,
-                entryPrice: entry,
-              });
+        const risk = await riskGate(signal, entry);
+        if (risk.allowed) {
+          await withDbLock(async () => {
+            const { rows } = await pool.query(
+              `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
+            );
+            if (rows.length) return;
 
-              if (res.success) {
-                console.log("[TRADE_OPENED]", {
-                  tradeId: res.tradeId,
-                  side: signal.direction,
-                  entry,
-                  sl,
-                  tp1,
-                });
-              }
+            const res = await executeTradeIntent({
+              signalId: signal.reason,
+              symbol: SYMBOL,
+              qty: 1,
+              side: signal.direction,
+              rawSl: sl,
+              rawTp1: tp1,
+              entryPrice: entry,
             });
-          }
+
+            if (res.success) {
+              console.log("[TRADE_OPENED]", {
+                tradeId: res.tradeId,
+                side: signal.direction,
+                entry,
+                sl,
+                tp1,
+                rrTarget: RR_TARGET,
+                volPct: Number((vol * 100).toFixed(3)),
+              });
+            }
+          });
+        } else {
+          console.log("[ENTRY_BLOCKED]", { reason: risk.reason });
         }
       }
     } catch (err) {

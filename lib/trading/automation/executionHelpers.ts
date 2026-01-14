@@ -85,9 +85,7 @@ export async function executeTradeIntent(intent: {
       intent.rawTp1 != null ? assertFinite(intent.rawTp1, "INVALID_TP") : null;
 
     validateLevelDistance({ entry, level: sl, label: "SL" });
-    if (tp1 != null) {
-      validateLevelDistance({ entry, level: tp1, label: "TP1" });
-    }
+    if (tp1 != null) validateLevelDistance({ entry, level: tp1, label: "TP1" });
 
     const geometryOk =
       intent.side === "BUY"
@@ -208,7 +206,6 @@ export async function closeTrade(
       `
       UPDATE paper_trades
       SET
-        qty = 0,
         is_closed = true,
         realised_pl = $1,
         exit_price = $2,
