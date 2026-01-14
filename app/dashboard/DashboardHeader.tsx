@@ -12,25 +12,21 @@ export default function DashboardHeader({
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /* ---------------------------------------------
-     LOAD AUTOMATION STATE
-  --------------------------------------------- */
+  /* LOAD AUTOMATION STATE */
   useEffect(() => {
     fetch("/api/automation/status", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => {
-        if (j?.automation && typeof j.automation.enabled === "boolean") {
-          setEnabled(j.automation.enabled);
-        } else {
-          setEnabled(false);
-        }
-      })
+      .then((j) =>
+        setEnabled(
+          typeof j?.automation?.enabled === "boolean"
+            ? j.automation.enabled
+            : false
+        )
+      )
       .catch(() => setEnabled(false));
   }, []);
 
-  /* ---------------------------------------------
-     TOGGLE
-  --------------------------------------------- */
+  /* TOGGLE */
   async function toggleAutomation() {
     if (busy || enabled === null) return;
 
@@ -57,19 +53,26 @@ export default function DashboardHeader({
 
   const cpuColor =
     enabled === null
-      ? "text-omega-gold/60"
+      ? "text-omega-gold"
       : enabled
       ? "text-green-400"
       : "text-red-400";
 
   return (
     <>
-      <div className="sticky top-0 z-50 bg-transparent pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      {/* STICKY OFFSET */}
+      <div
+        className="sticky top-0 z-50"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+      >
         <div className="mx-auto max-w-7xl px-2 sm:px-4">
+          {/* HEADER BAR */}
           <div
             className="grid grid-cols-[auto_1fr_auto] items-center rounded-xl px-3 py-2 sm:px-4 sm:py-3
-              backdrop-blur bg-omega-green/70 border border-omega-dark-gold overflow-hidden"
+              backdrop-blur border border-omega-dark-gold overflow-hidden"
+            style={{ backgroundColor: "rgba(0, 72, 48, 0.7)" }}
           >
+            {/* HOME */}
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -79,17 +82,17 @@ export default function DashboardHeader({
               <FiHome size={16} />
             </motion.button>
 
+            {/* TITLE */}
             <motion.h1
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="text-base sm:text-xl md:text-2xl font-semibold
-                text-omega-gold cursor-pointer select-none
-                text-center leading-none"
+              className="text-base sm:text-xl md:text-2xl font-semibold text-omega-gold text-center leading-none select-none"
             >
               𝛀mega
             </motion.h1>
 
+            {/* ACTIONS */}
             <div className="flex justify-end gap-1.5 sm:gap-2">
               <motion.button
                 whileTap={{ scale: 0.9 }}
@@ -118,6 +121,7 @@ export default function DashboardHeader({
         </div>
       </div>
 
+      {/* SPACER TO PREVENT OVERLAP */}
       <div className="h-3 sm:h-4" />
     </>
   );
