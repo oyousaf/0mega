@@ -12,7 +12,6 @@ export default function DashboardHeader({
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /* LOAD AUTOMATION STATE */
   useEffect(() => {
     fetch("/api/automation/status", { cache: "no-store" })
       .then((r) => r.json())
@@ -26,7 +25,6 @@ export default function DashboardHeader({
       .catch(() => setEnabled(false));
   }, []);
 
-  /* TOGGLE */
   async function toggleAutomation() {
     if (busy || enabled === null) return;
 
@@ -60,49 +58,38 @@ export default function DashboardHeader({
 
   return (
     <>
-      {/* STICKY OFFSET */}
-      <div
-        className="sticky top-0 z-50"
-        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
-      >
+      <div className="sticky top-0 z-50 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="mx-auto max-w-7xl px-2 sm:px-4">
-          {/* HEADER BAR */}
           <div
-            className="grid grid-cols-[auto_1fr_auto] items-center rounded-xl px-3 py-2 sm:px-4 sm:py-3
-              backdrop-blur border border-omega-dark-gold overflow-hidden"
-            style={{ backgroundColor: "rgba(0, 72, 48, 0.7)" }}
+            className="omega-blur grid grid-cols-3 items-center rounded-xl px-3 py-2 sm:px-4 sm:py-3
+              bg-omega-green-70 border-omega-dark-gold border"
           >
-            {/* HOME */}
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold
-                text-omega-gold hover:bg-omega-dark-gold/10"
+              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center
+                rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
             >
               <FiHome size={16} />
             </motion.button>
 
-            {/* TITLE */}
             <motion.h1
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="text-base sm:text-xl md:text-2xl font-semibold text-omega-gold text-center leading-none select-none"
+              className="text-base sm:text-xl md:text-2xl font-semibold text-omega-gold
+                text-center leading-none select-none"
             >
               𝛀mega
             </motion.h1>
 
-            {/* ACTIONS */}
             <div className="flex justify-end gap-1.5 sm:gap-2">
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={toggleAutomation}
                 title={enabled ? "Automation enabled" : "Automation disabled"}
-                className={`w-8 h-8 sm:w-9 sm:h-9
-                  flex items-center justify-center
-                  rounded-full border border-omega-dark-gold
-                  ${cpuColor}
-                  hover:bg-omega-dark-gold/10 transition`}
+                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold
+                  ${cpuColor} hover-omega`}
               >
                 <FiCpu size={16} />
               </motion.button>
@@ -110,9 +97,8 @@ export default function DashboardHeader({
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={onOpenSettings}
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center
-                  rounded-full border border-omega-dark-gold
-                  text-omega-gold hover:bg-omega-dark-gold/10"
+                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold 
+                text-omega-gold hover-omega"
               >
                 <FiSettings size={16} />
               </motion.button>
@@ -121,7 +107,6 @@ export default function DashboardHeader({
         </div>
       </div>
 
-      {/* SPACER TO PREVENT OVERLAP */}
       <div className="h-3 sm:h-4" />
     </>
   );

@@ -2,141 +2,84 @@
 @import "tailwindcss";
 
 /* --------------------
-   Omega-Alpha Theme
+   Omega Theme Tokens
 -------------------- */
 :root {
-  --background: #202123; /* Dark base */
-  --foreground: #eaeaea; /* Light text */
-  --omega-green: #004830; /* Dial green */
-  --omega-gold: #d4af37; /* Main gold */
-  --omega-dark-gold: #b8860b; /* Accent gold */
+  --background: #202123;
+  --foreground: #eaeaea;
+
+  --omega-green: #004830;
+  --omega-gold: #d4af37;
+  --omega-dark-gold: #b8860b;
+
   --font-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* Text */
-.text-omega-gold {
-  color: var(--omega-gold);
-}
-.text-omega-green {
-  color: var(--omega-green);
-}
-.text-omega-dark-gold {
-  color: var(--omega-dark-gold);
-}
-
-/* Backgrounds */
-.bg-omega-green {
-  background-color: var(--omega-green);
-}
-.bg-omega-gold {
-  background-color: var(--omega-gold);
-}
-.bg-omega-dark-gold {
-  background-color: var(--omega-dark-gold);
-}
-
-/* Borders */
-.border-omega-gold {
-  border-color: var(--omega-gold);
-}
-.border-omega-dark-gold {
-  border-color: var(--omega-dark-gold);
-}
-
-/* Ensure MUI and all elements use Poppins */
+/* --------------------
+   Base
+-------------------- */
 *,
 *::before,
 *::after {
   font-family: var(--font-sans) !important;
 }
 
-/* --------------------
-   Base styling
--------------------- */
 body {
   margin: 0;
-  padding: 0;
-
-  background-color: var(--background);
+  background: var(--background);
   color: var(--foreground);
-
-  font-family: var(--font-sans);
-  letter-spacing: 0.02em;
-
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 /* --------------------
-   Utility classes
+   Tailwind v4 Utilities
 -------------------- */
-.omega-border {
-  border-color: var(--omega-gold);
+@layer utilities {
+  /* Text */
+  .text-omega-gold { color: var(--omega-gold); }
+  .text-omega-green { color: var(--omega-green); }
+  .text-omega-dark-gold { color: var(--omega-dark-gold); }
+
+  .text-omega-gold-60 { color: rgba(212, 175, 55, 0.6); }
+
+  /* Backgrounds */
+  .bg-omega-green { background-color: var(--omega-green); }
+  .bg-omega-green-70 { background-color: rgba(0, 72, 48, 0.7); }
+
+  .bg-omega-dark-gold-10 { background-color: rgba(184, 134, 11, 0.1); }
+
+  /* Borders */
+  .border-omega-dark-gold { border-color: var(--omega-dark-gold); }
+
+  /* Hover */
+  .hover-omega:hover { background-color: rgba(184, 134, 11, 0.1); }
+
+  /* Blur */
+  .omega-blur {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
 }
 
+/* --------------------
+   Components
+-------------------- */
 .omega-card {
-  background-color: var(--omega-green);
+  background: var(--omega-green);
   color: var(--omega-gold);
   border: 1px solid var(--omega-dark-gold);
   border-radius: 0.75rem;
   padding: 1rem;
-  box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
-}
-
-.omega-button {
-  background-color: var(--omega-gold);
-  color: var(--omega-green);
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  transition: all 0.2s ease;
-}
-.omega-button:hover {
-  background-color: var(--omega-dark-gold);
 }
 
 /* --------------------
-   Animation pulse
--------------------- */
-@keyframes omegaPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 18px rgba(212, 175, 55, 0.6);
-  }
-}
-
-.omega-pulse {
-  animation: omegaPulse 2s infinite ease-in-out;
-}
-
-/* --------------------
-   Scrollbar hiding
+   Scrollbar
 -------------------- */
 .trade-history-scroll {
   overflow-y: auto;
   scrollbar-width: none;
-  -ms-overflow-style: none;
 }
-
 .trade-history-scroll::-webkit-scrollbar {
   display: none;
-}
-
-.omega-test-btn {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #7a6325;
-  border-radius: 0.5rem;
-  background-color: #0f2a1f;
-  transition: background-color 150ms ease, color 150ms ease;
-  color: #d4af37;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.omega-test-btn:hover {
-  background-color: #183d2d;
-  color: #ffd966;
 }
