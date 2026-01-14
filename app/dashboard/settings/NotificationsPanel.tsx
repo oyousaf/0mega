@@ -121,8 +121,7 @@ export default function NotificationsPanel() {
 
         <button
           onClick={testFullPipeline}
-          className="w-full mt-3 px-4 py-3 rounded-lg
-            bg-omega-gold text-black font-semibold"
+          className="w-full mt-3 omega-button"
         >
           Run Full Pipeline Test
         </button>
