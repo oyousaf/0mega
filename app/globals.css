@@ -10,6 +10,7 @@
 
   --omega-green: #004830;
   --omega-green-soft: #0f2a1f;
+
   --omega-gold: #d4af37;
   --omega-gold-soft: rgba(212, 175, 55, 0.12);
   --omega-dark-gold: #b8860b;
@@ -19,19 +20,34 @@
 }
 
 /* =========================================================
-   Base
+   Base / Typography Authority
 ========================================================= */
-*,
-*::before,
-*::after {
-  font-family: var(--font-sans);
-}
-
+html,
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
+/* =========================================================
+   MUI Overrides
+========================================================= */
+.MuiTypography-root,
+.MuiButton-root,
+.MuiInputBase-root,
+.MuiFormControl-root,
+.MuiMenuItem-root {
+  font-family: var(--font-sans) !important;
 }
 
 /* =========================================================
@@ -75,7 +91,7 @@ body {
   font-weight: 600;
   border-radius: 0.5rem;
   padding: 0.6rem 1rem;
-  transition: background-color 150ms ease;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 .omega-button:hover {
@@ -84,7 +100,7 @@ body {
 
 /* Diagnostic / test buttons */
 .omega-test-btn {
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.9rem;
   border-radius: 0.5rem;
   border: 1px solid var(--omega-dark-gold);
   background: var(--omega-green-soft);
