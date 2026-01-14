@@ -14,13 +14,34 @@
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-omega-green: var(--omega-green);
-  --color-omega-gold: var(--omega-gold);
-  --color-omega-dark-gold: var(--omega-dark-gold);
-  --font-sans: var(--font-sans);
+/* Text */
+.text-omega-gold {
+  color: var(--omega-gold);
+}
+.text-omega-green {
+  color: var(--omega-green);
+}
+.text-omega-dark-gold {
+  color: var(--omega-dark-gold);
+}
+
+/* Backgrounds */
+.bg-omega-green {
+  background-color: var(--omega-green);
+}
+.bg-omega-gold {
+  background-color: var(--omega-gold);
+}
+.bg-omega-dark-gold {
+  background-color: var(--omega-dark-gold);
+}
+
+/* Borders */
+.border-omega-gold {
+  border-color: var(--omega-gold);
+}
+.border-omega-dark-gold {
+  border-color: var(--omega-dark-gold);
 }
 
 /* Ensure MUI and all elements use Poppins */
