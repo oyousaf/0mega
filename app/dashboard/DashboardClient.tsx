@@ -10,7 +10,7 @@ import { computeMetricsFromTrades } from "@/lib/metrics";
 import { buildEquityAndDrawdown } from "@/lib/analytics/equity";
 
 import DashboardHeader from "./DashboardHeader";
-import NotificationsPanel from "@/components/settings/NotificationsPanel";
+import NotificationsPanel from "@/app/dashboard/settings/NotificationsPanel";
 import MetricsCards from "@/components/dashboard/MetricsCards";
 import StrategyLeaderboard from "@/components/dashboard/analytics/StrategyLeaderboard";
 import SymbolLeaderboard from "@/components/dashboard/analytics/SymbolLeaderboard";
