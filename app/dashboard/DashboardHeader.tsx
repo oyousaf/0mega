@@ -60,15 +60,11 @@ export default function DashboardHeader({
     <>
       <div className="sticky top-0 z-50 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="mx-auto max-w-7xl px-2 sm:px-4">
-          <div
-            className="omega-blur grid grid-cols-3 items-center rounded-xl px-3 py-2 sm:px-4 sm:py-3
-              bg-omega-green-70 border-omega-dark-gold border"
-          >
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-xl px-3 py-2 sm:px-4 sm:py-3 bg-omega-green border border-omega-dark-gold shadow-lg">
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center
-                rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
+              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
             >
               <FiHome size={16} />
             </motion.button>
@@ -77,8 +73,7 @@ export default function DashboardHeader({
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="text-base sm:text-xl md:text-2xl font-semibold text-omega-gold
-                text-center leading-none select-none"
+              className="text-base sm:text-xl md:text-2xl font-semibold text-omega-gold text-center leading-none select-none"
             >
               𝛀mega
             </motion.h1>
@@ -88,8 +83,7 @@ export default function DashboardHeader({
                 whileTap={{ scale: 0.9 }}
                 onClick={toggleAutomation}
                 title={enabled ? "Automation enabled" : "Automation disabled"}
-                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold
-                  ${cpuColor} hover-omega`}
+                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold ${cpuColor} hover-omega`}
               >
                 <FiCpu size={16} />
               </motion.button>
@@ -97,8 +91,7 @@ export default function DashboardHeader({
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={onOpenSettings}
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold 
-                text-omega-gold hover-omega"
+                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
               >
                 <FiSettings size={16} />
               </motion.button>

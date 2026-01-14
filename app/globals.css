@@ -33,32 +33,32 @@ body {
 }
 
 /* --------------------
-   Tailwind v4 Utilities
+   Utilities
 -------------------- */
 @layer utilities {
-  /* Text */
-  .text-omega-gold { color: var(--omega-gold); }
-  .text-omega-green { color: var(--omega-green); }
-  .text-omega-dark-gold { color: var(--omega-dark-gold); }
+  .text-omega-gold {
+    color: var(--omega-gold);
+  }
+  .text-omega-green {
+    color: var(--omega-green);
+  }
+  .text-omega-dark-gold {
+    color: var(--omega-dark-gold);
+  }
 
-  .text-omega-gold-60 { color: rgba(212, 175, 55, 0.6); }
+  .bg-omega-green {
+    background-color: var(--omega-green);
+  }
+  .bg-omega-green-85 {
+    background-color: rgba(0, 72, 48, 0.85);
+  }
 
-  /* Backgrounds */
-  .bg-omega-green { background-color: var(--omega-green); }
-  .bg-omega-green-70 { background-color: rgba(0, 72, 48, 0.7); }
+  .border-omega-dark-gold {
+    border-color: var(--omega-dark-gold);
+  }
 
-  .bg-omega-dark-gold-10 { background-color: rgba(184, 134, 11, 0.1); }
-
-  /* Borders */
-  .border-omega-dark-gold { border-color: var(--omega-dark-gold); }
-
-  /* Hover */
-  .hover-omega:hover { background-color: rgba(184, 134, 11, 0.1); }
-
-  /* Blur */
-  .omega-blur {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+  .hover-omega:hover {
+    background-color: rgba(184, 134, 11, 0.12);
   }
 }
 
