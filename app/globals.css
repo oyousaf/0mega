@@ -1,28 +1,30 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
-/* --------------------
-   Omega Theme Tokens
--------------------- */
+/* =========================================================
+   Omega Design Tokens
+========================================================= */
 :root {
   --background: #202123;
   --foreground: #eaeaea;
 
   --omega-green: #004830;
+  --omega-green-soft: #0f2a1f;
   --omega-gold: #d4af37;
+  --omega-gold-soft: rgba(212, 175, 55, 0.12);
   --omega-dark-gold: #b8860b;
 
   --font-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* --------------------
+/* =========================================================
    Base
--------------------- */
+========================================================= */
 *,
 *::before,
 *::after {
-  font-family: var(--font-sans) !important;
+  font-family: var(--font-sans);
 }
 
 body {
@@ -32,39 +34,33 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* --------------------
-   Utilities
--------------------- */
-@layer utilities {
-  .text-omega-gold {
-    color: var(--omega-gold);
-  }
-  .text-omega-green {
-    color: var(--omega-green);
-  }
-  .text-omega-dark-gold {
-    color: var(--omega-dark-gold);
-  }
+/* =========================================================
+   Omega Utility Classes
+   (Stable, explicit, Tailwind-safe)
+========================================================= */
 
-  .bg-omega-green {
-    background-color: var(--omega-green);
-  }
-  .bg-omega-green-85 {
-    background-color: rgba(0, 72, 48, 0.85);
-  }
+/* Text */
+.text-omega-gold { color: var(--omega-gold); }
+.text-omega-green { color: var(--omega-green); }
+.text-omega-dark-gold { color: var(--omega-dark-gold); }
 
-  .border-omega-dark-gold {
-    border-color: var(--omega-dark-gold);
-  }
+/* Backgrounds */
+.bg-omega-green { background-color: var(--omega-green); }
+.bg-omega-green-soft { background-color: var(--omega-green-soft); }
 
-  .hover-omega:hover {
-    background-color: rgba(184, 134, 11, 0.12);
-  }
+/* Borders */
+.border-omega-dark-gold { border-color: var(--omega-dark-gold); }
+
+/* Hover */
+.hover-omega:hover {
+  background-color: var(--omega-gold-soft);
 }
 
-/* --------------------
+/* =========================================================
    Components
--------------------- */
+========================================================= */
+
+/* Cards */
 .omega-card {
   background: var(--omega-green);
   color: var(--omega-gold);
@@ -73,13 +69,44 @@ body {
   padding: 1rem;
 }
 
-/* --------------------
-   Scrollbar
--------------------- */
+/* Primary buttons */
+.omega-button {
+  background: var(--omega-gold);
+  color: var(--omega-green);
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  transition: background-color 150ms ease;
+}
+
+.omega-button:hover {
+  background: var(--omega-dark-gold);
+}
+
+/* Diagnostic / test buttons */
+.omega-test-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--omega-dark-gold);
+  background: var(--omega-green-soft);
+  color: var(--omega-gold);
+  font-weight: 600;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.omega-test-btn:hover {
+  background: var(--omega-green);
+  color: #ffe58a;
+}
+
+/* =========================================================
+   Scrollbars
+========================================================= */
 .trade-history-scroll {
   overflow-y: auto;
   scrollbar-width: none;
 }
+
 .trade-history-scroll::-webkit-scrollbar {
   display: none;
 }
