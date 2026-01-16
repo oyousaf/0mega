@@ -17,7 +17,7 @@ const RR_TARGET = 1.25;
 
 // Volatility filter
 const VOL_WINDOW = 20;       // candles
-const MIN_VOL_PCT = 0.0012; // 0.12%
+const MIN_VOL_PCT = 0.0006; // 0.06%
 
 /* ---------------------------------------
    LOOP CONTROL
