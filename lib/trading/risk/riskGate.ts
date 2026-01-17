@@ -97,13 +97,6 @@ export async function riskGate(
       return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
     }
 
-    if (
-      streak.length === MAX_CONSECUTIVE_LOSSES &&
-      streak.every((r) => Number(r.realised_pl) < 0)
-    ) {
-      return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
-    }
-
     /* -----------------------------
        4) Daily loss cap (realised)
     ------------------------------ */
