@@ -76,19 +76,26 @@ export async function riskGate(
     }
 
     /* -----------------------------
-       3) Max consecutive losses
-    ------------------------------ */
+   3) Max consecutive losses (DAILY RESET)
+------------------------------ */
     const { rows: streak } = await pool.query(
-      `
-      SELECT realised_pl
+      `SELECT realised_pl
       FROM paper_trades
       WHERE is_closed = true
-        AND realised_pl IS NOT NULL
-      ORDER BY closed_at DESC NULLS LAST
+      AND realised_pl IS NOT NULL
+      AND closed_at::date = CURRENT_DATE
+      ORDER BY closed_at DESC
       LIMIT $1
       `,
       [MAX_CONSECUTIVE_LOSSES]
     );
+
+    if (
+      streak.length === MAX_CONSECUTIVE_LOSSES &&
+      streak.every((r) => Number(r.realised_pl) < 0)
+    ) {
+      return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
+    }
 
     if (
       streak.length === MAX_CONSECUTIVE_LOSSES &&
