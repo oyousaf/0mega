@@ -27,7 +27,7 @@ export function getDailyRisk(market: string): DailyRiskState {
 export function recordRealisedPnl(
   market: string,
   pnl: number,
-  maxDailyLoss: number
+  maxDailyLoss: number,
 ) {
   const r = getDailyRisk(market);
   r.realisedPnl += pnl;
@@ -37,16 +37,11 @@ export function recordRealisedPnl(
   }
 }
 
-export function assertTradingAllowed(
-  market: string,
-  maxDailyLoss: number
-) {
+export function assertTradingAllowed(market: string, maxDailyLoss: number) {
   const r = getDailyRisk(market);
 
   if (r.frozen) {
-    throw new Error(
-      `DAILY_LOSS_LIMIT_REACHED:${market}:${r.realisedPnl}`
-    );
+    throw new Error(`DAILY_LOSS_LIMIT_REACHED:${market}:${r.realisedPnl}`);
   }
 
   return true;

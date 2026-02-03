@@ -34,7 +34,7 @@ export interface Broker {
   placeOrder(
     symbol: string,
     qty: number,
-    side: OrderSide
+    side: OrderSide,
   ): Promise<ExecutionResult>;
 
   closeOrder(tradeId: string, qty?: number): Promise<ExecutionResult>;

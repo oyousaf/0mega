@@ -39,7 +39,6 @@ export async function notify({ title, body, channels }: NotifyOptions) {
       const { sendTelegram } = await import("./telegram");
       await sendTelegram(`*${title}*\n${body}`);
     }
-
   } catch (err) {
     console.error("Notify error:", err);
   }

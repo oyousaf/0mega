@@ -23,7 +23,7 @@ function minutes(n: number) {
 
 export async function riskGate(
   signal: any,
-  price: number
+  price: number,
 ): Promise<RiskResult> {
   try {
     if (!RISK_ENABLED) return { allowed: true };
@@ -50,7 +50,7 @@ export async function riskGate(
       WHERE is_closed = true AND closed_at IS NOT NULL
       ORDER BY closed_at DESC
       LIMIT 1
-      `
+      `,
     );
 
     if (lastClosed.length) {
@@ -68,7 +68,7 @@ export async function riskGate(
       SELECT COUNT(*)::int AS c
       FROM paper_trades
       WHERE opened_at::date = CURRENT_DATE
-      `
+      `,
     );
 
     if (Number(todays?.[0]?.c ?? 0) >= MAX_TRADES_PER_DAY) {
@@ -87,7 +87,7 @@ export async function riskGate(
       ORDER BY closed_at DESC
       LIMIT $1
       `,
-      [MAX_CONSECUTIVE_LOSSES]
+      [MAX_CONSECUTIVE_LOSSES],
     );
 
     if (
@@ -107,7 +107,7 @@ export async function riskGate(
       WHERE is_closed = true
         AND closed_at::date = CURRENT_DATE
         AND realised_pl IS NOT NULL
-      `
+      `,
     );
 
     const dailyPnl = Number(pnl?.[0]?.pnl ?? 0);

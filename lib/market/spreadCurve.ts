@@ -5,9 +5,9 @@ type Market = "crypto" | "equity" | "forex";
  * Conservative defaults.
  */
 const BASE_SPREAD: Record<Market, number> = {
-  forex: 1.2,   // pips
-  equity: 2.0,  // bps
-  crypto: 4.0,  // bps
+  forex: 1.2, // pips
+  equity: 2.0, // bps
+  crypto: 4.0, // bps
 };
 
 /**

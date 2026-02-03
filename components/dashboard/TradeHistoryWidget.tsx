@@ -55,7 +55,7 @@ export default function TradeHistoryWidget() {
     try {
       const res = await fetch(
         `/api/trading/history?limit=${PAGE_SIZE}&offset=${nextOffset}`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
 
       const json = await res.json();
@@ -190,7 +190,9 @@ export default function TradeHistoryWidget() {
                         <div className="text-right">
                           Qty {e.qty} • {e.broker}
                           <br />
-                          <span className="opacity-60">{fmtDate(e.timestamp)}</span>
+                          <span className="opacity-60">
+                            {fmtDate(e.timestamp)}
+                          </span>
                         </div>
                       </div>
                     ))}

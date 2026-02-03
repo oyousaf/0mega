@@ -66,8 +66,7 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
   const expectancy =
     total > 0
       ? Number(
-          ((wins / total) * avgWinR -
-            (losses / total) * avgLossR).toFixed(2)
+          ((wins / total) * avgWinR - (losses / total) * avgLossR).toFixed(2),
         )
       : 0;
 

@@ -1,7 +1,7 @@
 import { getBroker } from "@/providers/execution/router";
 
 export async function fetchPrices(
-  symbols: string[]
+  symbols: string[],
 ): Promise<Record<string, number>> {
   const broker = getBroker();
   const prices: Record<string, number> = {};

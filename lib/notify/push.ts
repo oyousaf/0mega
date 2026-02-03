@@ -6,7 +6,7 @@ import { pool } from "@/lib/neon";
 webpush.setVapidDetails(
   process.env.VAPID_PUBLIC_EMAIL!,
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
+  process.env.VAPID_PRIVATE_KEY!,
 );
 
 export async function sendPushNotification(title: string, body: string) {

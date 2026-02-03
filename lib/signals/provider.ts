@@ -18,7 +18,7 @@ export async function getActiveSignals(): Promise<Signal[]> {
     FROM signals
     WHERE status = 'ACTIVE'
     ORDER BY created_at ASC
-    `
+    `,
   );
 
   return rows;

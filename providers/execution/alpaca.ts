@@ -10,7 +10,7 @@ export class AlpacaBroker implements Broker {
   async placeOrder(
     symbol: string,
     qty: number,
-    side: OrderSide
+    side: OrderSide,
   ): Promise<ExecutionResult> {
     throw new Error("AlpacaBroker not wired");
   }

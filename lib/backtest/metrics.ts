@@ -19,7 +19,7 @@ export function computeMetrics(
     qty: number;
     price: number;
     t: number;
-  }[]
+  }[],
 ): Metrics {
   // ---- Drawdown
   let peak = -Infinity;

@@ -5,6 +5,6 @@ export async function recordHeartbeat() {
     `
     INSERT INTO automation_heartbeat (status)
     VALUES ('RUNNING')
-    `
+    `,
   );
 }

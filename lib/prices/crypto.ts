@@ -19,7 +19,7 @@ const BASE_PRICE: Record<string, number> = {};
  */
 export function getCryptoProvider(
   symbol: string,
-  _timeframe: "1m" | "5m" | "15m"
+  _timeframe: "1m" | "5m" | "15m",
 ) {
   return {
     async fetchCandles(): Promise<Candle[]> {

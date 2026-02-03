@@ -15,16 +15,19 @@ export function putCandles(
   market: string,
   symbol: string,
   tf: string,
-  candles: Candle[]
+  candles: Candle[],
 ) {
   const key: Key = `${market}:${symbol}:${tf}`;
-  store.set(key, candles.sort((a, b) => a.t - b.t));
+  store.set(
+    key,
+    candles.sort((a, b) => a.t - b.t),
+  );
 }
 
 export function getCandles(
   market: string,
   symbol: string,
-  tf: string
+  tf: string,
 ): Candle[] {
   const key: Key = `${market}:${symbol}:${tf}`;
   const data = store.get(key);

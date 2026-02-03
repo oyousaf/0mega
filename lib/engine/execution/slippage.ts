@@ -7,9 +7,9 @@ type SlippageConfig = {
 
 // Conservative defaults. Tune later.
 const DEFAULT_SLIPPAGE: Record<Market, SlippageConfig> = {
-  crypto: { bps: 5 },   // 0.05%
-  equity: { bps: 2 },   // 0.02%
-  forex:  { bps: 1 },   // 0.01%
+  crypto: { bps: 5 }, // 0.05%
+  equity: { bps: 2 }, // 0.02%
+  forex: { bps: 1 }, // 0.01%
 };
 
 export function applySlippage(params: {

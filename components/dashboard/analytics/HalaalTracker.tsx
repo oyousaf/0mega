@@ -24,7 +24,7 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
   const total = executed.length;
 
   const halal = executed.filter((t) =>
-    typeof t.halaal === "boolean" ? t.halaal : isHalaalTrade(t)
+    typeof t.halaal === "boolean" ? t.halaal : isHalaalTrade(t),
   ).length;
 
   const nonHalal = total - halal;
@@ -48,16 +48,12 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
           padding: "1rem",
         }}
       >
-        <h2
-          className="text-xl font-semibold text-omega-gold mb-3 text-center"
-        >
+        <h2 className="text-xl font-semibold text-omega-gold mb-3 text-center">
           🕌 Halaal Compliance
         </h2>
 
         {/* METRICS */}
-        <div
-          className="grid grid-cols-3 gap-4 text-center text-omega-gold"
-        >
+        <div className="grid grid-cols-3 gap-4 text-center text-omega-gold">
           <div>
             <p className="opacity-70 text-sm">EXECUTED</p>
             <p className="font-bold text-lg">{total}</p>

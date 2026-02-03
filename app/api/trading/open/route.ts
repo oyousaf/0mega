@@ -6,13 +6,12 @@ import { pool } from "@/lib/neon";
 --------------------------------------------- */
 async function getMarkPrice(
   origin: string,
-  symbol: string
+  symbol: string,
 ): Promise<number | null> {
   try {
-    const res = await fetch(
-      `${origin}/api/prices/crypto/${symbol}`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`${origin}/api/prices/crypto/${symbol}`, {
+      cache: "no-store",
+    });
 
     if (!res.ok) return null;
 
@@ -82,7 +81,7 @@ export async function GET(req: Request) {
           mark_price: mark,
           unrealised_pl: unrealised,
         };
-      })
+      }),
     );
 
     return NextResponse.json({
@@ -93,7 +92,7 @@ export async function GET(req: Request) {
     console.error("Open trades route failed", err);
     return NextResponse.json(
       { error: err.message || String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

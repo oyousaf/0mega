@@ -1,6 +1,9 @@
 "use client";
 
-export default function SortBar({ sort, setSort }: {
+export default function SortBar({
+  sort,
+  setSort,
+}: {
   sort: string;
   setSort: (n: string) => void;
 }) {

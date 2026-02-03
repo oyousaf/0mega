@@ -49,7 +49,7 @@ export async function checkDailyLoss() {
       WHERE e.timestamp::date = CURRENT_DATE
       GROUP BY e.trade_id
     ) t
-    `
+    `,
   );
 
   if (Number(rows[0].pnl) < -MAX_DAILY_LOSS_PCT) {
@@ -82,7 +82,7 @@ export async function checkConsecutiveLosses() {
       LIMIT $1
     ) t
     `,
-    [MAX_CONSECUTIVE_LOSSES]
+    [MAX_CONSECUTIVE_LOSSES],
   );
 
   if (

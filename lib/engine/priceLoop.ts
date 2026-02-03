@@ -16,7 +16,7 @@ const POLL_MS = 5000;
 const RR_TARGET = 1.25;
 
 // Volatility filter
-const VOL_WINDOW = 20;       // candles
+const VOL_WINDOW = 20; // candles
 const MIN_VOL_PCT = 0.0006; // 0.06%
 
 /* ---------------------------------------
@@ -129,7 +129,7 @@ export async function startPriceLoop() {
                 if (risk.allowed) {
                   await withDbLock(async () => {
                     const { rows } = await pool.query(
-                      `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
+                      `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
                     );
                     if (rows.length) return;
 

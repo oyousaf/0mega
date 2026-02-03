@@ -133,7 +133,7 @@ export async function executeTradeIntent(intent: {
         tp1,
         rr,
         riskAmount,
-      ]
+      ],
     );
 
     const tradeId = assertFinite(rows[0]?.id, "TRADE_ID_MISSING");
@@ -154,7 +154,7 @@ export async function executeTradeIntent(intent: {
       )
       VALUES ($1,$2,$3,$4,'paper',$5,'FILLED',$6,NULL,NOW())
       `,
-      [tradeId, intent.side, qty, entry, res.orderId ?? null, riskAmount]
+      [tradeId, intent.side, qty, entry, res.orderId ?? null, riskAmount],
     );
 
     return { success: true, tradeId };
@@ -169,7 +169,7 @@ export async function executeTradeIntent(intent: {
 export async function closeTrade(
   tradeId: number,
   reason: "SL_HIT" | "TP_HIT" | "MANUAL",
-  exitPrice: number
+  exitPrice: number,
 ): Promise<CloseResult> {
   const client = await pool.connect();
 
@@ -186,7 +186,7 @@ export async function closeTrade(
       WHERE id = $1 AND is_closed = false
       FOR UPDATE
       `,
-      [id]
+      [id],
     );
 
     if (!rows.length) {
@@ -213,7 +213,7 @@ export async function closeTrade(
         closed_at = NOW()
       WHERE id = $4
       `,
-      [realised, exit, reason, id]
+      [realised, exit, reason, id],
     );
 
     await client.query(
@@ -230,7 +230,7 @@ export async function closeTrade(
       )
       VALUES ($1,$2,$3,$4,'paper','FILLED',$5,NOW())
       `,
-      [id, reverseSide(trade.side), qty, exit, trade.risk_amount]
+      [id, reverseSide(trade.side), qty, exit, trade.risk_amount],
     );
 
     await client.query("COMMIT");

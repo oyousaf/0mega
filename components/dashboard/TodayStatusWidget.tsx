@@ -47,8 +47,8 @@ export default function TodayStatusWidget() {
     data.pnlToday > 0
       ? "text-green-400"
       : data.pnlToday < 0
-      ? "text-red-400"
-      : "text-neutral-300";
+        ? "text-red-400"
+        : "text-neutral-300";
 
   const statusColor = data.tradingAllowed ? "text-green-400" : "text-red-500";
 
@@ -56,8 +56,8 @@ export default function TodayStatusWidget() {
     data.lossUsedPct >= 80
       ? "text-red-400"
       : data.lossUsedPct >= 50
-      ? "text-yellow-300"
-      : "text-omega-gold";
+        ? "text-yellow-300"
+        : "text-omega-gold";
 
   return (
     <motion.div

@@ -8,9 +8,7 @@ type TradePoint = {
 export function buildEquityAndDrawdown(trades: TradePoint[]) {
   // 1. Enforce chronological order (oldest → newest)
   const ordered = [...trades].sort(
-    (a, b) =>
-      new Date(a.closed_at).getTime() -
-      new Date(b.closed_at).getTime()
+    (a, b) => new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime(),
   );
 
   let equity = STARTING_EQUITY;
@@ -35,8 +33,7 @@ export function buildEquityAndDrawdown(trades: TradePoint[]) {
 
     if (equity > peak) peak = equity;
 
-    const drawdown =
-      peak > 0 ? ((equity - peak) / peak) * 100 : 0;
+    const drawdown = peak > 0 ? ((equity - peak) / peak) * 100 : 0;
 
     series.push({
       date: t.closed_at,

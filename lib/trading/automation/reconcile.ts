@@ -6,7 +6,7 @@ export async function reconcilePositions() {
   const brokerPositions = await broker.fetchPositions();
 
   const { rows: dbTrades } = await pool.query(
-    `SELECT id, symbol, qty FROM paper_trades`
+    `SELECT id, symbol, qty FROM paper_trades`,
   );
 
   for (const trade of dbTrades) {

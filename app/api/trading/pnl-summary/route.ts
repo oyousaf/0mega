@@ -65,8 +65,7 @@ export async function GET() {
         daily += pl;
       }
 
-      const diffDays =
-        (now.getTime() - closed.getTime()) / 86400000;
+      const diffDays = (now.getTime() - closed.getTime()) / 86400000;
 
       if (diffDays <= 7) weekly += pl;
       if (diffDays <= 30) monthly += pl;
@@ -81,7 +80,7 @@ export async function GET() {
     console.error("PNL summary error:", err);
     return NextResponse.json(
       { error: err.message || String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -30,17 +30,18 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
     () =>
       Array.isArray(data)
         ? data.filter(
-            (d) => typeof d.drawdown === "number" && Number.isFinite(d.drawdown)
+            (d) =>
+              typeof d.drawdown === "number" && Number.isFinite(d.drawdown),
           )
         : [],
-    [data]
+    [data],
   );
 
   const maxDD = useMemo(() => {
     if (!safeData.length) return -1;
     return Math.min(
       -1,
-      Math.floor(Math.min(...safeData.map((d) => d.drawdown)))
+      Math.floor(Math.min(...safeData.map((d) => d.drawdown))),
     );
   }, [safeData]);
 

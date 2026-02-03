@@ -19,7 +19,8 @@ export async function getCryptoPrice(symbol: string): Promise<number> {
 
   const res = await fetch(url, { cache: "no-store" });
 
-  if (!res.ok) throw new Error(`Failed to fetch crypto price for ${normalized}`);
+  if (!res.ok)
+    throw new Error(`Failed to fetch crypto price for ${normalized}`);
 
   const data = await res.json();
 

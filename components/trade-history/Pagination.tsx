@@ -1,6 +1,10 @@
 "use client";
 
-export default function Pagination({ page, setPage, hasMore }: {
+export default function Pagination({
+  page,
+  setPage,
+  hasMore,
+}: {
   page: number;
   setPage: (n: number) => void;
   hasMore: boolean;

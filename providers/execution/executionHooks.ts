@@ -12,7 +12,7 @@ export async function onExecution(
   context: {
     symbol: string;
     action: "OPEN" | "CLOSE" | "PARTIAL";
-  }
+  },
 ) {
   if (!result.success) {
     console.warn("Execution failed", context, result.error);

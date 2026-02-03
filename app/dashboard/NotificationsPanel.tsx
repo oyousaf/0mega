@@ -72,10 +72,18 @@ export default function NotificationsPanel() {
 
       <div className="pt-4 border-t border-neutral-700 space-y-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button className="omega-test-btn" onClick={testWeb}>Test Web</button>
-          <button className="omega-test-btn" onClick={testPush}>Test Push</button>
-          <button className="omega-test-btn" onClick={testEmail}>Test Email</button>
-          <button className="omega-test-btn" onClick={testTelegram}>Test Telegram</button>
+          <button className="omega-test-btn" onClick={testWeb}>
+            Test Web
+          </button>
+          <button className="omega-test-btn" onClick={testPush}>
+            Test Push
+          </button>
+          <button className="omega-test-btn" onClick={testEmail}>
+            Test Email
+          </button>
+          <button className="omega-test-btn" onClick={testTelegram}>
+            Test Telegram
+          </button>
         </div>
 
         <button

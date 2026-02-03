@@ -11,7 +11,7 @@ export async function registerPush() {
     const existing = await reg.pushManager.getSubscription();
 
     const key = urlBase64ToUint8Array(
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
     );
 
     const sub =

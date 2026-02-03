@@ -193,7 +193,7 @@ async function closeSignal(signal: any, reason: string) {
 
   await pool.query(
     `UPDATE signals SET status = 'CLOSED', close_reason = $2 WHERE id = $1`,
-    [signal.id, reason]
+    [signal.id, reason],
   );
 }
 
@@ -216,7 +216,7 @@ async function partialClose(signal: any, reason: string) {
 -------------------------------------------------- */
 async function fetchPrice(
   market: "crypto" | "equity" | "forex",
-  symbol: string
+  symbol: string,
 ): Promise<number | null> {
   if (engineMode() === "BACKTEST") {
     return getSimBroker(market).getPrice(symbol);

@@ -34,7 +34,7 @@ export default function StrategyDetailPanel({
     .filter((t) => t.realised_pl !== null) // ignore open trades for analytics
     .sort(
       (a, b) =>
-        new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()
+        new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime(),
     );
 
   const last5 = stratTrades.slice(0, 5);

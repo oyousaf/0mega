@@ -6,7 +6,7 @@ export async function resetEngineDaily() {
     UPDATE engine_state
     SET value = true
     WHERE key = 'TRADING_ENABLED'
-    `
+    `,
   );
 
   console.log("[ENGINE_RESET] UTC daily reset");

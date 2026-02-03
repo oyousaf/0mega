@@ -99,9 +99,7 @@ export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
           width: "100%",
         }}
       >
-        <h2
-          className="text-xl font-semibold text-omega-gold mb-3 text-center"
-        >
+        <h2 className="text-xl font-semibold text-omega-gold mb-3 text-center">
           📊 Market Breakdown
         </h2>
 
@@ -149,8 +147,8 @@ export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
                     d.winRate >= 60
                       ? "#4CAF50"
                       : d.winRate >= 40
-                      ? "#FFC107"
-                      : "#FF5252";
+                        ? "#FFC107"
+                        : "#FF5252";
                   return <Cell key={d.market} fill={colour} />;
                 })}
               </Bar>
@@ -158,9 +156,7 @@ export default function MarketBreakdown({ trades }: { trades: Trade[] }) {
           )}
         </div>
 
-        <div
-          className="flex justify-center gap-6 mt-4 text-sm text-omega-gold opacity-80"
-        >
+        <div className="flex justify-center gap-6 mt-4 text-sm text-omega-gold opacity-80">
           {data.map((d) => (
             <div key={d.market} className="text-center">
               <p className="font-semibold">{d.market}</p>

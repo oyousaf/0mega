@@ -29,7 +29,7 @@ function fmtShortDate(iso: string, compact: boolean) {
     "en-GB",
     compact
       ? { day: "2-digit", month: "2-digit" }
-      : { day: "2-digit", month: "short" }
+      : { day: "2-digit", month: "short" },
   );
 }
 
@@ -51,7 +51,7 @@ export default function PerformanceChart({ data }: Props) {
             cumulative: Number(d.cumulative) || 0,
           }))
         : [],
-    [data, compact]
+    [data, compact],
   );
 
   const tickCount = compact ? 3 : 6;

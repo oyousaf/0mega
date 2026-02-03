@@ -8,9 +8,7 @@ export const FOREX_SPREAD_PIPS: SpreadMap = {
 };
 
 export function normalisePair(pair: string) {
-  return pair.includes("/")
-    ? pair
-    : `${pair.slice(0, 3)}/${pair.slice(3)}`;
+  return pair.includes("/") ? pair : `${pair.slice(0, 3)}/${pair.slice(3)}`;
 }
 
 export function getForexSpreadPips(pair: string): number {

@@ -85,10 +85,10 @@ export default function OpenTradesWidget() {
               pnl == null
                 ? "opacity-60"
                 : pnl > 0
-                ? "text-green-400"
-                : pnl < 0
-                ? "text-red-400"
-                : "opacity-60";
+                  ? "text-green-400"
+                  : pnl < 0
+                    ? "text-red-400"
+                    : "opacity-60";
 
             return (
               <div

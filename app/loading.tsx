@@ -24,7 +24,7 @@ export default function GlobalLoading() {
       initial={{ opacity: 1 }}
       animate={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
-      className="fixed inset-0 flex items-center justify-center bg-black z-[9999]"
+      className="fixed inset-0 flex items-center justify-center bg-black z-9999"
     >
       {/* Matrix rain */}
       <div className="absolute inset-0 pointer-events-none">

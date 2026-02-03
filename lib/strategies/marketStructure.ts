@@ -24,10 +24,10 @@ type StructureSignal = {
 /* FAST DEBUG MODE */
 const LOOKBACK = 6;
 const MIN_RISK_PCT = 0.00015; // 0.015%
-const MAX_RISK_PCT = 0.05;    // 5%
+const MAX_RISK_PCT = 0.05; // 5%
 
 export async function runStructureCheck(
-  input: StructureInput
+  input: StructureInput,
 ): Promise<StructureSignal | null> {
   const { symbol, candles } = input;
   if (candles.length < LOOKBACK + 1) return null;
@@ -36,8 +36,8 @@ export async function runStructureCheck(
   const last = recent.at(-1)!;
   const prev = recent.at(-2)!;
 
-  const highs = recent.map(c => c.high);
-  const lows = recent.map(c => c.low);
+  const highs = recent.map((c) => c.high);
+  const lows = recent.map((c) => c.low);
 
   const rangeHigh = Math.max(...highs);
   const rangeLow = Math.min(...lows);

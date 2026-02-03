@@ -7,11 +7,11 @@ export function analyseBehaviour(trades: Trade[]) {
         t.is_closed &&
         t.closed_at &&
         Number.isFinite(Number(t.realised_pl)) &&
-        Number(t.realised_pl) !== 0
+        Number(t.realised_pl) !== 0,
     )
     .sort(
       (a, b) =>
-        new Date(a.closed_at!).getTime() - new Date(b.closed_at!).getTime()
+        new Date(a.closed_at!).getTime() - new Date(b.closed_at!).getTime(),
     );
 
   let maxLossStreak = 0;
@@ -29,7 +29,7 @@ export function analyseBehaviour(trades: Trade[]) {
   }
 
   const uniqueDays = new Set(
-    closed.map((t) => new Date(t.closed_at!).toISOString().slice(0, 10))
+    closed.map((t) => new Date(t.closed_at!).toISOString().slice(0, 10)),
   ).size;
 
   return {

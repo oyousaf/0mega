@@ -41,7 +41,7 @@ export class PaperBroker implements Broker {
   async placeOrder(
     symbol: string,
     qty: number,
-    side: OrderSide
+    side: OrderSide,
   ): Promise<ExecutionResult> {
     const asset = detectAsset(symbol);
     const price = await getPrice(symbol, asset);

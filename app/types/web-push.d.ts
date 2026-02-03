@@ -43,7 +43,7 @@ declare module "web-push" {
     setVapidDetails(
       subject: string,
       publicKey: string,
-      privateKey: string
+      privateKey: string,
     ): void;
 
     /**
@@ -57,7 +57,7 @@ declare module "web-push" {
     sendNotification(
       subscription: PushSubscription | any,
       payload?: string | Buffer,
-      options?: PushOptions
+      options?: PushOptions,
     ): Promise<any>;
   }
 
