@@ -26,6 +26,7 @@ export async function GET() {
     const { rows } = await pool.query(`
       SELECT COUNT(*) AS open_trades
       FROM paper_trades
+      WHERE is_closed = false
     `);
 
     openTrades = Number(rows[0]?.open_trades ?? 0);
