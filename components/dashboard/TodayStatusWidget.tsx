@@ -64,13 +64,8 @@ export default function TodayStatusWidget() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="
-        w-full max-w-6xl mx-auto
-        rounded-xl p-4
-        bg-omega-green
-        border border-omega-dark-gold
-        shadow-[0_0_18px_rgba(212,175,55,0.15)]
-      "
+      className="w-full max-w-6xl mx-auto rounded-xl p-4 bg-omega-green border border-omega-dark-gold
+        shadow-[0_0_18px_rgba(212,175,55,0.15)]"
     >
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 text-center">
         <Block label="TODAY PNL">
