@@ -8,27 +8,27 @@ import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 /* ---------------------------------------
    CONFIG — PAPER FORWARD TEST
 ---------------------------------------- */
+
 const SYMBOL = "BTCUSDT";
 const TIMEFRAME = "1m";
 const POLL_MS = 5000;
 
-// Payoff geometry
 const RR_TARGET = 1.25;
 
-// Volatility filter
 const VOL_WINDOW = 20;
 const MIN_VOL_PCT = 0.0006;
 
-// Trend filter
 const EMA_PERIOD = 200;
 
-// Session filter (UTC hours)
 const SESSION_START = 7;
 const SESSION_END = 22;
 
 /* ---------------------------------------
    LOOP CONTROL
 ---------------------------------------- */
+
+let running = false;
+
 declare global {
   var __OMEGA_PRICE_LOOP_ID__: number | undefined;
 }
@@ -90,9 +90,16 @@ function sessionOpen() {
 ---------------------------------------- */
 
 export async function startPriceLoop() {
+  if (running) {
+    console.log("[ENGINE] already running");
+    return;
+  }
+
+  running = true;
+
   const loopId = nextLoopId();
 
-  console.log("[PRICE_LOOP] started", {
+  console.log("[ENGINE] started", {
     loopId,
     SYMBOL,
     TIMEFRAME,
@@ -107,34 +114,26 @@ export async function startPriceLoop() {
 
     try {
       const candles = await provider.fetchCandles();
-
       if (!candles.length) throw new Error("NO_CANDLES");
 
       const latest = candles[candles.length - 1];
       const price = Number(latest.close);
 
-      /* EXIT CHECK ALWAYS RUNS */
+      /* ALWAYS CHECK EXIT */
       await runExitWatcher(price);
 
-      /* SESSION FILTER */
-      if (!sessionOpen()) {
-        console.log("[SKIP] outside session");
-        continue;
-      }
+      if (!sessionOpen()) continue;
 
-      /* NEW CANDLE CHECK */
-      if (lastCandleTs === latest.timestamp) {
-        continue;
-      }
+      /* NEW CANDLE ONLY */
+      const minuteTs = Math.floor(Number(latest.timestamp) / 60000);
 
-      lastCandleTs = latest.timestamp;
+      if (lastCandleTs === minuteTs) continue;
 
-      console.log("[PRICE_LOOP] candle", {
-        ts: latest.timestamp,
-        close: price,
-      });
+      lastCandleTs = minuteTs;
 
-      /* VOLATILITY FILTER */
+      console.log("[CANDLE]", price);
+
+      /* VOL FILTER */
       const closes = candles
         .slice(-VOL_WINDOW)
         .map((c) => Number(c.close))
@@ -142,24 +141,16 @@ export async function startPriceLoop() {
 
       const vol = avgAbsReturnPct(closes);
 
-      if (vol < MIN_VOL_PCT) {
-        console.log("[SKIP] low volatility", {
-          volPct: (vol * 100).toFixed(3),
-        });
-        continue;
-      }
+      if (vol < MIN_VOL_PCT) continue;
 
-      /* TREND FILTER (EMA200) */
+      /* EMA FILTER */
       const allCloses = candles
         .map((c) => Number(c.close))
         .filter(Number.isFinite);
 
       const ema = calculateEMA(allCloses, EMA_PERIOD);
 
-      if (!ema) {
-        console.log("[SKIP] insufficient EMA data");
-        continue;
-      }
+      if (!ema) continue;
 
       /* STRUCTURE SIGNAL */
       const signal = await runStructureCheck({
@@ -171,27 +162,17 @@ export async function startPriceLoop() {
       if (!signal) continue;
 
       /* TREND ALIGNMENT */
-      if (signal.direction === "BUY" && price < ema) {
-        console.log("[SKIP] trend mismatch BUY");
-        continue;
-      }
-
-      if (signal.direction === "SELL" && price > ema) {
-        console.log("[SKIP] trend mismatch SELL");
-        continue;
-      }
+      if (signal.direction === "BUY" && price < ema) continue;
+      if (signal.direction === "SELL" && price > ema) continue;
 
       const entry = price;
       const sl = Number(signal.sl);
 
-      if (!Number.isFinite(entry) || !Number.isFinite(sl)) return;
+      if (!Number.isFinite(entry) || !Number.isFinite(sl)) continue;
 
       const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
 
-      if (!(riskDist > entry * 0.0002)) {
-        console.log("[SKIP] stop too tight");
-        return;
-      }
+      if (!(riskDist > entry * 0.0002)) continue;
 
       const tp1 =
         signal.direction === "BUY"
@@ -202,7 +183,7 @@ export async function startPriceLoop() {
 
       if (!risk.allowed) {
         console.log("[ENTRY_BLOCKED]", risk.reason);
-        return;
+        continue;
       }
 
       await withDbLock(async () => {
@@ -229,26 +210,25 @@ export async function startPriceLoop() {
             entry,
             sl,
             tp1,
-            rr: RR_TARGET,
-            volPct: (vol * 100).toFixed(3),
-            ema,
           });
         }
       });
     } catch (err) {
-      console.error("[PRICE_LOOP] error", err);
+      console.error("[ENGINE_ERROR]", err);
     }
 
     const sleep = Math.max(POLL_MS - (Date.now() - started), 0);
     await new Promise((r) => setTimeout(r, sleep));
   }
 
-  console.log("[PRICE_LOOP] exited cleanly");
+  running = false;
+  console.log("[ENGINE] stopped");
 }
 
 export function stopPriceLoop() {
   nextLoopId();
-  console.log("[PRICE_LOOP] stop requested");
+  running = false;
+  console.log("[ENGINE] stop requested");
 }
 
 /* ---------------------------------------
