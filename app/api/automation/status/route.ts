@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 import { getBroker } from "@/providers/execution/router";
+import { startPriceLoop, stopPriceLoop } from "@/lib/engine/priceLoop";
 
 /* -------------------------------------------------
-   AUTOMATION STATUS (CANONICAL)
+   AUTOMATION STATUS
 -------------------------------------------------- */
 export async function GET() {
   try {
@@ -49,7 +50,7 @@ export async function GET() {
 
     return NextResponse.json(
       { success: false, error: err.message ?? String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -60,6 +61,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const { enabled } = await req.json();
+    const nextState = Boolean(enabled);
 
     await pool.query(
       `
@@ -67,17 +69,31 @@ export async function POST(req: Request) {
       SET enabled = $1, updated_at = now()
       WHERE id = 1
       `,
-      [Boolean(enabled)]
+      [nextState],
     );
+
+    /* --------------------------
+       ENGINE CONTROL
+    --------------------------- */
+
+    if (nextState) {
+      console.log("[AUTOMATION] starting engine");
+      startPriceLoop();
+    } else {
+      console.log("[AUTOMATION] stopping engine");
+      stopPriceLoop();
+    }
 
     return NextResponse.json({
       success: true,
-      enabled: Boolean(enabled),
+      enabled: nextState,
     });
   } catch (err: any) {
+    console.error("Automation toggle error:", err);
+
     return NextResponse.json(
       { success: false, error: err.message ?? String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
