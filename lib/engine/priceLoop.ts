@@ -15,8 +15,16 @@ const POLL_MS = 5000;
 
 const RR_TARGET = 1.25;
 
+/* short volatility filter */
 const VOL_WINDOW = 20;
 const MIN_VOL_PCT = 0.0006;
+
+/* regime filter */
+const REGIME_WINDOW = 100;
+const REGIME_MIN_PCT = 0.0005;
+
+/* spike guard */
+const SPIKE_MULTIPLIER = 3;
 
 const EMA_PERIOD = 200;
 
@@ -119,12 +127,12 @@ export async function startPriceLoop() {
       const latest = candles[candles.length - 1];
       const price = Number(latest.close);
 
-      /* ALWAYS CHECK EXIT */
+      /* EXIT WATCHER */
       await runExitWatcher(price);
 
       if (!sessionOpen()) continue;
 
-      /* NEW CANDLE ONLY */
+      /* NEW CANDLE GATE */
       const minuteTs = Math.floor(Number(latest.timestamp) / 60000);
 
       if (lastCandleTs === minuteTs) continue;
@@ -133,26 +141,59 @@ export async function startPriceLoop() {
 
       console.log("[CANDLE]", price);
 
-      /* VOL FILTER */
       const closes = candles
-        .slice(-VOL_WINDOW)
         .map((c) => Number(c.close))
         .filter(Number.isFinite);
 
-      const vol = avgAbsReturnPct(closes);
+      /* ---------------------------------------
+         VOLATILITY REGIME FILTER
+      ---------------------------------------- */
+
+      const regimeCloses = closes.slice(-REGIME_WINDOW);
+      const regimeVol = avgAbsReturnPct(regimeCloses);
+
+      if (regimeVol < REGIME_MIN_PCT) {
+        console.log("[SKIP] low volatility regime");
+        continue;
+      }
+
+      /* ---------------------------------------
+         SHORT VOL FILTER
+      ---------------------------------------- */
+
+      const shortCloses = closes.slice(-VOL_WINDOW);
+      const vol = avgAbsReturnPct(shortCloses);
 
       if (vol < MIN_VOL_PCT) continue;
 
-      /* EMA FILTER */
-      const allCloses = candles
-        .map((c) => Number(c.close))
-        .filter(Number.isFinite);
+      /* ---------------------------------------
+         SPIKE GUARD
+      ---------------------------------------- */
 
-      const ema = calculateEMA(allCloses, EMA_PERIOD);
+      const lastMove =
+        Math.abs(closes[closes.length - 1] - closes[closes.length - 2]) /
+        closes[closes.length - 2];
 
-      if (!ema) continue;
+      if (lastMove > vol * SPIKE_MULTIPLIER) {
+        console.log("[SKIP] volatility spike");
+        continue;
+      }
 
-      /* STRUCTURE SIGNAL */
+      /* ---------------------------------------
+         EMA + SLOPE
+      ---------------------------------------- */
+
+      const emaNow = calculateEMA(closes, EMA_PERIOD);
+      const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
+
+      if (!emaNow || !emaPrev) continue;
+
+      const emaSlope = emaNow - emaPrev;
+
+      /* ---------------------------------------
+         STRUCTURE SIGNAL
+      ---------------------------------------- */
+
       const signal = await runStructureCheck({
         symbol: SYMBOL,
         timeframe: TIMEFRAME,
@@ -161,9 +202,19 @@ export async function startPriceLoop() {
 
       if (!signal) continue;
 
-      /* TREND ALIGNMENT */
-      if (signal.direction === "BUY" && price < ema) continue;
-      if (signal.direction === "SELL" && price > ema) continue;
+      /* ---------------------------------------
+         TREND QUALITY FILTER
+      ---------------------------------------- */
+
+      if (signal.direction === "BUY") {
+        if (price < emaNow) continue;
+        if (emaSlope <= 0) continue;
+      }
+
+      if (signal.direction === "SELL") {
+        if (price > emaNow) continue;
+        if (emaSlope >= 0) continue;
+      }
 
       const entry = price;
       const sl = Number(signal.sl);
