@@ -6,10 +6,10 @@ import { runExitWatcher } from "./exitWatcher";
 import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 
 /* ---------------------------------------
-   CONFIG — PAPER FORWARD TEST
+   CONFIG — FOREX FORWARD TEST
 ---------------------------------------- */
 
-const SYMBOL = "BTCUSDT";
+const SYMBOL = "EURUSD";
 const TIMEFRAME = "1m";
 const POLL_MS = 5000;
 
@@ -17,19 +17,29 @@ const RR_TARGET = 1.25;
 
 /* short volatility filter */
 const VOL_WINDOW = 20;
-const MIN_VOL_PCT = 0.0006;
+const MIN_VOL_PCT = 0.00015;
 
 /* regime filter */
 const REGIME_WINDOW = 100;
-const REGIME_MIN_PCT = 0.0005;
+const REGIME_MIN_PCT = 0.00012;
 
 /* spike guard */
-const SPIKE_MULTIPLIER = 3;
+const SPIKE_MULTIPLIER = 2;
 
 const EMA_PERIOD = 200;
 
+/* trading session */
 const SESSION_START = 7;
 const SESSION_END = 22;
+
+/* forex specific filters */
+
+/* spread guard */
+const MAX_SPREAD_PIPS = 1.5;
+
+/* consolidation filter */
+const RANGE_WINDOW = 15;
+const MIN_RANGE_PCT = 0.00025;
 
 /* ---------------------------------------
    LOOP CONTROL
@@ -93,6 +103,12 @@ function sessionOpen() {
   return hour >= SESSION_START && hour <= SESSION_END;
 }
 
+function calcRangePct(values: number[]) {
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  return (max - min) / min;
+}
+
 /* ---------------------------------------
    PUBLIC API
 ---------------------------------------- */
@@ -133,6 +149,7 @@ export async function startPriceLoop() {
       if (!sessionOpen()) continue;
 
       /* NEW CANDLE GATE */
+
       const minuteTs = Math.floor(Number(latest.timestamp) / 60000);
 
       if (lastCandleTs === minuteTs) continue;
@@ -180,6 +197,18 @@ export async function startPriceLoop() {
       }
 
       /* ---------------------------------------
+         CONSOLIDATION FILTER
+      ---------------------------------------- */
+
+      const rangeCloses = closes.slice(-RANGE_WINDOW);
+      const rangePct = calcRangePct(rangeCloses);
+
+      if (rangePct < MIN_RANGE_PCT) {
+        console.log("[SKIP] tight consolidation");
+        continue;
+      }
+
+      /* ---------------------------------------
          EMA + SLOPE
       ---------------------------------------- */
 
@@ -223,12 +252,16 @@ export async function startPriceLoop() {
 
       const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
 
-      if (!(riskDist > entry * 0.0002)) continue;
+      if (!(riskDist > entry * 0.00005)) continue;
 
       const tp1 =
         signal.direction === "BUY"
           ? entry + riskDist * RR_TARGET
           : entry - riskDist * RR_TARGET;
+
+      /* ---------------------------------------
+         RISK ENGINE
+      ---------------------------------------- */
 
       const risk = await riskGate(signal, entry);
 
@@ -236,6 +269,10 @@ export async function startPriceLoop() {
         console.log("[ENTRY_BLOCKED]", risk.reason);
         continue;
       }
+
+      /* ---------------------------------------
+         SINGLE POSITION LOCK
+      ---------------------------------------- */
 
       await withDbLock(async () => {
         const { rows } = await pool.query(
