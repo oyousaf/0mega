@@ -6,7 +6,7 @@ import { runExitWatcher } from "./exitWatcher";
 import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 
 /* ---------------------------------------
-   CONFIG — FOREX FORWARD TEST
+CONFIG — FOREX FORWARD TEST
 ---------------------------------------- */
 
 const SYMBOL = "EURUSD";
@@ -14,8 +14,6 @@ const TIMEFRAME = "1m";
 const POLL_MS = 5000;
 
 const RR_TARGET = 1.25;
-
-/* volatility filters */
 
 const VOL_WINDOW = 20;
 const MIN_VOL_PCT = 0.00015;
@@ -27,12 +25,10 @@ const SPIKE_MULTIPLIER = 2;
 
 const EMA_PERIOD = 200;
 
-/* sessions */
-
 const SESSION_START = 7;
 const SESSION_END = 22;
 
-/* forex specific filters */
+/* forex filters */
 
 const MAX_SPREAD_PIPS = 1.5;
 
@@ -42,13 +38,13 @@ const MIN_RANGE_PCT = 0.00025;
 /* position sizing */
 
 const PAPER_ACCOUNT_EQUITY = 10000;
-const RISK_PER_TRADE = 0.005; // 0.5%
+const RISK_PER_TRADE = 0.005;
 
 const PIP_SIZE = 0.0001;
-const PIP_VALUE_PER_LOT = 10; // $10 per pip per lot
+const PIP_VALUE_PER_LOT = 10;
 
 /* ---------------------------------------
-   LOOP CONTROL
+LOOP CONTROL
 ---------------------------------------- */
 
 let running = false;
@@ -68,7 +64,7 @@ function currentLoopId() {
 }
 
 /* ---------------------------------------
-   HELPERS
+HELPERS
 ---------------------------------------- */
 
 function avgAbsReturnPct(closes: number[]) {
@@ -116,7 +112,19 @@ function calcRangePct(values: number[]) {
 }
 
 /* ---------------------------------------
-   POSITION SIZING
+SPREAD CALCULATION
+---------------------------------------- */
+
+function calculateSpreadPips(candle: any) {
+  if (!candle.bid || !candle.ask) return null;
+
+  const spread = candle.ask - candle.bid;
+
+  return spread / PIP_SIZE;
+}
+
+/* ---------------------------------------
+POSITION SIZING
 ---------------------------------------- */
 
 function calculateLotSize(entry: number, stop: number) {
@@ -134,7 +142,7 @@ function calculateLotSize(entry: number, stop: number) {
 }
 
 /* ---------------------------------------
-   PUBLIC API
+PUBLIC API
 ---------------------------------------- */
 
 export async function startPriceLoop() {
@@ -166,13 +174,11 @@ export async function startPriceLoop() {
 
       /* spread filter */
 
-      if (latest.spread) {
-        const spreadPips = latest.spread / PIP_SIZE;
+      const spreadPips = calculateSpreadPips(latest);
 
-        if (spreadPips > MAX_SPREAD_PIPS) {
-          console.log("[SKIP] spread too wide", spreadPips);
-          continue;
-        }
+      if (spreadPips && spreadPips > MAX_SPREAD_PIPS) {
+        console.log("[SKIP] spread too wide", spreadPips);
+        continue;
       }
 
       await runExitWatcher(price);
@@ -191,8 +197,6 @@ export async function startPriceLoop() {
         .map((c) => Number(c.close))
         .filter(Number.isFinite);
 
-      /* regime volatility */
-
       const regimeCloses = closes.slice(-REGIME_WINDOW);
       const regimeVol = avgAbsReturnPct(regimeCloses);
 
@@ -201,14 +205,10 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* short volatility */
-
       const shortCloses = closes.slice(-VOL_WINDOW);
       const vol = avgAbsReturnPct(shortCloses);
 
       if (vol < MIN_VOL_PCT) continue;
-
-      /* spike guard */
 
       const lastMove =
         Math.abs(closes[closes.length - 1] - closes[closes.length - 2]) /
@@ -219,8 +219,6 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* consolidation */
-
       const rangeCloses = closes.slice(-RANGE_WINDOW);
       const rangePct = calcRangePct(rangeCloses);
 
@@ -229,16 +227,12 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* EMA */
-
       const emaNow = calculateEMA(closes, EMA_PERIOD);
       const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
 
       if (!emaNow || !emaPrev) continue;
 
       const emaSlope = emaNow - emaPrev;
-
-      /* structure signal */
 
       const signal = await runStructureCheck({
         symbol: SYMBOL,
