@@ -15,31 +15,37 @@ const POLL_MS = 5000;
 
 const RR_TARGET = 1.25;
 
-/* short volatility filter */
+/* volatility filters */
+
 const VOL_WINDOW = 20;
 const MIN_VOL_PCT = 0.00015;
 
-/* regime filter */
 const REGIME_WINDOW = 100;
 const REGIME_MIN_PCT = 0.00012;
 
-/* spike guard */
 const SPIKE_MULTIPLIER = 2;
 
 const EMA_PERIOD = 200;
 
-/* trading session */
+/* sessions */
+
 const SESSION_START = 7;
 const SESSION_END = 22;
 
 /* forex specific filters */
 
-/* spread guard */
 const MAX_SPREAD_PIPS = 1.5;
 
-/* consolidation filter */
 const RANGE_WINDOW = 15;
 const MIN_RANGE_PCT = 0.00025;
+
+/* position sizing */
+
+const PAPER_ACCOUNT_EQUITY = 10000;
+const RISK_PER_TRADE = 0.005; // 0.5%
+
+const PIP_SIZE = 0.0001;
+const PIP_VALUE_PER_LOT = 10; // $10 per pip per lot
 
 /* ---------------------------------------
    LOOP CONTROL
@@ -110,6 +116,24 @@ function calcRangePct(values: number[]) {
 }
 
 /* ---------------------------------------
+   POSITION SIZING
+---------------------------------------- */
+
+function calculateLotSize(entry: number, stop: number) {
+  const riskAmount = PAPER_ACCOUNT_EQUITY * RISK_PER_TRADE;
+
+  const stopDistance = Math.abs(entry - stop);
+
+  const stopPips = stopDistance / PIP_SIZE;
+
+  if (stopPips <= 0) return 0;
+
+  const lotSize = riskAmount / (stopPips * PIP_VALUE_PER_LOT);
+
+  return Number(lotSize.toFixed(3));
+}
+
+/* ---------------------------------------
    PUBLIC API
 ---------------------------------------- */
 
@@ -123,11 +147,7 @@ export async function startPriceLoop() {
 
   const loopId = nextLoopId();
 
-  console.log("[ENGINE] started", {
-    loopId,
-    SYMBOL,
-    TIMEFRAME,
-  });
+  console.log("[ENGINE] started", { loopId, SYMBOL, TIMEFRAME });
 
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
@@ -141,14 +161,23 @@ export async function startPriceLoop() {
       if (!candles.length) throw new Error("NO_CANDLES");
 
       const latest = candles[candles.length - 1];
+
       const price = Number(latest.close);
 
-      /* EXIT WATCHER */
+      /* spread filter */
+
+      if (latest.spread) {
+        const spreadPips = latest.spread / PIP_SIZE;
+
+        if (spreadPips > MAX_SPREAD_PIPS) {
+          console.log("[SKIP] spread too wide", spreadPips);
+          continue;
+        }
+      }
+
       await runExitWatcher(price);
 
       if (!sessionOpen()) continue;
-
-      /* NEW CANDLE GATE */
 
       const minuteTs = Math.floor(Number(latest.timestamp) / 60000);
 
@@ -162,9 +191,7 @@ export async function startPriceLoop() {
         .map((c) => Number(c.close))
         .filter(Number.isFinite);
 
-      /* ---------------------------------------
-         VOLATILITY REGIME FILTER
-      ---------------------------------------- */
+      /* regime volatility */
 
       const regimeCloses = closes.slice(-REGIME_WINDOW);
       const regimeVol = avgAbsReturnPct(regimeCloses);
@@ -174,18 +201,14 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* ---------------------------------------
-         SHORT VOL FILTER
-      ---------------------------------------- */
+      /* short volatility */
 
       const shortCloses = closes.slice(-VOL_WINDOW);
       const vol = avgAbsReturnPct(shortCloses);
 
       if (vol < MIN_VOL_PCT) continue;
 
-      /* ---------------------------------------
-         SPIKE GUARD
-      ---------------------------------------- */
+      /* spike guard */
 
       const lastMove =
         Math.abs(closes[closes.length - 1] - closes[closes.length - 2]) /
@@ -196,9 +219,7 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* ---------------------------------------
-         CONSOLIDATION FILTER
-      ---------------------------------------- */
+      /* consolidation */
 
       const rangeCloses = closes.slice(-RANGE_WINDOW);
       const rangePct = calcRangePct(rangeCloses);
@@ -208,9 +229,7 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* ---------------------------------------
-         EMA + SLOPE
-      ---------------------------------------- */
+      /* EMA */
 
       const emaNow = calculateEMA(closes, EMA_PERIOD);
       const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
@@ -219,9 +238,7 @@ export async function startPriceLoop() {
 
       const emaSlope = emaNow - emaPrev;
 
-      /* ---------------------------------------
-         STRUCTURE SIGNAL
-      ---------------------------------------- */
+      /* structure signal */
 
       const signal = await runStructureCheck({
         symbol: SYMBOL,
@@ -230,10 +247,6 @@ export async function startPriceLoop() {
       });
 
       if (!signal) continue;
-
-      /* ---------------------------------------
-         TREND QUALITY FILTER
-      ---------------------------------------- */
 
       if (signal.direction === "BUY") {
         if (price < emaNow) continue;
@@ -259,10 +272,6 @@ export async function startPriceLoop() {
           ? entry + riskDist * RR_TARGET
           : entry - riskDist * RR_TARGET;
 
-      /* ---------------------------------------
-         RISK ENGINE
-      ---------------------------------------- */
-
       const risk = await riskGate(signal, entry);
 
       if (!risk.allowed) {
@@ -270,9 +279,9 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* ---------------------------------------
-         SINGLE POSITION LOCK
-      ---------------------------------------- */
+      const lotSize = calculateLotSize(entry, sl);
+
+      if (lotSize <= 0) continue;
 
       await withDbLock(async () => {
         const { rows } = await pool.query(
@@ -284,7 +293,7 @@ export async function startPriceLoop() {
         const res = await executeTradeIntent({
           signalId: signal.reason,
           symbol: SYMBOL,
-          qty: 1,
+          qty: lotSize,
           side: signal.direction,
           rawSl: sl,
           rawTp1: tp1,
@@ -298,6 +307,7 @@ export async function startPriceLoop() {
             entry,
             sl,
             tp1,
+            lotSize,
           });
         }
       });
@@ -318,10 +328,6 @@ export function stopPriceLoop() {
   running = false;
   console.log("[ENGINE] stop requested");
 }
-
-/* ---------------------------------------
-   DB LOCK
----------------------------------------- */
 
 async function withDbLock(fn: () => Promise<void>) {
   await pool.query("BEGIN");
