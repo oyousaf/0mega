@@ -15,6 +15,8 @@ const POLL_MS = 5000;
 
 const RR_TARGET = 1.25;
 
+/* volatility filters */
+
 const VOL_WINDOW = 20;
 const MIN_VOL_PCT = 0.00015;
 
@@ -32,8 +34,20 @@ const SESSION_END = 22;
 
 const MAX_SPREAD_PIPS = 1.5;
 
+/* consolidation filter */
+
 const RANGE_WINDOW = 15;
 const MIN_RANGE_PCT = 0.00025;
+
+/* london activation (30-minute range) */
+
+const ACTIVATION_WINDOW = 30;
+const MIN_ACTIVATION_RANGE_PIPS = 8;
+
+/* news guard */
+
+const NEWS_LOOKBACK = 5;
+const NEWS_SPIKE_PIPS = 12;
 
 /* position sizing */
 
@@ -112,6 +126,34 @@ function calcRangePct(values: number[]) {
 }
 
 /* ---------------------------------------
+30-MINUTE RANGE (PIPS)
+---------------------------------------- */
+
+function calculateRangePips(values: number[]) {
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+
+  const range = max - min;
+
+  return range / PIP_SIZE;
+}
+
+/* ---------------------------------------
+NEWS VOLATILITY GUARD
+---------------------------------------- */
+
+function newsSpikeDetected(values: number[]) {
+  const recent = values.slice(-NEWS_LOOKBACK);
+
+  const max = Math.max(...recent);
+  const min = Math.min(...recent);
+
+  const range = (max - min) / PIP_SIZE;
+
+  return range >= NEWS_SPIKE_PIPS;
+}
+
+/* ---------------------------------------
 SPREAD CALCULATION
 ---------------------------------------- */
 
@@ -172,8 +214,6 @@ export async function startPriceLoop() {
 
       const price = Number(latest.close);
 
-      /* spread filter */
-
       const spreadPips = calculateSpreadPips(latest);
 
       if (spreadPips && spreadPips > MAX_SPREAD_PIPS) {
@@ -197,6 +237,26 @@ export async function startPriceLoop() {
         .map((c) => Number(c.close))
         .filter(Number.isFinite);
 
+      /* london activation */
+
+      const activationCloses = closes.slice(-ACTIVATION_WINDOW);
+
+      const rangePips = calculateRangePips(activationCloses);
+
+      if (rangePips < MIN_ACTIVATION_RANGE_PIPS) {
+        console.log("[SKIP] london range not active", rangePips);
+        continue;
+      }
+
+      /* news spike guard */
+
+      if (newsSpikeDetected(closes)) {
+        console.log("[SKIP] news volatility spike");
+        continue;
+      }
+
+      /* volatility regime */
+
       const regimeCloses = closes.slice(-REGIME_WINDOW);
       const regimeVol = avgAbsReturnPct(regimeCloses);
 
@@ -204,6 +264,8 @@ export async function startPriceLoop() {
         console.log("[SKIP] low volatility regime");
         continue;
       }
+
+      /* short volatility */
 
       const shortCloses = closes.slice(-VOL_WINDOW);
       const vol = avgAbsReturnPct(shortCloses);
