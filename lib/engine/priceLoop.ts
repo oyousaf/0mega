@@ -23,7 +23,7 @@ const MIN_VOL_PCT = 0.00015;
 const REGIME_WINDOW = 100;
 const REGIME_MIN_PCT = 0.00012;
 
-const SPIKE_MULTIPLIER = 2;
+const SPIKE_MULTIPLIER = 3;
 
 const EMA_PERIOD = 200;
 
@@ -47,7 +47,7 @@ const MIN_ACTIVATION_RANGE_PIPS = 8;
 /* news guard */
 
 const NEWS_LOOKBACK = 5;
-const NEWS_SPIKE_PIPS = 12;
+const NEWS_SPIKE_PIPS = 18;
 
 /* position sizing */
 
