@@ -140,7 +140,6 @@ export async function GET(req: Request) {
         closed_at: exit?.time ?? null,
         is_closed: Boolean(exit),
 
-        // strategy stays hard-coded (no DB column)
         strategy: "Structure",
 
         rr: Number.isFinite(Number(meta.rr)) ? Number(meta.rr) : null,
