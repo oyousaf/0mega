@@ -1,11 +1,8 @@
-type Candle = {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
+import type { Candle } from "@/types/trade";
+
+/* -------------------------------------------------
+STRUCTURE TYPES
+-------------------------------------------------- */
 
 type StructureInput = {
   symbol: string;
@@ -21,18 +18,27 @@ type StructureSignal = {
   reason: string;
 };
 
-/* FAST DEBUG MODE */
+/* -------------------------------------------------
+FAST DEBUG MODE PARAMETERS
+-------------------------------------------------- */
+
 const LOOKBACK = 6;
 const MIN_RISK_PCT = 0.00015; // 0.015%
 const MAX_RISK_PCT = 0.05; // 5%
+
+/* -------------------------------------------------
+STRUCTURE CHECK
+-------------------------------------------------- */
 
 export async function runStructureCheck(
   input: StructureInput,
 ): Promise<StructureSignal | null> {
   const { symbol, candles } = input;
+
   if (candles.length < LOOKBACK + 1) return null;
 
   const recent = candles.slice(-LOOKBACK);
+
   const last = recent.at(-1)!;
   const prev = recent.at(-2)!;
 
@@ -42,9 +48,13 @@ export async function runStructureCheck(
   const rangeHigh = Math.max(...highs);
   const rangeLow = Math.min(...lows);
 
-  /* BUY momentum */
+  /* ------------------------------
+     BUY MOMENTUM
+  ------------------------------ */
+
   if (last.close > prev.close) {
     const sl = rangeLow;
+
     const risk = last.close - sl;
     const riskPct = risk / last.close;
 
@@ -59,9 +69,13 @@ export async function runStructureCheck(
     }
   }
 
-  /* SELL momentum */
+  /* ------------------------------
+     SELL MOMENTUM
+  ------------------------------ */
+
   if (last.close < prev.close) {
     const sl = rangeHigh;
+
     const risk = sl - last.close;
     const riskPct = risk / last.close;
 
