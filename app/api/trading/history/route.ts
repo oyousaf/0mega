@@ -5,13 +5,14 @@ import { pool } from "@/lib/neon";
    SAFE CAST HELPERS
 ------------------------------------------------------- */
 const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
 const iso = (v: any) => {
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d.toISOString();
 };
 
 /* -------------------------------------------------------
-   TRADE HISTORY (EXECUTION-ONLY + RR/HALAAL PATCH)
+   TRADE HISTORY (CANONICAL EXECUTION TRUTH)
 ------------------------------------------------------- */
 export async function GET(req: Request) {
   try {
@@ -19,11 +20,12 @@ export async function GET(req: Request) {
 
     const isAnalytics = searchParams.get("analytics") === "1";
     const rawLimit = n(searchParams.get("limit") ?? 20);
-    const limit = isAnalytics ? rawLimit || 10_000 : Math.min(rawLimit, 50);
+
+    const limit = isAnalytics ? rawLimit || 10000 : Math.min(rawLimit, 50);
     const offset = Math.max(n(searchParams.get("offset") ?? 0), 0);
 
     /* -------------------------------------------------
-       1. Page trade_ids by execution activity
+       1. Page trade_ids by latest execution activity
     -------------------------------------------------- */
     const { rows: tradeRows } = await pool.query(
       `
@@ -66,12 +68,13 @@ export async function GET(req: Request) {
     );
 
     /* -------------------------------------------------
-       3. Fetch trade metadata (RR + halaal ONLY)
+       3. Fetch trade metadata
     -------------------------------------------------- */
     const { rows: tradeMeta } = await pool.query(
       `
       SELECT
         id,
+        symbol,
         rr,
         halaal
       FROM paper_trades
@@ -92,6 +95,7 @@ export async function GET(req: Request) {
 
     for (const r of execRows) {
       const tid = String(r.trade_id);
+
       if (!tradeMap[tid]) tradeMap[tid] = [];
 
       tradeMap[tid].push({
@@ -107,51 +111,58 @@ export async function GET(req: Request) {
     /* -------------------------------------------------
        5. Build trade objects
     -------------------------------------------------- */
-    const trades = pageTradeIds.map((trade_id) => {
-      const executions = tradeMap[String(trade_id)] ?? [];
-      const entry = executions[0];
-      const exit =
-        executions.length > 1 ? executions[executions.length - 1] : null;
+    const trades = pageTradeIds
+      .map((trade_id) => {
+        const executions = tradeMap[String(trade_id)] ?? [];
 
-      const qty = entry.qty;
-      const isBuy = entry.side === "BUY";
+        if (!executions.length) return null;
 
-      const realised_pl = exit
-        ? isBuy
-          ? (exit.price - entry.price) * qty
-          : (entry.price - exit.price) * qty
-        : null;
+        const entry = executions[0];
+        const exit =
+          executions.length > 1 ? executions[executions.length - 1] : null;
 
-      const meta = metaMap[String(trade_id)] ?? {};
+        const qty = entry.qty;
+        const isBuy = entry.side === "BUY";
 
-      return {
-        trade_id,
-        symbol: "BTCUSDT",
-        side: entry.side,
-        qty,
+        const realised_pl = exit
+          ? isBuy
+            ? (exit.price - entry.price) * qty
+            : (entry.price - exit.price) * qty
+          : null;
 
-        entry_price: entry.price,
-        entry_fill_price: entry.price,
-        exit_fill_price: exit?.price ?? null,
+        const meta = metaMap[String(trade_id)] ?? {};
 
-        realised_pl,
+        return {
+          trade_id,
+          symbol: meta.symbol ?? "UNKNOWN",
 
-        opened_at: entry.time,
-        closed_at: exit?.time ?? null,
-        is_closed: Boolean(exit),
+          side: entry.side,
+          qty,
 
-        strategy: "Structure",
+          entry_price: entry.price,
+          entry_fill_price: entry.price,
+          exit_fill_price: exit?.price ?? null,
 
-        rr: Number.isFinite(Number(meta.rr)) ? Number(meta.rr) : null,
-        halaal: meta.halaal ?? true,
+          realised_pl,
 
-        executions,
-      };
-    });
+          opened_at: entry.time,
+          closed_at: exit?.time ?? null,
+          is_closed: Boolean(exit),
+
+          strategy: "Structure",
+
+          rr: Number.isFinite(Number(meta.rr)) ? Number(meta.rr) : null,
+          halaal: meta.halaal ?? true,
+
+          executions,
+        };
+      })
+      .filter(Boolean);
 
     return NextResponse.json({ trades, hasMore });
   } catch (err: any) {
     console.error("History route error:", err);
+
     return NextResponse.json(
       { error: err.message || String(err) },
       { status: 500 },
