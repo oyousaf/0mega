@@ -78,13 +78,14 @@ const MIN_REQUIRED_CANDLES = Math.max(
 );
 
 /* ---------------------------------------
-LOOP CONTROL
+ENGINE STATE
 ---------------------------------------- */
 
 let running = false;
 
 declare global {
   var __OMEGA_PRICE_LOOP_ID__: number | undefined;
+  var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
 }
 
 function nextLoopId() {
@@ -188,10 +189,15 @@ export async function startPriceLoop() {
   }
 
   running = true;
+  globalThis.__OMEGA_ENGINE_RUNNING__ = true;
 
   const loopId = nextLoopId();
 
-  console.log("[ENGINE] started", { loopId, SYMBOL, TEST_MODE });
+  console.log("[ENGINE] started", {
+    loopId,
+    SYMBOL,
+    TEST_MODE,
+  });
 
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
@@ -398,6 +404,7 @@ export async function startPriceLoop() {
   }
 
   running = false;
+  globalThis.__OMEGA_ENGINE_RUNNING__ = false;
 
   console.log("[ENGINE] stopped");
 }
@@ -409,6 +416,8 @@ STOP ENGINE
 export function stopPriceLoop() {
   nextLoopId();
   running = false;
+  globalThis.__OMEGA_ENGINE_RUNNING__ = false;
+
   console.log("[ENGINE] stop requested");
 }
 
