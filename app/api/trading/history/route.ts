@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
 /* -------------------------------------------------------
-   HELPERS
+HELPERS
 ------------------------------------------------------- */
 
 const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -13,7 +13,7 @@ const iso = (v: any) => {
 };
 
 /* -------------------------------------------------------
-   TRADE HISTORY 
+TRADE HISTORY
 ------------------------------------------------------- */
 
 export async function GET(req: Request) {
@@ -28,21 +28,40 @@ export async function GET(req: Request) {
     const offset = Math.max(n(searchParams.get("offset") ?? 0), 0);
 
     /* -------------------------------------------------
-       1. PAGE TRADES BY LATEST EXECUTION
+       1. FETCH TRADES (SOURCE OF TRUTH)
     -------------------------------------------------- */
 
     const { rows: tradeRows } = await pool.query(
       `
       SELECT
-        e.trade_id,
-        MAX(e.timestamp) AS last_time,
+        p.id AS trade_id,
         p.symbol,
+        p.side,
+        p.qty,
+        p.entry_price,
+        p.realised_pl,
+        p.opened_at,
+        p.closed_at,
+        p.is_closed,
+        p.rr,
+        p.halaal,
+        MAX(e.timestamp) AS last_time
+      FROM paper_trades p
+      LEFT JOIN trade_executions e
+        ON e.trade_id = p.id
+      GROUP BY
+        p.id,
+        p.symbol,
+        p.side,
+        p.qty,
+        p.entry_price,
+        p.realised_pl,
+        p.opened_at,
+        p.closed_at,
+        p.is_closed,
         p.rr,
         p.halaal
-      FROM trade_executions e
-      JOIN paper_trades p ON p.id = e.trade_id
-      GROUP BY e.trade_id, p.symbol, p.rr, p.halaal
-      ORDER BY last_time DESC
+      ORDER BY last_time DESC NULLS LAST
       LIMIT $1 OFFSET $2
       `,
       [limit + 1, offset],
@@ -53,7 +72,6 @@ export async function GET(req: Request) {
     }
 
     const hasMore = tradeRows.length > limit;
-
     const pageTrades = tradeRows.slice(0, limit);
 
     const tradeIds = pageTrades.map((r) => r.trade_id);
@@ -94,58 +112,48 @@ export async function GET(req: Request) {
         qty: n(r.qty),
         price: n(r.price),
         broker: r.broker ?? "paper",
-        time: iso(r.timestamp),
+        timestamp: iso(r.timestamp),
       });
     }
 
     /* -------------------------------------------------
-       4. BUILD TRADES
+       4. BUILD TRADE OBJECTS
     -------------------------------------------------- */
 
-    const trades = pageTrades
-      .map((row) => {
-        const executions = execMap[row.trade_id] ?? [];
+    const trades = pageTrades.map((row) => {
+      const executions = execMap[row.trade_id] ?? [];
 
-        if (!executions.length) return null;
+      const entry = executions[0] ?? null;
+      const exit =
+        executions.length > 1 ? executions[executions.length - 1] : null;
 
-        const entry = executions[0];
-        const exit =
-          executions.length > 1 ? executions[executions.length - 1] : null;
+      return {
+        trade_id: row.trade_id,
 
-        const qty = entry.qty;
+        symbol: row.symbol ?? "UNKNOWN",
+        side: row.side,
 
-        const realised_pl = exit
-          ? entry.side === "BUY"
-            ? (exit.price - entry.price) * qty
-            : (entry.price - exit.price) * qty
-          : null;
+        qty: n(row.qty),
 
-        return {
-          trade_id: row.trade_id,
-          symbol: row.symbol ?? "UNKNOWN",
+        entry_price: n(row.entry_price),
+        entry_fill_price: entry?.price ?? n(row.entry_price),
+        exit_fill_price: exit?.price ?? null,
 
-          side: entry.side,
-          qty,
+        realised_pl: row.realised_pl !== null ? n(row.realised_pl) : null,
 
-          entry_price: entry.price,
-          entry_fill_price: entry.price,
-          exit_fill_price: exit?.price ?? null,
+        opened_at: iso(row.opened_at) ?? entry?.timestamp,
+        closed_at: iso(row.closed_at) ?? exit?.timestamp ?? null,
 
-          realised_pl,
+        is_closed: Boolean(row.is_closed),
 
-          opened_at: entry.time,
-          closed_at: exit?.time ?? null,
-          is_closed: Boolean(exit),
+        strategy: "Structure",
 
-          strategy: "Structure",
+        rr: Number.isFinite(Number(row.rr)) ? Number(row.rr) : null,
+        halaal: row.halaal ?? true,
 
-          rr: Number.isFinite(Number(row.rr)) ? Number(row.rr) : null,
-          halaal: row.halaal ?? true,
-
-          executions,
-        };
-      })
-      .filter(Boolean);
+        executions,
+      };
+    });
 
     return NextResponse.json({ trades, hasMore });
   } catch (err: any) {

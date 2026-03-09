@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
 /* ------------------------------------------------
+   SAFE NUMBER
+------------------------------------------------ */
+
+function n(v: unknown) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+}
+
+/* ------------------------------------------------
    PNL SUMMARY
 ------------------------------------------------ */
 
@@ -9,14 +18,20 @@ export async function GET() {
   try {
     const { rows } = await pool.query(`
       SELECT
-        COALESCE(SUM(realised_pl)
-          FILTER (WHERE closed_at::date = CURRENT_DATE), 0) AS daily,
+        SUM(realised_pl)
+          FILTER (
+            WHERE closed_at >= CURRENT_DATE
+          ) AS daily,
 
-        COALESCE(SUM(realised_pl)
-          FILTER (WHERE closed_at >= NOW() - INTERVAL '7 days'), 0) AS weekly,
+        SUM(realised_pl)
+          FILTER (
+            WHERE closed_at >= NOW() - INTERVAL '7 days'
+          ) AS weekly,
 
-        COALESCE(SUM(realised_pl)
-          FILTER (WHERE closed_at >= NOW() - INTERVAL '30 days'), 0) AS monthly
+        SUM(realised_pl)
+          FILTER (
+            WHERE closed_at >= NOW() - INTERVAL '30 days'
+          ) AS monthly
 
       FROM paper_trades
       WHERE is_closed = true
@@ -25,10 +40,14 @@ export async function GET() {
 
     const r = rows[0] ?? {};
 
+    const daily = n(r.daily);
+    const weekly = n(r.weekly);
+    const monthly = n(r.monthly);
+
     return NextResponse.json({
-      daily: Number(Number(r.daily ?? 0).toFixed(2)),
-      weekly: Number(Number(r.weekly ?? 0).toFixed(2)),
-      monthly: Number(Number(r.monthly ?? 0).toFixed(2)),
+      daily,
+      weekly,
+      monthly,
     });
   } catch (err: any) {
     console.error("PNL summary error:", err);

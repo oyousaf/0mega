@@ -31,6 +31,10 @@ function assertPositive(n: number, err: string) {
   if (!(n > 0)) throw new Error(err);
 }
 
+function cleanZero(n: number) {
+  return Math.abs(n) < 0.0000001 ? 0 : n;
+}
+
 function validateLevelDistance(params: {
   entry: number;
   level: number;
@@ -72,23 +76,28 @@ function validateTradeGeometry(params: {
   }
 }
 
+/* -------------------------------------------------
+   FOREX RISK MODEL
+-------------------------------------------------- */
 function calculateRiskAmount(entry: number, sl: number, qtyLots: number) {
   const stopPips = Math.abs(entry - sl) / PIP_SIZE;
-  return stopPips * qtyLots * PIP_VALUE_PER_LOT;
+  return cleanZero(stopPips * qtyLots * PIP_VALUE_PER_LOT);
 }
 
+/* -------------------------------------------------
+   REALISED PNL
+   Use direct currency PnL so UI + DB stay aligned
+-------------------------------------------------- */
 function calculateRealisedPl(params: {
   side: OrderSide;
   entry: number;
   exit: number;
-  qtyLots: number;
+  qty: number;
 }) {
-  const { side, entry, exit, qtyLots } = params;
+  const { side, entry, exit, qty } = params;
 
   const diff = side === "BUY" ? exit - entry : entry - exit;
-  const pips = diff / PIP_SIZE;
-
-  return pips * qtyLots * PIP_VALUE_PER_LOT;
+  return cleanZero(diff * qty);
 }
 
 /* -------------------------------------------------
@@ -209,7 +218,7 @@ export async function closeTrade(
 
     const { rows } = await client.query(
       `
-      SELECT side, qty, entry_price, risk_amount
+      SELECT id, side, qty, entry_price, risk_amount
       FROM paper_trades
       WHERE id = $1 AND is_closed = false
       FOR UPDATE
@@ -230,7 +239,7 @@ export async function closeTrade(
       side: trade.side,
       entry,
       exit,
-      qtyLots: qty,
+      qty,
     });
 
     const updateRes = await client.query(
