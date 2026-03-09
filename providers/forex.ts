@@ -1,19 +1,21 @@
+import { getPriceProvider } from "@/lib/prices/provider";
+
 export async function getForexPrice(pair: string): Promise<number> {
   const formatted = pair.toUpperCase().trim();
 
-  const res = await fetch(`/api/prices/forex/${formatted}`, {
-    cache: "no-store",
-  });
+  const provider = getPriceProvider(formatted, "1m");
 
-  if (!res.ok) {
+  const candles = await provider.fetchCandles();
+
+  if (!candles.length) {
     throw new Error(`Forex price unavailable for ${formatted}`);
   }
 
-  const data = await res.json();
+  const price = Number(candles[candles.length - 1].close);
 
-  if (!Number.isFinite(Number(data.price))) {
+  if (!Number.isFinite(price)) {
     throw new Error(`Invalid forex price for ${formatted}`);
   }
 
-  return Number(data.price);
+  return price;
 }
