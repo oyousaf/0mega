@@ -24,32 +24,41 @@ export default function TradeHistoryWidget() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const latestTradeRef = useRef<number | null>(null);
+
   const pnlSummary = usePnlSummary(POLL_INTERVAL);
 
   /* ---------------------------------------------
      Helpers
   --------------------------------------------- */
+
   const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
   const fmt = (v: unknown) =>
     Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
 
   const fmtDate = (d: unknown) => {
     const dt = new Date(String(d));
-    return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
+    return isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-GB");
   };
 
   function mergeTrades(prev: Trade[], next: Trade[]) {
     const map = new Map<number, Trade>();
+
     for (const t of prev) map.set(t.trade_id, t);
     for (const t of next) map.set(t.trade_id, t);
+
     return Array.from(map.values());
   }
 
   /* ---------------------------------------------
      Data loading
   --------------------------------------------- */
+
   async function loadPage(nextOffset = 0, append = false) {
     if (loadingMore) return;
+
     setLoadingMore(true);
 
     try {
@@ -61,7 +70,19 @@ export default function TradeHistoryWidget() {
       const json = await res.json();
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
+      if (!append && trades.length > 0) {
+        const newest = trades[0].trade_id;
+
+        if (latestTradeRef.current === newest) {
+          setLoadingMore(false);
+          return;
+        }
+
+        latestTradeRef.current = newest;
+      }
+
       setItems((prev) => (append ? mergeTrades(prev, trades) : trades));
+
       setHasMore(Boolean(json.hasMore));
       setOffset(nextOffset);
     } catch (err) {
@@ -73,7 +94,9 @@ export default function TradeHistoryWidget() {
 
   useEffect(() => {
     loadPage(0, false);
+
     const id = setInterval(() => loadPage(0, false), POLL_INTERVAL);
+
     return () => clearInterval(id);
   }, []);
 
@@ -83,18 +106,21 @@ export default function TradeHistoryWidget() {
 
     const onScroll = () => {
       if (!hasMore || loadingMore) return;
+
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
         loadPage(offset + PAGE_SIZE, true);
       }
     };
 
     el.addEventListener("scroll", onScroll);
+
     return () => el.removeEventListener("scroll", onScroll);
   }, [offset, hasMore, loadingMore]);
 
   /* ---------------------------------------------
      Render
   --------------------------------------------- */
+
   return (
     <Card
       sx={{
@@ -126,7 +152,6 @@ export default function TradeHistoryWidget() {
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 1.5 }} />
 
-        {/* SCROLL CONTAINER */}
         <div
           ref={containerRef}
           className="trade-history-scroll"
@@ -134,6 +159,7 @@ export default function TradeHistoryWidget() {
         >
           {items.map((t) => {
             const isOpen = openRow === t.trade_id;
+
             const entry = n(t.entry_price);
             const pl = t.realised_pl != null ? n(t.realised_pl) : null;
 
@@ -187,11 +213,12 @@ export default function TradeHistoryWidget() {
                         <div>
                           {e.side} @ £{fmt(e.price)}
                         </div>
+
                         <div className="text-right">
                           Qty {e.qty} • {e.broker}
                           <br />
                           <span className="opacity-60">
-                            {fmtDate(e.timestamp)}
+                            {fmtDate((e as any).timestamp ?? (e as any).time)}
                           </span>
                         </div>
                       </div>
