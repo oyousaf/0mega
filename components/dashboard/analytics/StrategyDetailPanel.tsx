@@ -5,13 +5,14 @@ import { motion } from "framer-motion";
 import { Box } from "@mui/material";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { Trade } from "@/types/trade";
+import { fmtPrice } from "@/lib/format";
 
 /* -----------------------------------------
-   SAFE HELPERS
+SAFE HELPERS
 ----------------------------------------- */
-const num = (v: any) => {
+const num = (v: unknown) => {
   const n = Number(v);
-  return isFinite(n) ? n : 0;
+  return Number.isFinite(n) ? n : 0;
 };
 
 const pct = (realised: number, entry: number, qty: number) => {
@@ -27,11 +28,11 @@ export default function StrategyDetailPanel({
   trades: Trade[];
 }) {
   /* -----------------------------------------
-     FILTER BY STRATEGY
+  FILTER BY STRATEGY
   ----------------------------------------- */
   const stratTrades = trades
     .filter((t) => (t.strategy ?? "Unknown") === strategy)
-    .filter((t) => t.realised_pl !== null) // ignore open trades for analytics
+    .filter((t) => t.realised_pl !== null)
     .sort(
       (a, b) =>
         new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime(),
@@ -40,32 +41,32 @@ export default function StrategyDetailPanel({
   const last5 = stratTrades.slice(0, 5);
 
   /* -----------------------------------------
-     AVG RR
+  AVG RR
   ----------------------------------------- */
   const rrList = stratTrades.filter((t) => t.rr !== null).map((t) => num(t.rr));
 
-  const avgRR = rrList.length
-    ? (rrList.reduce((a, b) => a + b, 0) / rrList.length).toFixed(2)
-    : "0.00";
+  const avgRR =
+    rrList.length > 0 ? rrList.reduce((a, b) => a + b, 0) / rrList.length : 0;
 
   /* -----------------------------------------
-     AVG PNL %
+  AVG PNL %
   ----------------------------------------- */
   const pnlList = stratTrades
     .map((t) => pct(num(t.realised_pl), num(t.entry_price), num(t.qty)))
     .filter((v): v is number => v !== null);
 
-  const avgPnL = pnlList.length
-    ? (pnlList.reduce((a, b) => a + b, 0) / pnlList.length).toFixed(2)
-    : "0.00";
+  const avgPnL =
+    pnlList.length > 0
+      ? pnlList.reduce((a, b) => a + b, 0) / pnlList.length
+      : 0;
 
   /* -----------------------------------------
-     SPARKLINE (Last 5 trades PNL%)
+  SPARKLINE DATA
   ----------------------------------------- */
   const sparkline = last5
     .map((t) => {
       const p = pct(num(t.realised_pl), num(t.entry_price), num(t.qty));
-      return p !== null ? { value: Number(p.toFixed(2)) } : null;
+      return p !== null ? { value: Number(p) } : null;
     })
     .filter(Boolean) as { value: number }[];
 
@@ -93,7 +94,9 @@ export default function StrategyDetailPanel({
             <p className="text-xs" style={{ color: omega.dim }}>
               Avg R:R
             </p>
-            <p className="font-bold text-omega-gold text-lg">{avgRR}</p>
+            <p className="font-bold text-omega-gold text-lg">
+              {fmtPrice(avgRR)}
+            </p>
           </div>
 
           <div>
@@ -103,10 +106,10 @@ export default function StrategyDetailPanel({
             <p
               className="font-bold text-lg"
               style={{
-                color: Number(avgPnL) >= 0 ? omega.win : omega.loss,
+                color: avgPnL >= 0 ? omega.win : omega.loss,
               }}
             >
-              {avgPnL}%
+              {fmtPrice(avgPnL)}%
             </p>
           </div>
 
@@ -167,7 +170,7 @@ export default function StrategyDetailPanel({
                       : omega.text,
                 }}
               >
-                {pnl !== null ? pnl.toFixed(2) + "%" : "--"}
+                {pnl !== null ? `${fmtPrice(pnl)}%` : "—"}
               </span>
             </div>
           );

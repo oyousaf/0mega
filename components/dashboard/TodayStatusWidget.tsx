@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { fmtPnL } from "@/lib/format";
 
 type Status = {
   pnlToday: number;
@@ -15,30 +16,37 @@ type Status = {
 export default function TodayStatusWidget() {
   const [data, setData] = useState<Status | null>(null);
 
-  async function load() {
-    try {
-      const res = await fetch("/api/engine/status/today", {
-        cache: "no-store",
-      });
-
-      if (!res.ok) {
-        console.error("Status API failed", res.status);
-        return;
-      }
-
-      const text = await res.text();
-      if (!text) return;
-
-      setData(JSON.parse(text));
-    } catch (err) {
-      console.error("Failed to load engine status", err);
-    }
-  }
-
   useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      try {
+        const res = await fetch("/api/engine/status/today", {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          console.error("Status API failed", res.status);
+          return;
+        }
+
+        const json = await res.json();
+
+        if (!alive) return;
+
+        setData(json);
+      } catch (err) {
+        console.error("Failed to load engine status", err);
+      }
+    }
+
     load();
     const id = setInterval(load, 5000);
-    return () => clearInterval(id);
+
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, []);
 
   if (!data) return null;
@@ -64,31 +72,28 @@ export default function TodayStatusWidget() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="w-full max-w-6xl mx-auto rounded-xl p-4 bg-omega-green border border-omega-dark-gold
-        shadow-[0_0_18px_rgba(212,175,55,0.15)]"
+      className="w-full max-w-6xl mx-auto rounded-xl p-4 bg-omega-green border border-omega-dark-gold shadow-[0_0_18px_rgba(212,175,55,0.15)]"
     >
+      {" "}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 text-center">
+        {" "}
         <Block label="TODAY PNL">
           <span className={`text-xl font-bold ${pnlColor}`}>
-            {data.pnlToday.toFixed(2)}
-          </span>
+            {fmtPnL(data.pnlToday)}{" "}
+          </span>{" "}
         </Block>
-
         <Block label="TRADES TODAY" value={data.tradesToday} />
         <Block label="OPEN TRADES" value={data.openTrades} />
-
         <Block label="LOSS USED">
           <span className={`text-lg font-bold ${lossColor}`}>
-            {data.lossUsedPct.toFixed(1)}%
+            {Number(data.lossUsedPct).toFixed(1)}%
           </span>
         </Block>
-
         <Block label="STATUS">
           <span className={`text-lg font-bold ${statusColor}`}>
             {data.tradingAllowed ? "TRADING" : "FROZEN"}
           </span>
         </Block>
-
         <Block label="LAST TICK">
           <span className="text-xs opacity-70 tracking-wide">
             {data.lastTick
@@ -101,9 +106,6 @@ export default function TodayStatusWidget() {
   );
 }
 
-/* -------------------------------------------------
-   BLOCK
--------------------------------------------------- */
 function Block({
   label,
   value,
@@ -115,10 +117,10 @@ function Block({
 }) {
   return (
     <div className="flex flex-col gap-1">
+      {" "}
       <span className="text-[0.65rem] tracking-widest opacity-60 text-omega-gold">
-        {label}
+        {label}{" "}
       </span>
-
       {children ? (
         children
       ) : (

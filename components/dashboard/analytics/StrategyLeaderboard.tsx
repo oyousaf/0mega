@@ -7,6 +7,7 @@ import { Box } from "@mui/material";
 import { Trade } from "@/types/trade";
 import StrategyDetailPanel from "./StrategyDetailPanel";
 import { omegaAnalytics as omega } from "./theme";
+import { fmtPrice } from "@/lib/format";
 
 interface StrategySummary {
   strategy: string;
@@ -18,25 +19,24 @@ interface StrategySummary {
   rr: number;
 }
 
-function safeNum(n: any) {
-  const v = Number(n);
-  return Number.isFinite(v) ? v : 0;
+function safeNum(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function computeStrategies(trades: Trade[]): StrategySummary[] {
-  const map = new Map<string, StrategySummary & { rrCount: number }>();
+  const map = new Map<
+    string,
+    StrategySummary & { rrTotal: number; rrCount: number }
+  >();
 
   for (const t of trades) {
-    if (
-      !t.is_closed ||
-      t.realised_pl === null ||
-      !Number.isFinite(Number(t.realised_pl)) ||
-      Number(t.realised_pl) === 0
-    ) {
-      continue;
-    }
+    if (!t.is_closed) continue;
 
-    const strat = (t.strategy && t.strategy.trim()) || "Unknown";
+    const realised = safeNum(t.realised_pl);
+    if (!realised) continue;
+
+    const strat = t.strategy?.trim() || "Unknown";
 
     if (!map.has(strat)) {
       map.set(strat, {
@@ -47,26 +47,28 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
         winRate: 0,
         pnl: 0,
         rr: 0,
+        rrTotal: 0,
         rrCount: 0,
       });
     }
 
     const row = map.get(strat)!;
-    row.trades++;
 
-    const realised = Number(t.realised_pl);
-    const entry = safeNum(t.entry_price);
-    const qty = safeNum(t.qty);
+    row.trades++;
 
     if (realised > 0) row.wins++;
     else row.losses++;
+
+    const entry = safeNum(t.entry_price);
+    const qty = safeNum(t.qty);
 
     if (entry > 0 && qty > 0) {
       row.pnl += (realised / (entry * qty)) * 100;
     }
 
-    if (t.rr !== null && Number.isFinite(Number(t.rr))) {
-      row.rr += Number(t.rr);
+    const rr = safeNum(t.rr);
+    if (rr) {
+      row.rrTotal += rr;
       row.rrCount++;
     }
   }
@@ -79,13 +81,14 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
       losses: r.losses,
       winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
       pnl: r.trades ? r.pnl / r.trades : 0,
-      rr: r.rrCount ? r.rr / r.rrCount : 0,
+      rr: r.rrCount ? r.rrTotal / r.rrCount : 0,
     }))
     .sort((a, b) => b.winRate - a.winRate);
 }
 
 export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+
   const data = useMemo(() => computeStrategies(trades), [trades]);
 
   return (
@@ -112,33 +115,37 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
               className="rounded-lg border border-omega-dark-gold bg-black/40 p-4 cursor-pointer"
               onClick={() => setExpanded(open ? null : row.strategy)}
             >
+              {/* HEADER */}
               <div className="flex items-center justify-between gap-3">
                 <p className="font-semibold text-omega-gold truncate">
                   {row.strategy}
                 </p>
+
                 <span className="text-xs text-omega-gold/70">
                   {row.trades} trades
                 </span>
               </div>
 
+              {/* METRICS */}
               <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
                 <div className="text-omega-gold">
                   Win{" "}
                   <span className="font-semibold">
-                    {row.winRate.toFixed(1)}%
+                    {fmtPrice(row.winRate)}%
                   </span>
                 </div>
 
                 <div className="text-omega-gold text-center">
                   PnL{" "}
-                  <span className="font-semibold">{row.pnl.toFixed(2)}%</span>
+                  <span className="font-semibold">{fmtPrice(row.pnl)}%</span>
                 </div>
 
                 <div className="text-omega-gold text-right">
-                  RR <span className="font-semibold">{row.rr.toFixed(2)}</span>
+                  RR <span className="font-semibold">{fmtPrice(row.rr)}</span>
                 </div>
               </div>
 
+              {/* EXPAND PANEL */}
               <AnimatePresence>
                 {open && (
                   <motion.div

@@ -11,9 +11,36 @@ import {
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { Trade } from "@/types/trade";
 import { usePnlSummary } from "@/hooks/usePnlSummary";
+import { fmtPrice, fmtQty, fmtPnL } from "@/lib/format";
 
 const PAGE_SIZE = 20;
 const POLL_INTERVAL = 5000;
+
+/* ---------------------------------------
+SAFE NUMBER
+--------------------------------------- */
+
+function num(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/* ---------------------------------------
+NORMALISE -0
+--------------------------------------- */
+
+function cleanZero(n: number) {
+  return Math.abs(n) < 0.000001 ? 0 : n;
+}
+
+/* ---------------------------------------
+PERCENT CALC
+--------------------------------------- */
+
+function pnlPercent(pl: number, entry: number, qty: number) {
+  if (entry <= 0 || qty <= 0) return null;
+  return cleanZero((pl / (entry * qty)) * 100);
+}
 
 export default function TradeHistoryWidget() {
   const [items, setItems] = useState<Trade[]>([]);
@@ -24,24 +51,18 @@ export default function TradeHistoryWidget() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-
   const latestTradeRef = useRef<number | null>(null);
 
   const pnlSummary = usePnlSummary(POLL_INTERVAL);
-
-  /* ---------------------------------------------
-     Helpers
-  --------------------------------------------- */
-
-  const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-
-  const fmt = (v: unknown) =>
-    Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
 
   const fmtDate = (d: unknown) => {
     const dt = new Date(String(d));
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-GB");
   };
+
+  /* ---------------------------------------
+MERGE TRADE SETS
+--------------------------------------- */
 
   function mergeTrades(prev: Trade[], next: Trade[]) {
     const map = new Map<number, Trade>();
@@ -52,9 +73,9 @@ export default function TradeHistoryWidget() {
     return Array.from(map.values());
   }
 
-  /* ---------------------------------------------
-     Data loading
-  --------------------------------------------- */
+  /* ---------------------------------------
+LOAD PAGE
+--------------------------------------- */
 
   async function loadPage(nextOffset = 0, append = false) {
     if (loadingMore) return;
@@ -92,6 +113,10 @@ export default function TradeHistoryWidget() {
     }
   }
 
+  /* ---------------------------------------
+INITIAL LOAD + POLLING
+--------------------------------------- */
+
   useEffect(() => {
     loadPage(0, false);
 
@@ -99,6 +124,10 @@ export default function TradeHistoryWidget() {
 
     return () => clearInterval(id);
   }, []);
+
+  /* ---------------------------------------
+INFINITE SCROLL
+--------------------------------------- */
 
   useEffect(() => {
     const el = containerRef.current;
@@ -113,13 +142,12 @@ export default function TradeHistoryWidget() {
     };
 
     el.addEventListener("scroll", onScroll);
-
     return () => el.removeEventListener("scroll", onScroll);
   }, [offset, hasMore, loadingMore]);
 
-  /* ---------------------------------------------
-     Render
-  --------------------------------------------- */
+  /* ---------------------------------------
+UI
+--------------------------------------- */
 
   return (
     <Card
@@ -145,9 +173,9 @@ export default function TradeHistoryWidget() {
             color: "var(--omega-gold)",
           }}
         >
-          <span>Daily £{fmt(pnlSummary?.daily)}</span>
-          <span>Weekly £{fmt(pnlSummary?.weekly)}</span>
-          <span>Monthly £{fmt(pnlSummary?.monthly)}</span>
+          <span>Daily {fmtPnL(pnlSummary?.daily)}</span>
+          <span>Weekly {fmtPnL(pnlSummary?.weekly)}</span>
+          <span>Monthly {fmtPnL(pnlSummary?.monthly)}</span>
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 1.5 }} />
@@ -159,13 +187,12 @@ export default function TradeHistoryWidget() {
         >
           {items.map((t) => {
             const isOpen = openRow === t.trade_id;
-
-            const entry = n(t.entry_price);
-            const pl = t.realised_pl != null ? n(t.realised_pl) : null;
+            const pl =
+              t.realised_pl != null ? cleanZero(num(t.realised_pl)) : null;
 
             const pnlPct =
-              pl != null && entry > 0 && t.qty > 0
-                ? ((pl / (entry * t.qty)) * 100).toFixed(2)
+              pl !== null
+                ? pnlPercent(pl, num(t.entry_price), num(t.qty))
                 : null;
 
             return (
@@ -179,26 +206,29 @@ export default function TradeHistoryWidget() {
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
+
                     <div className="text-xs opacity-70">
-                      {t.side} • Qty {t.qty}
+                      {t.side} • Qty {fmtQty(t.qty)}
                     </div>
                   </div>
 
                   <div className="text-right">
-                    {pl != null && (
+                    {pl !== null && (
                       <div
                         className={`font-bold ${
                           pl >= 0 ? "text-green-400" : "text-red-400"
                         }`}
                       >
-                        £{fmt(pl)}
-                        {pnlPct && (
+                        {fmtPnL(pl)}
+
+                        {pnlPct !== null && (
                           <span className="ml-1 text-xs opacity-70">
-                            ({pnlPct}%)
+                            ({fmtPrice(pnlPct)}%)
                           </span>
                         )}
                       </div>
                     )}
+
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
                   </div>
                 </div>
@@ -211,11 +241,11 @@ export default function TradeHistoryWidget() {
                         className="flex justify-between py-1 border-b border-omega-dark-gold/20"
                       >
                         <div>
-                          {e.side} @ £{fmt(e.price)}
+                          {e.side} @ {fmtPrice(e.price, t.symbol)}
                         </div>
 
                         <div className="text-right">
-                          Qty {e.qty} • {e.broker}
+                          Qty {fmtQty(e.qty)} • {e.broker}
                           <br />
                           <span className="opacity-60">
                             {fmtDate((e as any).timestamp ?? (e as any).time)}

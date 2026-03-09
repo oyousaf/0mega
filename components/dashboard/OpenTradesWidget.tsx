@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, Divider, Typography } from "@mui/material";
+import { fmtPrice, fmtQty, fmtPnL } from "@/lib/format";
 
 type Trade = {
   trade_id: number;
@@ -44,21 +45,12 @@ export default function OpenTradesWidget() {
 
     load();
     const id = setInterval(load, 3000);
+
     return () => {
       alive = false;
       clearInterval(id);
     };
   }, []);
-
-  const fmt = (v: any) => {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return "—";
-
-    if (n < 10) return n.toFixed(5); // forex
-    if (n < 1000) return n.toFixed(2); // stocks / indices
-
-    return n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
-  };
 
   return (
     <Card
@@ -74,7 +66,7 @@ export default function OpenTradesWidget() {
         </h2>
 
         <p className="text-xs text-center opacity-70 mb-2">
-          Balance: £{fmt(balance)}
+          Balance: {fmtPnL(balance)}
         </p>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", mb: 2 }} />
@@ -88,6 +80,7 @@ export default function OpenTradesWidget() {
         <div className="space-y-2">
           {trades.map((t) => {
             const pnl = t.unrealised_pl;
+
             const pnlColor =
               pnl == null
                 ? "opacity-60"
@@ -104,39 +97,45 @@ export default function OpenTradesWidget() {
               >
                 <div className="flex justify-between items-center">
                   <div className="font-semibold">{t.symbol}</div>
+
                   <div className="text-xs opacity-70">
-                    {t.side} • Qty {fmt(t.qty)}
+                    {t.side} • Qty {fmtQty(t.qty)}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div>
                     <div className="opacity-50">Entry</div>
-                    <div className="font-semibold">£{fmt(t.entry_price)}</div>
+                    <div className="font-semibold">
+                      {fmtPrice(t.entry_price, t.symbol)}
+                    </div>
                   </div>
 
                   <div>
                     <div className="opacity-50">SL</div>
                     <div className="font-semibold">
-                      {t.sl != null ? `£${fmt(t.sl)}` : "—"}
+                      {t.sl != null ? fmtPrice(t.sl, t.symbol) : "—"}
                     </div>
                   </div>
 
                   <div>
                     <div className="opacity-50">TP</div>
                     <div className="font-semibold">
-                      {t.tp1 != null ? `£${fmt(t.tp1)}` : "—"}
+                      {t.tp1 != null ? fmtPrice(t.tp1, t.symbol) : "—"}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex justify-between items-end text-xs">
                   <div className="opacity-60">
-                    Mark {t.mark_price != null ? `£${fmt(t.mark_price)}` : "—"}
+                    Mark{" "}
+                    {t.mark_price != null
+                      ? fmtPrice(t.mark_price, t.symbol)
+                      : "—"}
                   </div>
 
                   <div className={`font-bold ${pnlColor}`}>
-                    {pnl != null ? `£${fmt(pnl)}` : "—"}
+                    {pnl != null ? fmtPnL(pnl) : "—"}
                     <div className="text-[0.65rem] opacity-60">unrealised</div>
                   </div>
                 </div>
