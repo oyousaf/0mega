@@ -1,5 +1,5 @@
 import { getPriceProvider } from "@/lib/prices/provider";
-import { Candle } from "@/types/trade";
+import type { Candle } from "@/types/trade";
 import { runStructureCheck } from "@/lib/strategies/marketStructure";
 import { riskGate } from "@/lib/trading/risk/riskGate";
 import { pool } from "@/lib/neon";
@@ -12,7 +12,8 @@ CONFIG — FOREX FORWARD TEST
 
 const SYMBOL = "EURUSD";
 const TIMEFRAME = "1m";
-const POLL_MS = 5000;
+
+const IDLE_POLL_MS = 2000;
 
 const RR_TARGET = 1.25;
 
@@ -58,6 +59,18 @@ const RISK_PER_TRADE = 0.005;
 const PIP_SIZE = 0.0001;
 const PIP_VALUE_PER_LOT = 10;
 
+/* history requirement */
+
+const MIN_REQUIRED_CANDLES = Math.max(
+  EMA_PERIOD + 1,
+  REGIME_WINDOW,
+  ACTIVATION_WINDOW,
+  VOL_WINDOW,
+  RANGE_WINDOW,
+  NEWS_LOOKBACK,
+  50,
+);
+
 /* ---------------------------------------
 LOOP CONTROL
 ---------------------------------------- */
@@ -82,6 +95,14 @@ function currentLoopId() {
 HELPERS
 ---------------------------------------- */
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getMinuteBucket(timestampMs: number) {
+  return Math.floor(timestampMs / 60000);
+}
+
 function avgAbsReturnPct(closes: number[]) {
   if (closes.length < 3) return 0;
 
@@ -105,8 +126,7 @@ function calculateEMA(values: number[], period: number) {
   if (values.length < period) return null;
 
   const k = 2 / (period + 1);
-
-  let ema = values.slice(0, period).reduce((a, b) => a + b) / period;
+  let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
   for (let i = period; i < values.length; i++) {
     ema = values[i] * k + ema * (1 - k);
@@ -120,22 +140,16 @@ function sessionOpen() {
   return hour >= SESSION_START && hour <= SESSION_END;
 }
 
-/* ---------------------------------------
-RANGE CALCULATIONS
----------------------------------------- */
-
 function calculateRangePips(values: number[]) {
+  if (!values.length) return 0;
   const max = Math.max(...values);
   const min = Math.min(...values);
   return (max - min) / PIP_SIZE;
 }
 
-/* ---------------------------------------
-NEWS GUARD
----------------------------------------- */
-
 function newsSpikeDetected(values: number[]) {
   const recent = values.slice(-NEWS_LOOKBACK);
+  if (recent.length < NEWS_LOOKBACK) return false;
 
   const max = Math.max(...recent);
   const min = Math.min(...recent);
@@ -145,26 +159,25 @@ function newsSpikeDetected(values: number[]) {
   return range >= NEWS_SPIKE_PIPS;
 }
 
-/* ---------------------------------------
-SPREAD
----------------------------------------- */
-
 function calculateSpreadPips(candle: Candle) {
-  if (!candle.bid || !candle.ask) return null;
+  if (
+    typeof candle.bid !== "number" ||
+    typeof candle.ask !== "number" ||
+    !Number.isFinite(candle.bid) ||
+    !Number.isFinite(candle.ask)
+  ) {
+    return null;
+  }
+
   return (candle.ask - candle.bid) / PIP_SIZE;
 }
 
-/* ---------------------------------------
-POSITION SIZING
----------------------------------------- */
-
 function calculateLotSize(entry: number, stop: number) {
   const riskAmount = PAPER_ACCOUNT_EQUITY * RISK_PER_TRADE;
-
   const stopDistance = Math.abs(entry - stop);
   const stopPips = stopDistance / PIP_SIZE;
 
-  if (stopPips <= 0) return 0;
+  if (!(stopPips > 0)) return 0;
 
   const lotSize = riskAmount / (stopPips * PIP_VALUE_PER_LOT);
 
@@ -172,7 +185,7 @@ function calculateLotSize(entry: number, stop: number) {
 }
 
 /* ---------------------------------------
-PUBLIC API
+ENGINE
 ---------------------------------------- */
 
 export async function startPriceLoop() {
@@ -185,46 +198,108 @@ export async function startPriceLoop() {
 
   const loopId = nextLoopId();
 
-  console.log("[ENGINE] started", { loopId, SYMBOL });
+  console.log("[ENGINE] started", {
+    loopId,
+    SYMBOL,
+    TIMEFRAME,
+  });
 
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
-  let lastCandleTs: number | null = null;
+  /*
+    We only evaluate once per completed/new candle minute.
+    This keeps API usage sane for TwelveData free-tier limits.
+  */
+  let lastEvaluatedMinute: number | null = null;
+  let lastNoCandleLogMinute: number | null = null;
 
   while (currentLoopId() === loopId) {
-    const started = Date.now();
-
     try {
-      const candles: Candle[] = await provider.fetchCandles();
+      const nowBucket = getMinuteBucket(Date.now());
 
-      if (!candles.length) throw new Error("NO_CANDLES");
-
-      const latest = candles[candles.length - 1];
-
-      const price = Number(latest.close);
-
-      const spreadPips = calculateSpreadPips(latest);
-
-      if (spreadPips && spreadPips > MAX_SPREAD_PIPS) {
-        console.log("[SKIP] spread too wide", spreadPips);
+      /*
+        Only fetch once per new minute.
+        This is the big anti-rate-limit fix.
+      */
+      if (lastEvaluatedMinute === nowBucket) {
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
+      const candles: Candle[] = await provider.fetchCandles();
+
+      if (!candles || candles.length === 0) {
+        if (lastNoCandleLogMinute !== nowBucket) {
+          console.log("[ENGINE] provider returned no candles");
+          lastNoCandleLogMinute = nowBucket;
+        }
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
+
+      if (candles.length < MIN_REQUIRED_CANDLES) {
+        console.log("[ENGINE] waiting for enough candles", {
+          have: candles.length,
+          need: MIN_REQUIRED_CANDLES,
+        });
+        lastEvaluatedMinute = nowBucket;
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
+
+      const latest = candles[candles.length - 1];
+      const latestBucket = getMinuteBucket(Number(latest.timestamp));
+
+      /*
+        Avoid evaluating the exact same candle twice,
+        even if provider data lags or loop jitters.
+      */
+      if (lastEvaluatedMinute === latestBucket) {
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
+
+      lastEvaluatedMinute = latestBucket;
+
+      const price = Number(latest.close);
+
+      if (!Number.isFinite(price)) {
+        console.log("[ENGINE] invalid latest close", latest);
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
+
+      /*
+        Run exit watcher once per new candle.
+        In paper mode this is acceptable and avoids extra provider hits.
+      */
       await runExitWatcher(price);
 
-      if (!sessionOpen()) continue;
+      if (!sessionOpen()) {
+        console.log("[SKIP] session closed");
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
-      const minuteTs = Math.floor(Number(latest.timestamp) / 60000);
+      const spreadPips = calculateSpreadPips(latest);
 
-      if (lastCandleTs === minuteTs) continue;
-
-      lastCandleTs = minuteTs;
+      if (spreadPips !== null && spreadPips > MAX_SPREAD_PIPS) {
+        console.log("[SKIP] spread too wide", spreadPips);
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       console.log("[CANDLE]", price);
 
       const closes = candles
         .map((c) => Number(c.close))
-        .filter(Number.isFinite);
+        .filter((n) => Number.isFinite(n));
+
+      if (closes.length < MIN_REQUIRED_CANDLES) {
+        console.log("[SKIP] insufficient close history", closes.length);
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       /* london activation */
 
@@ -233,6 +308,7 @@ export async function startPriceLoop() {
 
       if (rangePips < MIN_ACTIVATION_RANGE_PIPS) {
         console.log("[SKIP] london range not active", rangePips);
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
@@ -240,6 +316,7 @@ export async function startPriceLoop() {
 
       if (newsSpikeDetected(closes)) {
         console.log("[SKIP] news volatility spike");
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
@@ -250,6 +327,7 @@ export async function startPriceLoop() {
 
       if (regimeVol < REGIME_MIN_PCT) {
         console.log("[SKIP] low volatility regime");
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
@@ -258,14 +336,20 @@ export async function startPriceLoop() {
       const shortCloses = closes.slice(-VOL_WINDOW);
       const vol = avgAbsReturnPct(shortCloses);
 
-      if (vol < MIN_VOL_PCT) continue;
+      if (vol < MIN_VOL_PCT) {
+        console.log("[SKIP] short volatility too low");
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
-      const lastMove =
-        Math.abs(closes[closes.length - 1] - closes[closes.length - 2]) /
-        closes[closes.length - 2];
+      const prevClose = closes[closes.length - 2];
+      const lastClose = closes[closes.length - 1];
+
+      const lastMove = Math.abs(lastClose - prevClose) / prevClose;
 
       if (lastMove > vol * SPIKE_MULTIPLIER) {
         console.log("[SKIP] volatility spike");
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
@@ -276,13 +360,18 @@ export async function startPriceLoop() {
 
       if (rangePct < MIN_RANGE_PCT) {
         console.log("[SKIP] tight consolidation");
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
       const emaNow = calculateEMA(closes, EMA_PERIOD);
       const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
 
-      if (!emaNow || !emaPrev) continue;
+      if (emaNow === null || emaPrev === null) {
+        console.log("[SKIP] ema unavailable");
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       const emaSlope = emaNow - emaPrev;
 
@@ -292,26 +381,53 @@ export async function startPriceLoop() {
         candles,
       });
 
-      if (!signal) continue;
+      if (!signal) {
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       if (signal.direction === "BUY") {
-        if (price < emaNow) continue;
-        if (emaSlope <= 0) continue;
+        if (price < emaNow) {
+          console.log("[SKIP] buy below ema");
+          await sleep(IDLE_POLL_MS);
+          continue;
+        }
+        if (emaSlope <= 0) {
+          console.log("[SKIP] buy ema slope not positive");
+          await sleep(IDLE_POLL_MS);
+          continue;
+        }
       }
 
       if (signal.direction === "SELL") {
-        if (price > emaNow) continue;
-        if (emaSlope >= 0) continue;
+        if (price > emaNow) {
+          console.log("[SKIP] sell above ema");
+          await sleep(IDLE_POLL_MS);
+          continue;
+        }
+        if (emaSlope >= 0) {
+          console.log("[SKIP] sell ema slope not negative");
+          await sleep(IDLE_POLL_MS);
+          continue;
+        }
       }
 
       const entry = price;
       const sl = Number(signal.sl);
 
-      if (!Number.isFinite(entry) || !Number.isFinite(sl)) continue;
+      if (!Number.isFinite(entry) || !Number.isFinite(sl)) {
+        console.log("[SKIP] invalid entry/sl", { entry, sl });
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
 
-      if (!(riskDist > entry * 0.00005)) continue;
+      if (!(riskDist > entry * 0.00005)) {
+        console.log("[SKIP] risk distance too small");
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       const tp1 =
         signal.direction === "BUY"
@@ -322,19 +438,27 @@ export async function startPriceLoop() {
 
       if (!risk.allowed) {
         console.log("[ENTRY_BLOCKED]", risk.reason);
+        await sleep(IDLE_POLL_MS);
         continue;
       }
 
       const lotSize = calculateLotSize(entry, sl);
 
-      if (lotSize <= 0) continue;
+      if (!(lotSize > 0)) {
+        console.log("[SKIP] invalid lot size", lotSize);
+        await sleep(IDLE_POLL_MS);
+        continue;
+      }
 
       await withDbLock(async () => {
         const { rows } = await pool.query(
           `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
         );
 
-        if (rows.length) return;
+        if (rows.length) {
+          console.log("[SKIP] open trade already exists");
+          return;
+        }
 
         const res = await executeTradeIntent({
           signalId: signal.reason,
@@ -355,26 +479,33 @@ export async function startPriceLoop() {
             tp1,
             lotSize,
           });
+        } else {
+          console.log("[TRADE_FAILED]", res);
         }
       });
     } catch (err) {
       console.error("[ENGINE_ERROR]", err);
+      await sleep(IDLE_POLL_MS);
     }
-
-    const sleep = Math.max(POLL_MS - (Date.now() - started), 0);
-    await new Promise((r) => setTimeout(r, sleep));
   }
 
   running = false;
   console.log("[ENGINE] stopped");
 }
 
+/* ---------------------------------------
+STOP ENGINE
+---------------------------------------- */
+
 export function stopPriceLoop() {
   nextLoopId();
   running = false;
-
   console.log("[ENGINE] stop requested");
 }
+
+/* ---------------------------------------
+DB LOCK
+---------------------------------------- */
 
 async function withDbLock(fn: () => Promise<void>) {
   await pool.query("BEGIN");

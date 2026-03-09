@@ -4,17 +4,27 @@ import { getForexProvider } from "./forex";
 export type Timeframe = "1m" | "5m" | "15m";
 
 export function getPriceProvider(symbol: string, timeframe: Timeframe) {
-  /* crypto */
+  /* ---------------------------------
+     CRYPTO
+  ---------------------------------- */
 
   if (symbol === "BTCUSDT" || symbol === "ETHUSDT") {
     return getCryptoProvider(symbol, timeframe);
   }
 
-  /* forex */
+  /* ---------------------------------
+     FOREX
+  ---------------------------------- */
 
   if (symbol === "EURUSD" || symbol === "GBPUSD" || symbol === "USDJPY") {
     return getForexProvider(symbol, timeframe);
   }
 
-  throw new Error(`No provider configured for symbol ${symbol}`);
+  /* ---------------------------------
+     UNKNOWN SYMBOL
+  ---------------------------------- */
+
+  throw new Error(
+    `[PRICE_PROVIDER] No provider configured for symbol: ${symbol}`,
+  );
 }
