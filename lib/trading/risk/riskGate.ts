@@ -1,34 +1,63 @@
 import { pool } from "@/lib/neon";
 
+/* -------------------------------------------------
+CONFIG
+-------------------------------------------------- */
+
 const RISK_ENABLED = true;
 
 const COOLDOWN_MINUTES = 10;
+
 const MAX_TRADES_PER_DAY = 25;
 const MAX_CONSECUTIVE_LOSSES = 3;
 
 const MAX_DAILY_LOSS_PCT = 0.03;
 const ACCOUNT_EQUITY = 10000;
 
+/* -------------------------------------------------
+TYPES
+-------------------------------------------------- */
+
 type RiskResult = { allowed: true } | { allowed: false; reason: string };
+
+type Signal = {
+  sl: number;
+};
+
+/* -------------------------------------------------
+UTILS
+-------------------------------------------------- */
 
 function minutes(n: number) {
   return n * 60 * 1000;
 }
 
-export async function riskGate(signal: any): Promise<RiskResult> {
+function safeNum(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/* -------------------------------------------------
+RISK GATE
+-------------------------------------------------- */
+
+export async function riskGate(signal: Signal): Promise<RiskResult> {
   try {
     if (!RISK_ENABLED) return { allowed: true };
 
-    if (!signal?.sl || !Number.isFinite(Number(signal.sl))) {
-      return { allowed: false, reason: "NO_STOP_LOSS" };
-    }
+    /* -----------------------------------------
+       STOP LOSS VALIDATION
+    ------------------------------------------ */
 
-    const sl = Number(signal.sl);
-    if (sl <= 0) {
+    const sl = safeNum(signal?.sl);
+
+    if (!(sl > 0)) {
       return { allowed: false, reason: "INVALID_SL" };
     }
 
-    /* cooldown */
+    /* -----------------------------------------
+       COOLDOWN
+    ------------------------------------------ */
 
     const { rows: lastClosed } = await pool.query(
       `
@@ -41,13 +70,19 @@ export async function riskGate(signal: any): Promise<RiskResult> {
     );
 
     if (lastClosed.length) {
-      const t = new Date(lastClosed[0].closed_at).getTime();
-      if (Number.isFinite(t) && Date.now() - t < minutes(COOLDOWN_MINUTES)) {
+      const lastTime = new Date(lastClosed[0].closed_at).getTime();
+
+      if (
+        Number.isFinite(lastTime) &&
+        Date.now() - lastTime < minutes(COOLDOWN_MINUTES)
+      ) {
         return { allowed: false, reason: "COOLDOWN" };
       }
     }
 
-    /* daily trades */
+    /* -----------------------------------------
+       DAILY TRADE LIMIT
+    ------------------------------------------ */
 
     const { rows: todays } = await pool.query(
       `
@@ -57,11 +92,15 @@ export async function riskGate(signal: any): Promise<RiskResult> {
       `,
     );
 
-    if (Number(todays?.[0]?.c ?? 0) >= MAX_TRADES_PER_DAY) {
+    const tradesToday = safeNum(todays?.[0]?.c);
+
+    if (tradesToday >= MAX_TRADES_PER_DAY) {
       return { allowed: false, reason: "MAX_TRADES_PER_DAY" };
     }
 
-    /* loss streak */
+    /* -----------------------------------------
+       CONSECUTIVE LOSSES
+    ------------------------------------------ */
 
     const { rows: streak } = await pool.query(
       `
@@ -77,12 +116,14 @@ export async function riskGate(signal: any): Promise<RiskResult> {
 
     if (
       streak.length === MAX_CONSECUTIVE_LOSSES &&
-      streak.every((r) => Number(r.realised_pl) < 0)
+      streak.every((r) => safeNum(r.realised_pl) < 0)
     ) {
       return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
     }
 
-    /* daily loss */
+    /* -----------------------------------------
+       DAILY LOSS LIMIT
+    ------------------------------------------ */
 
     const { rows: pnl } = await pool.query(
       `
@@ -93,14 +134,25 @@ export async function riskGate(signal: any): Promise<RiskResult> {
       `,
     );
 
-    const dailyPnl = Number(pnl?.[0]?.pnl ?? 0);
+    const dailyPnl = safeNum(pnl?.[0]?.pnl);
 
-    if (dailyPnl < -ACCOUNT_EQUITY * MAX_DAILY_LOSS_PCT) {
+    const maxDailyLoss = ACCOUNT_EQUITY * MAX_DAILY_LOSS_PCT;
+
+    if (dailyPnl < -maxDailyLoss) {
       return { allowed: false, reason: "MAX_DAILY_LOSS" };
     }
 
+    /* -----------------------------------------
+       PASS
+    ------------------------------------------ */
+
     return { allowed: true };
-  } catch (e: any) {
-    return { allowed: false, reason: e?.message ?? "RISK_GATE_ERROR" };
+  } catch (err: any) {
+    console.error("[RISK_GATE_ERROR]", err);
+
+    return {
+      allowed: false,
+      reason: err?.message ?? "RISK_GATE_ERROR",
+    };
   }
 }
