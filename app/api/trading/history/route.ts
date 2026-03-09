@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
 /* -------------------------------------------------------
-   SAFE CAST HELPERS
+   HELPERS
 ------------------------------------------------------- */
+
 const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 const iso = (v: any) => {
@@ -12,28 +13,35 @@ const iso = (v: any) => {
 };
 
 /* -------------------------------------------------------
-   TRADE HISTORY (CANONICAL EXECUTION TRUTH)
+   TRADE HISTORY 
 ------------------------------------------------------- */
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
     const isAnalytics = searchParams.get("analytics") === "1";
-    const rawLimit = n(searchParams.get("limit") ?? 20);
 
+    const rawLimit = n(searchParams.get("limit") ?? 20);
     const limit = isAnalytics ? rawLimit || 10000 : Math.min(rawLimit, 50);
+
     const offset = Math.max(n(searchParams.get("offset") ?? 0), 0);
 
     /* -------------------------------------------------
-       1. Page trade_ids by latest execution activity
+       1. PAGE TRADES BY LATEST EXECUTION
     -------------------------------------------------- */
+
     const { rows: tradeRows } = await pool.query(
       `
       SELECT
-        trade_id,
-        MAX(timestamp) AS last_time
-      FROM trade_executions
-      GROUP BY trade_id
+        e.trade_id,
+        MAX(e.timestamp) AS last_time,
+        p.symbol,
+        p.rr,
+        p.halaal
+      FROM trade_executions e
+      JOIN paper_trades p ON p.id = e.trade_id
+      GROUP BY e.trade_id, p.symbol, p.rr, p.halaal
       ORDER BY last_time DESC
       LIMIT $1 OFFSET $2
       `,
@@ -45,11 +53,15 @@ export async function GET(req: Request) {
     }
 
     const hasMore = tradeRows.length > limit;
-    const pageTradeIds = tradeRows.slice(0, limit).map((r) => r.trade_id);
+
+    const pageTrades = tradeRows.slice(0, limit);
+
+    const tradeIds = pageTrades.map((r) => r.trade_id);
 
     /* -------------------------------------------------
-       2. Fetch executions
+       2. FETCH EXECUTIONS
     -------------------------------------------------- */
+
     const { rows: execRows } = await pool.query(
       `
       SELECT
@@ -64,41 +76,19 @@ export async function GET(req: Request) {
       WHERE trade_id = ANY($1)
       ORDER BY trade_id, timestamp ASC
       `,
-      [pageTradeIds],
+      [tradeIds],
     );
 
     /* -------------------------------------------------
-       3. Fetch trade metadata
+       3. GROUP EXECUTIONS
     -------------------------------------------------- */
-    const { rows: tradeMeta } = await pool.query(
-      `
-      SELECT
-        id,
-        symbol,
-        rr,
-        halaal
-      FROM paper_trades
-      WHERE id = ANY($1)
-      `,
-      [pageTradeIds],
-    );
 
-    const metaMap: Record<string, any> = {};
-    for (const r of tradeMeta) {
-      metaMap[String(r.id)] = r;
-    }
-
-    /* -------------------------------------------------
-       4. Group executions by trade_id
-    -------------------------------------------------- */
-    const tradeMap: Record<string, any[]> = {};
+    const execMap: Record<number, any[]> = {};
 
     for (const r of execRows) {
-      const tid = String(r.trade_id);
+      if (!execMap[r.trade_id]) execMap[r.trade_id] = [];
 
-      if (!tradeMap[tid]) tradeMap[tid] = [];
-
-      tradeMap[tid].push({
+      execMap[r.trade_id].push({
         exec_id: r.id,
         side: r.side,
         qty: n(r.qty),
@@ -109,11 +99,12 @@ export async function GET(req: Request) {
     }
 
     /* -------------------------------------------------
-       5. Build trade objects
+       4. BUILD TRADES
     -------------------------------------------------- */
-    const trades = pageTradeIds
-      .map((trade_id) => {
-        const executions = tradeMap[String(trade_id)] ?? [];
+
+    const trades = pageTrades
+      .map((row) => {
+        const executions = execMap[row.trade_id] ?? [];
 
         if (!executions.length) return null;
 
@@ -122,19 +113,16 @@ export async function GET(req: Request) {
           executions.length > 1 ? executions[executions.length - 1] : null;
 
         const qty = entry.qty;
-        const isBuy = entry.side === "BUY";
 
         const realised_pl = exit
-          ? isBuy
+          ? entry.side === "BUY"
             ? (exit.price - entry.price) * qty
             : (entry.price - exit.price) * qty
           : null;
 
-        const meta = metaMap[String(trade_id)] ?? {};
-
         return {
-          trade_id,
-          symbol: meta.symbol ?? "UNKNOWN",
+          trade_id: row.trade_id,
+          symbol: row.symbol ?? "UNKNOWN",
 
           side: entry.side,
           qty,
@@ -151,8 +139,8 @@ export async function GET(req: Request) {
 
           strategy: "Structure",
 
-          rr: Number.isFinite(Number(meta.rr)) ? Number(meta.rr) : null,
-          halaal: meta.halaal ?? true,
+          rr: Number.isFinite(Number(row.rr)) ? Number(row.rr) : null,
+          halaal: row.halaal ?? true,
 
           executions,
         };
