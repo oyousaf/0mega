@@ -50,8 +50,15 @@ export default function OpenTradesWidget() {
     };
   }, []);
 
-  const fmt = (v: any) =>
-    Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
+  const fmt = (v: any) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+
+    if (n < 10) return n.toFixed(5); // forex
+    if (n < 1000) return n.toFixed(2); // stocks / indices
+
+    return n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
+  };
 
   return (
     <Card
