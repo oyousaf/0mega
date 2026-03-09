@@ -237,7 +237,12 @@ export async function startPriceLoop() {
 
       if (!Number.isFinite(price)) continue;
 
-      await runExitWatcher(price);
+      const exited = await runExitWatcher(latest);
+
+      if (exited) {
+        console.log("[ENGINE] trade exited this candle");
+        continue;
+      }
 
       if (!TEST_MODE && !sessionOpen()) {
         console.log("[SKIP] session closed");
@@ -253,7 +258,9 @@ export async function startPriceLoop() {
 
       console.log("[CANDLE]", price);
 
-      const closes = candles.map((c) => Number(c.close));
+      const closes = candles
+        .map((c) => Number(c.close))
+        .filter(Number.isFinite);
 
       if (!TEST_MODE) {
         /* London activation */
@@ -329,13 +336,16 @@ export async function startPriceLoop() {
         candles,
       });
       if (TEST_MODE && !signal) {
-        const sl = price - price * 0.001;
+        const pip = 0.0001;
+        const testDistance = pip * 5; // 5 pips
+
+        const sl = price - testDistance;
 
         signal = {
           symbol: SYMBOL,
           direction: "BUY",
           sl,
-          tp1: price + (price - sl),
+          tp1: price + testDistance,
           reason: "TEST_SIGNAL",
         };
 
@@ -383,8 +393,8 @@ export async function startPriceLoop() {
           : entry - riskDist * RR_TARGET;
 
       const risk = TEST_MODE
-        ? { allowed: true, reason: "TEST_MODE" }
-        : await riskGate(signal, entry);
+        ? { allowed: true as const }
+        : await riskGate(signal);
 
       if (!risk.allowed) {
         console.log("[ENTRY_BLOCKED]", risk.reason);
@@ -400,8 +410,7 @@ export async function startPriceLoop() {
           `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
         );
 
-        if (rows.length && !TEST_MODE) {
-          console.log("[SKIP] open trade exists");
+        if (rows.length) {
           return;
         }
 

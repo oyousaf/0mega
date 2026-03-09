@@ -11,6 +11,9 @@ export type OpenResult =
 
 export type CloseResult = { success: true } | { success: false; error: string };
 
+const PIP_SIZE = 0.0001;
+const PIP_VALUE_PER_LOT = 10;
+
 /* -------------------------------------------------
    HELPERS
 -------------------------------------------------- */
@@ -28,9 +31,6 @@ function assertPositive(n: number, err: string) {
   if (!(n > 0)) throw new Error(err);
 }
 
-/**
- * Demo-safe validation
- */
 function validateLevelDistance(params: {
   entry: number;
   level: number;
@@ -52,6 +52,45 @@ function validateLevelDistance(params: {
   }
 }
 
+function validateTradeGeometry(params: {
+  side: OrderSide;
+  entry: number;
+  sl: number;
+  tp1: number | null;
+}) {
+  const { side, entry, sl, tp1 } = params;
+
+  const geometryOk =
+    side === "BUY"
+      ? sl < entry && (tp1 ?? Infinity) > entry
+      : sl > entry && (tp1 ?? -Infinity) < entry;
+
+  if (!geometryOk) {
+    throw new Error(
+      `INVALID_GEOMETRY entry=${entry} sl=${sl} tp1=${tp1 ?? "null"} side=${side}`,
+    );
+  }
+}
+
+function calculateRiskAmount(entry: number, sl: number, qtyLots: number) {
+  const stopPips = Math.abs(entry - sl) / PIP_SIZE;
+  return stopPips * qtyLots * PIP_VALUE_PER_LOT;
+}
+
+function calculateRealisedPl(params: {
+  side: OrderSide;
+  entry: number;
+  exit: number;
+  qtyLots: number;
+}) {
+  const { side, entry, exit, qtyLots } = params;
+
+  const diff = side === "BUY" ? exit - entry : entry - exit;
+  const pips = diff / PIP_SIZE;
+
+  return pips * qtyLots * PIP_VALUE_PER_LOT;
+}
+
 /* -------------------------------------------------
    OPEN TRADE
 -------------------------------------------------- */
@@ -68,18 +107,7 @@ export async function executeTradeIntent(intent: {
     const qty = assertFinite(intent.qty, "INVALID_QTY");
     if (qty <= 0) return { success: false, error: "INVALID_QTY" };
 
-    const broker = getBroker();
-    const res = await broker.placeOrder(intent.symbol, qty, intent.side);
-
-    if (!res.success || !Number.isFinite(res.price)) {
-      return { success: false, error: res.error ?? "ORDER_FAILED" };
-    }
-
-    const entry =
-      intent.entryPrice != null
-        ? assertFinite(intent.entryPrice, "INVALID_ENTRY")
-        : assertFinite(res.price, "NO_ENTRY_PRICE");
-
+    const entry = assertFinite(intent.entryPrice, "INVALID_ENTRY");
     const sl = assertFinite(intent.rawSl, "INVALID_SL");
     const tp1 =
       intent.rawTp1 != null ? assertFinite(intent.rawTp1, "INVALID_TP") : null;
@@ -87,21 +115,21 @@ export async function executeTradeIntent(intent: {
     validateLevelDistance({ entry, level: sl, label: "SL" });
     if (tp1 != null) validateLevelDistance({ entry, level: tp1, label: "TP1" });
 
-    const geometryOk =
-      intent.side === "BUY"
-        ? sl < entry && (tp1 ?? Infinity) > entry
-        : sl > entry && (tp1 ?? -Infinity) < entry;
+    validateTradeGeometry({
+      side: intent.side,
+      entry,
+      sl,
+      tp1,
+    });
 
-    if (!geometryOk) {
-      return {
-        success: false,
-        error: `INVALID_GEOMETRY entry=${entry} sl=${sl} tp1=${
-          tp1 ?? "null"
-        } side=${intent.side}`,
-      };
+    const broker = getBroker();
+    const res = await broker.placeOrder(intent.symbol, qty, intent.side);
+
+    if (!res.success) {
+      return { success: false, error: res.error ?? "ORDER_FAILED" };
     }
 
-    const riskAmount = Math.abs(entry - sl) * qty;
+    const riskAmount = calculateRiskAmount(entry, sl, qty);
     const rr =
       tp1 != null ? Math.abs(tp1 - entry) / Math.abs(entry - sl) : null;
 
@@ -164,7 +192,7 @@ export async function executeTradeIntent(intent: {
 }
 
 /* -------------------------------------------------
-   CLOSE TRADE (FAST PAPER SAFE)
+   CLOSE TRADE
 -------------------------------------------------- */
 export async function closeTrade(
   tradeId: number,
@@ -196,13 +224,16 @@ export async function closeTrade(
 
     const trade = rows[0];
     const qty = assertFinite(trade.qty, "INVALID_QTY");
+    const entry = assertFinite(trade.entry_price, "INVALID_ENTRY_PRICE");
 
-    const realised =
-      trade.side === "BUY"
-        ? (exit - trade.entry_price) * qty
-        : (trade.entry_price - exit) * qty;
+    const realised = calculateRealisedPl({
+      side: trade.side,
+      entry,
+      exit,
+      qtyLots: qty,
+    });
 
-    await client.query(
+    const updateRes = await client.query(
       `
       UPDATE paper_trades
       SET
@@ -211,10 +242,15 @@ export async function closeTrade(
         exit_price = $2,
         exit_reason = $3,
         closed_at = NOW()
-      WHERE id = $4
+      WHERE id = $4 AND is_closed = false
       `,
       [realised, exit, reason, id],
     );
+
+    if (updateRes.rowCount !== 1) {
+      await client.query("ROLLBACK");
+      return { success: false, error: "CLOSE_UPDATE_FAILED" };
+    }
 
     await client.query(
       `

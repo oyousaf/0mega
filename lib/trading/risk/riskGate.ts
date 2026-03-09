@@ -1,19 +1,13 @@
 import { pool } from "@/lib/neon";
 
-/* -------------------------------------------------
-   MODE FLAGS
--------------------------------------------------- */
 const RISK_ENABLED = true;
 
-/* -------------------------------------------------
-   CONTROLS 
--------------------------------------------------- */
 const COOLDOWN_MINUTES = 10;
 const MAX_TRADES_PER_DAY = 25;
 const MAX_CONSECUTIVE_LOSSES = 3;
 
 const MAX_DAILY_LOSS_PCT = 0.03;
-const ASSUMED_EQUITY = 100_000;
+const ACCOUNT_EQUITY = 10000;
 
 type RiskResult = { allowed: true } | { allowed: false; reason: string };
 
@@ -21,33 +15,26 @@ function minutes(n: number) {
   return n * 60 * 1000;
 }
 
-export async function riskGate(
-  signal: any,
-  price: number,
-): Promise<RiskResult> {
+export async function riskGate(signal: any): Promise<RiskResult> {
   try {
     if (!RISK_ENABLED) return { allowed: true };
 
-    // Must have SL
     if (!signal?.sl || !Number.isFinite(Number(signal.sl))) {
       return { allowed: false, reason: "NO_STOP_LOSS" };
     }
 
-    // Optional: disable BUY side (if UP was your loser)
-    // Toggle this ON if you want to run "DOWN-only" for one experiment.
-    const DISABLE_BUY = false;
-    if (DISABLE_BUY && signal.direction === "BUY") {
-      return { allowed: false, reason: "BUY_DISABLED" };
+    const sl = Number(signal.sl);
+    if (sl <= 0) {
+      return { allowed: false, reason: "INVALID_SL" };
     }
 
-    /* -----------------------------
-       1) Cooldown after last close
-    ------------------------------ */
+    /* cooldown */
+
     const { rows: lastClosed } = await pool.query(
       `
       SELECT closed_at
       FROM paper_trades
-      WHERE is_closed = true AND closed_at IS NOT NULL
+      WHERE is_closed = true
       ORDER BY closed_at DESC
       LIMIT 1
       `,
@@ -60,9 +47,8 @@ export async function riskGate(
       }
     }
 
-    /* -----------------------------
-       2) Max trades per day
-    ------------------------------ */
+    /* daily trades */
+
     const { rows: todays } = await pool.query(
       `
       SELECT COUNT(*)::int AS c
@@ -75,14 +61,13 @@ export async function riskGate(
       return { allowed: false, reason: "MAX_TRADES_PER_DAY" };
     }
 
-    /* -----------------------------
-   3) Max consecutive losses (DAILY RESET)
------------------------------- */
+    /* loss streak */
+
     const { rows: streak } = await pool.query(
-      `SELECT realised_pl
+      `
+      SELECT realised_pl
       FROM paper_trades
       WHERE is_closed = true
-      AND realised_pl IS NOT NULL
       AND closed_at::date = CURRENT_DATE
       ORDER BY closed_at DESC
       LIMIT $1
@@ -97,21 +82,20 @@ export async function riskGate(
       return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
     }
 
-    /* -----------------------------
-       4) Daily loss cap (realised)
-    ------------------------------ */
+    /* daily loss */
+
     const { rows: pnl } = await pool.query(
       `
-      SELECT COALESCE(SUM(realised_pl), 0) AS pnl
+      SELECT COALESCE(SUM(realised_pl),0) AS pnl
       FROM paper_trades
       WHERE is_closed = true
-        AND closed_at::date = CURRENT_DATE
-        AND realised_pl IS NOT NULL
+      AND closed_at::date = CURRENT_DATE
       `,
     );
 
     const dailyPnl = Number(pnl?.[0]?.pnl ?? 0);
-    if (dailyPnl < -ASSUMED_EQUITY * MAX_DAILY_LOSS_PCT) {
+
+    if (dailyPnl < -ACCOUNT_EQUITY * MAX_DAILY_LOSS_PCT) {
       return { allowed: false, reason: "MAX_DAILY_LOSS" };
     }
 
