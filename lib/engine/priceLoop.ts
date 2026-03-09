@@ -208,7 +208,6 @@ export async function startPriceLoop() {
 
   /*
     We only evaluate once per completed/new candle minute.
-    This keeps API usage sane for TwelveData free-tier limits.
   */
   let lastEvaluatedMinute: number | null = null;
   let lastNoCandleLogMinute: number | null = null;
@@ -219,7 +218,6 @@ export async function startPriceLoop() {
 
       /*
         Only fetch once per new minute.
-        This is the big anti-rate-limit fix.
       */
       if (lastEvaluatedMinute === nowBucket) {
         await sleep(IDLE_POLL_MS);
