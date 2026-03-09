@@ -2,16 +2,29 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 
 /* ---------------------------------------------
-   Canonical mark price resolver (SERVER SAFE)
+   CONFIG (aligned with trading engine)
 --------------------------------------------- */
+
+const ACCOUNT_BALANCE = 10000;
+const PIP_SIZE = 0.0001;
+const PIP_VALUE_PER_LOT = 10;
+
+/* ---------------------------------------------
+   PRICE RESOLVER
+--------------------------------------------- */
+
 async function getMarkPrice(
   origin: string,
   symbol: string,
 ): Promise<number | null> {
   try {
-    const res = await fetch(`${origin}/api/prices/crypto/${symbol}`, {
-      cache: "no-store",
-    });
+    const isForex = symbol.length === 6;
+
+    const url = isForex
+      ? `${origin}/api/prices/forex/${symbol}`
+      : `${origin}/api/prices/crypto/${symbol}`;
+
+    const res = await fetch(url, { cache: "no-store" });
 
     if (!res.ok) return null;
 
@@ -32,8 +45,26 @@ async function getMarkPrice(
 }
 
 /* ---------------------------------------------
-   OPEN TRADES (CANONICAL)
+   PNL CALCULATOR
 --------------------------------------------- */
+
+function calculatePnL(
+  side: "BUY" | "SELL",
+  entry: number,
+  mark: number,
+  lots: number,
+) {
+  const diff = side === "BUY" ? mark - entry : entry - mark;
+
+  const pips = diff / PIP_SIZE;
+
+  return pips * lots * PIP_VALUE_PER_LOT;
+}
+
+/* ---------------------------------------------
+   OPEN TRADES ROUTE
+--------------------------------------------- */
+
 export async function GET(req: Request) {
   try {
     const origin = new URL(req.url).origin;
@@ -62,11 +93,7 @@ export async function GET(req: Request) {
         const mark = await getMarkPrice(origin, t.symbol);
 
         const unrealised =
-          mark != null && Number.isFinite(entry) && Number.isFinite(qty)
-            ? t.side === "BUY"
-              ? (mark - entry) * qty
-              : (entry - mark) * qty
-            : null;
+          mark != null ? calculatePnL(t.side, entry, mark, qty) : null;
 
         return {
           trade_id: Number(t.trade_id),
@@ -86,10 +113,11 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       positions,
-      balance: 100000,
+      balance: ACCOUNT_BALANCE,
     });
   } catch (err: any) {
     console.error("Open trades route failed", err);
+
     return NextResponse.json(
       { error: err.message || String(err) },
       { status: 500 },
