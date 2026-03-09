@@ -47,3 +47,16 @@ export interface Trade {
 
   executions: TradeExecution[];
 }
+
+/* -------------------------------------------------
+   CANDLE
+-------------------------------------------------- */
+export interface Candle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  bid?: number;
+  ask?: number;
+}
