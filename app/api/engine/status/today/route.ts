@@ -6,8 +6,17 @@ const ASSUMED_EQUITY = 100000;
 const MAX_DAILY_LOSS_PCT = 0.02;
 
 /* -------------------------------------------------
+   GLOBAL ENGINE STATE
+-------------------------------------------------- */
+
+declare global {
+  var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
+}
+
+/* -------------------------------------------------
    TODAY ENGINE STATUS
 -------------------------------------------------- */
+
 export async function GET() {
   const now = new Date();
   const start = new Date(
@@ -19,6 +28,8 @@ export async function GET() {
   let openTrades = 0;
   let lossUsedPct = 0;
   let tradingAllowed = true;
+
+  const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
 
   /* -----------------------------------------
      OPEN TRADES
@@ -73,20 +84,20 @@ export async function GET() {
   }
 
   /* -----------------------------------------
-     DAILY RISK STATE
+     DAILY RISK + ENGINE STATE
   ------------------------------------------ */
   try {
     const risk = getDailyRisk("GLOBAL");
 
+    const maxLossAmount = ASSUMED_EQUITY * MAX_DAILY_LOSS_PCT;
+
+    lossUsedPct =
+      pnlToday < 0 ? Math.min(Math.abs(pnlToday) / maxLossAmount, 1) * 100 : 0;
+
     if (risk) {
-      const maxLossAmount = ASSUMED_EQUITY * MAX_DAILY_LOSS_PCT;
-
-      lossUsedPct =
-        pnlToday < 0
-          ? Math.min(Math.abs(pnlToday) / maxLossAmount, 1) * 100
-          : 0;
-
-      tradingAllowed = !risk.frozen;
+      tradingAllowed = engineRunning && !risk.frozen;
+    } else {
+      tradingAllowed = engineRunning;
     }
   } catch (err) {
     console.error("Risk state read failed", err);
