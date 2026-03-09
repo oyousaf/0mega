@@ -1,6 +1,6 @@
 "use client";
 
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 import { omegaAnalytics as omega } from "./theme";
 import { motion } from "framer-motion";
 import { Box } from "@mui/material";

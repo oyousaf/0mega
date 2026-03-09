@@ -1,6 +1,6 @@
 "use client";
 
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 import { analyseBehaviour } from "@/lib/analytics/behaviour";
 
 export default function ForwardTestReview({ trades }: { trades: Trade[] }) {

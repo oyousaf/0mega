@@ -1,4 +1,5 @@
 import { getPriceProvider } from "@/lib/prices/provider";
+import { Candle } from "@/types/trade";
 import { runStructureCheck } from "@/lib/strategies/marketStructure";
 import { riskGate } from "@/lib/trading/risk/riskGate";
 import { pool } from "@/lib/neon";
@@ -39,7 +40,7 @@ const MAX_SPREAD_PIPS = 1.5;
 const RANGE_WINDOW = 15;
 const MIN_RANGE_PCT = 0.00025;
 
-/* london activation (30-minute range) */
+/* london activation */
 
 const ACTIVATION_WINDOW = 30;
 const MIN_ACTIVATION_RANGE_PIPS = 8;
@@ -119,27 +120,18 @@ function sessionOpen() {
   return hour >= SESSION_START && hour <= SESSION_END;
 }
 
-function calcRangePct(values: number[]) {
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  return (max - min) / min;
-}
-
 /* ---------------------------------------
-30-MINUTE RANGE (PIPS)
+RANGE CALCULATIONS
 ---------------------------------------- */
 
 function calculateRangePips(values: number[]) {
   const max = Math.max(...values);
   const min = Math.min(...values);
-
-  const range = max - min;
-
-  return range / PIP_SIZE;
+  return (max - min) / PIP_SIZE;
 }
 
 /* ---------------------------------------
-NEWS VOLATILITY GUARD
+NEWS GUARD
 ---------------------------------------- */
 
 function newsSpikeDetected(values: number[]) {
@@ -154,15 +146,12 @@ function newsSpikeDetected(values: number[]) {
 }
 
 /* ---------------------------------------
-SPREAD CALCULATION
+SPREAD
 ---------------------------------------- */
 
-function calculateSpreadPips(candle: any) {
+function calculateSpreadPips(candle: Candle) {
   if (!candle.bid || !candle.ask) return null;
-
-  const spread = candle.ask - candle.bid;
-
-  return spread / PIP_SIZE;
+  return (candle.ask - candle.bid) / PIP_SIZE;
 }
 
 /* ---------------------------------------
@@ -173,7 +162,6 @@ function calculateLotSize(entry: number, stop: number) {
   const riskAmount = PAPER_ACCOUNT_EQUITY * RISK_PER_TRADE;
 
   const stopDistance = Math.abs(entry - stop);
-
   const stopPips = stopDistance / PIP_SIZE;
 
   if (stopPips <= 0) return 0;
@@ -197,7 +185,7 @@ export async function startPriceLoop() {
 
   const loopId = nextLoopId();
 
-  console.log("[ENGINE] started", { loopId, SYMBOL, TIMEFRAME });
+  console.log("[ENGINE] started", { loopId, SYMBOL });
 
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
@@ -207,7 +195,8 @@ export async function startPriceLoop() {
     const started = Date.now();
 
     try {
-      const candles = await provider.fetchCandles();
+      const candles: Candle[] = await provider.fetchCandles();
+
       if (!candles.length) throw new Error("NO_CANDLES");
 
       const latest = candles[candles.length - 1];
@@ -240,7 +229,6 @@ export async function startPriceLoop() {
       /* london activation */
 
       const activationCloses = closes.slice(-ACTIVATION_WINDOW);
-
       const rangePips = calculateRangePips(activationCloses);
 
       if (rangePips < MIN_ACTIVATION_RANGE_PIPS) {
@@ -248,7 +236,7 @@ export async function startPriceLoop() {
         continue;
       }
 
-      /* news spike guard */
+      /* news guard */
 
       if (newsSpikeDetected(closes)) {
         console.log("[SKIP] news volatility spike");
@@ -282,7 +270,9 @@ export async function startPriceLoop() {
       }
 
       const rangeCloses = closes.slice(-RANGE_WINDOW);
-      const rangePct = calcRangePct(rangeCloses);
+      const rangePct =
+        (Math.max(...rangeCloses) - Math.min(...rangeCloses)) /
+        Math.min(...rangeCloses);
 
       if (rangePct < MIN_RANGE_PCT) {
         console.log("[SKIP] tight consolidation");
@@ -382,6 +372,7 @@ export async function startPriceLoop() {
 export function stopPriceLoop() {
   nextLoopId();
   running = false;
+
   console.log("[ENGINE] stop requested");
 }
 

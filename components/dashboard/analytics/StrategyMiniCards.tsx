@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { omegaAnalytics as omega } from "./theme";
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 import { useMemo } from "react";
 
 interface Props {

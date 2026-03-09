@@ -1,4 +1,4 @@
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 
 export const hasExecuted = (t: Trade) =>
   Array.isArray(t.executions) && t.executions.length > 0;

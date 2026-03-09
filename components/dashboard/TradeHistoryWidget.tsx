@@ -9,7 +9,7 @@ import {
   Collapse,
 } from "@mui/material";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 import { usePnlSummary } from "@/hooks/usePnlSummary";
 
 const PAGE_SIZE = 20;

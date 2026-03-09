@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Box } from "@mui/material";
 
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 import { omegaAnalytics as omega } from "./theme";
 
 interface SymbolSummary {

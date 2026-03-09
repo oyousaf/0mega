@@ -4,7 +4,7 @@ import { omegaAnalytics as omega } from "./theme";
 import { motion } from "framer-motion";
 import { Box } from "@mui/material";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 
 /* -----------------------------------------
    SAFE HELPERS

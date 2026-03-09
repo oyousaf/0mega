@@ -1,4 +1,4 @@
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 
 export function analyseBehaviour(trades: Trade[]) {
   const closed = trades

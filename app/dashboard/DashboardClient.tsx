@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
 
-import { Trade } from "@/app/types/trade";
+import { Trade } from "@/types/trade";
 import { computeMetricsFromTrades } from "@/lib/metrics";
 import { buildEquityAndDrawdown } from "@/lib/analytics/equity";
 
