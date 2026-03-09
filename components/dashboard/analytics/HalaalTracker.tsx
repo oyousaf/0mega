@@ -5,19 +5,38 @@ import { omegaAnalytics as omega } from "./theme";
 import { motion } from "framer-motion";
 import { Box } from "@mui/material";
 
-function isHalaalTrade(t: Trade): boolean {
-  const s = t.symbol.toUpperCase();
+/* ---------------------------------------------------------
+   HALAAL CLASSIFICATION
+--------------------------------------------------------- */
 
-  if (s.endsWith("USDT") || s.endsWith("BTC") || s.endsWith("ETH")) return true;
+function isHalaalTrade(t: Trade): boolean {
+  const s = (t.symbol ?? "").toUpperCase();
+
+  /* Forex pairs (EURUSD etc) */
   if (/^[A-Z]{6}$/.test(s)) return true;
+
+  /* Stocks (AAPL etc) */
   if (/^[A-Z]{1,5}$/.test(s)) return true;
+
+  /* Crypto pairs */
+  if (s.endsWith("USDT") || s.endsWith("BTC")) return true;
 
   return false;
 }
 
+/* ---------------------------------------------------------
+   EXECUTION FILTER
+--------------------------------------------------------- */
+
 function hasExecuted(t: Trade): boolean {
-  return Array.isArray(t.executions) && t.executions.length > 0;
+  const pl = Number(t.realised_pl);
+
+  return t.is_closed === true && Number.isFinite(pl);
 }
+
+/* ---------------------------------------------------------
+   COMPONENT
+--------------------------------------------------------- */
 
 export default function HalaalTracker({ trades }: { trades: Trade[] }) {
   const executed = trades.filter(hasExecuted);
@@ -28,6 +47,7 @@ export default function HalaalTracker({ trades }: { trades: Trade[] }) {
   ).length;
 
   const nonHalal = total - halal;
+
   const percent = total > 0 ? Math.round((halal / total) * 100) : 0;
 
   const badgeColor =
