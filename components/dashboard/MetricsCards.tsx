@@ -80,16 +80,16 @@ export default function MetricsCards({
       className="w-full"
     >
       <Grid container spacing={3} justifyContent="center" alignItems="center">
-        <Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox title="Win Rate" value={metrics.winRate} suffix="%" />
         </Grid>
-        <Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox title="Expectancy (R)" value={metrics.expectancy} />
         </Grid>
-        <Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox title="Profit Factor" value={metrics.profitFactor} />
         </Grid>
-        <Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox
             title="Halaal Ratio"
             value={metrics.halaalRatio}
