@@ -59,7 +59,10 @@ export default function DashboardClient() {
 
   const equitySeries = useMemo(() => {
     const closed = history.filter(
-      (t) => t.is_closed && t.closed_at && t.realised_pl !== null,
+      (t) =>
+        t.is_closed === true &&
+        t.closed_at &&
+        Number.isFinite(Number(t.realised_pl)),
     );
 
     return buildEquityAndDrawdown(
