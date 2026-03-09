@@ -2,12 +2,12 @@ import { Trade } from "@/types/trade";
 
 export function analyseBehaviour(trades: Trade[]) {
   const closed = trades
+    .map((t) => ({
+      ...t,
+      pl: Number(t.realised_pl),
+    }))
     .filter(
-      (t) =>
-        t.is_closed &&
-        t.closed_at &&
-        Number.isFinite(Number(t.realised_pl)) &&
-        Number(t.realised_pl) !== 0,
+      (t) => t.is_closed && t.closed_at && Number.isFinite(t.pl) && t.pl !== 0,
     )
     .sort(
       (a, b) =>
@@ -18,9 +18,7 @@ export function analyseBehaviour(trades: Trade[]) {
   let current = 0;
 
   for (const t of closed) {
-    const pl = Number(t.realised_pl);
-
-    if (pl < 0) {
+    if (t.pl < 0) {
       current++;
       if (current > maxLossStreak) maxLossStreak = current;
     } else {
@@ -32,10 +30,12 @@ export function analyseBehaviour(trades: Trade[]) {
     closed.map((t) => new Date(t.closed_at!).toISOString().slice(0, 10)),
   ).size;
 
+  const avgTradesPerDay =
+    uniqueDays === 0 ? 0 : Number((closed.length / uniqueDays).toFixed(2));
+
   return {
     trades: closed.length,
     maxLossStreak,
-    avgTradesPerDay:
-      uniqueDays === 0 ? 0 : Number((closed.length / uniqueDays).toFixed(2)),
+    avgTradesPerDay,
   };
 }
