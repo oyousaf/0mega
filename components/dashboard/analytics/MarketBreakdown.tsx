@@ -24,12 +24,18 @@ function getMarket(symbol: string): "crypto" | "forex" | "stock" | "other" {
 
   const s = symbol.toUpperCase();
 
-  if (s.endsWith("USDT") || s.endsWith("USD") || /^[A-Z]{3,5}BTC$/.test(s)) {
-    if (["XAUUSD", "XAGUSD"].includes(s)) return "forex";
-    return "crypto";
-  }
-
+  /* ---------- FOREX ---------- */
+  // Standard FX pairs (EURUSD, GBPJPY etc)
   if (/^[A-Z]{6}$/.test(s)) return "forex";
+
+  // Metals often traded as FX
+  if (["XAUUSD", "XAGUSD"].includes(s)) return "forex";
+
+  /* ---------- CRYPTO ---------- */
+  if (s.endsWith("USDT")) return "crypto";
+  if (/BTC$/.test(s)) return "crypto";
+
+  /* ---------- STOCK ---------- */
   if (/^[A-Z]{1,5}$/.test(s)) return "stock";
 
   return "other";
