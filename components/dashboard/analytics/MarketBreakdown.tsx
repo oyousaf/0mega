@@ -46,10 +46,12 @@ function getMarket(symbol: string): "crypto" | "forex" | "stock" | "other" {
 --------------------------------------------------------- */
 
 function hasExecutedAndClosed(t: Trade): boolean {
+  const pl = Number(t.realised_pl);
+
   return (
-    Array.isArray(t.executions) &&
-    t.executions.length > 0 &&
-    t.closed_at !== null
+    t.is_closed === true &&
+    typeof t.closed_at === "string" &&
+    Number.isFinite(pl)
   );
 }
 
