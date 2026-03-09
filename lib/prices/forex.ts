@@ -58,7 +58,6 @@ export function getForexProvider(symbol: string, timeframe: string) {
           low: Number(c.low),
           close: Number(c.close),
 
-          /* TwelveData free tier does not provide bid/ask */
           bid: Number(c.close),
           ask: Number(c.close),
 
