@@ -101,17 +101,11 @@ function currentLoopId() {
 UTILS
 ---------------------------------------- */
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function minuteBucket(ts: number) {
-  return Math.floor(ts / 60000);
-}
+const minuteBucket = (ts: number) => Math.floor(ts / 60000);
 
 function avgAbsReturnPct(values: number[]) {
-  if (values.length < 3) return 0;
-
   let sum = 0;
   let count = 0;
 
@@ -148,18 +142,14 @@ function sessionOpen() {
 }
 
 function rangePips(values: number[]) {
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  return (max - min) / PIP_SIZE;
+  return (Math.max(...values) - Math.min(...values)) / PIP_SIZE;
 }
 
 function newsSpike(values: number[]) {
   const recent = values.slice(-NEWS_LOOKBACK);
-
-  const max = Math.max(...recent);
-  const min = Math.min(...recent);
-
-  return (max - min) / PIP_SIZE >= NEWS_SPIKE_PIPS;
+  return (
+    (Math.max(...recent) - Math.min(...recent)) / PIP_SIZE >= NEWS_SPIKE_PIPS
+  );
 }
 
 function spreadPips(candle: Candle) {
@@ -178,8 +168,7 @@ function spreadPips(candle: Candle) {
 function calculateLotSize(entry: number, stop: number) {
   const riskAmount = PAPER_ACCOUNT_EQUITY * RISK_PER_TRADE;
 
-  const stopDistance = Math.abs(entry - stop);
-  const stopPips = stopDistance / PIP_SIZE;
+  const stopPips = Math.abs(entry - stop) / PIP_SIZE;
 
   if (!(stopPips > 0)) return 0;
 
@@ -208,12 +197,11 @@ export async function startPriceLoop() {
 
   let lastMinute: number | null = null;
 
-  while (currentLoopId() === loopId) {
+  while (running && currentLoopId() === loopId) {
     try {
       const candles: Candle[] = await provider.fetchCandles();
 
       if (!candles?.length) {
-        console.log("[ENGINE] provider returned no candles");
         await sleep(IDLE_POLL_MS);
         continue;
       }
@@ -237,6 +225,8 @@ export async function startPriceLoop() {
 
       if (!Number.isFinite(price)) continue;
 
+      console.log("[CANDLE]", price);
+
       const exited = await runExitWatcher(latest);
 
       if (exited) {
@@ -256,30 +246,22 @@ export async function startPriceLoop() {
         continue;
       }
 
-      console.log("[CANDLE]", price);
-
       const closes = candles
         .map((c) => Number(c.close))
         .filter(Number.isFinite);
 
       if (!TEST_MODE) {
-        /* London activation */
-
         const activationRange = rangePips(closes.slice(-ACTIVATION_WINDOW));
 
         if (activationRange < MIN_ACTIVATION_RANGE_PIPS) {
-          console.log("[SKIP] london range not active", activationRange);
+          console.log("[SKIP] london range not active");
           continue;
         }
-
-        /* News */
 
         if (newsSpike(closes)) {
-          console.log("[SKIP] news volatility spike");
+          console.log("[SKIP] news spike");
           continue;
         }
-
-        /* Vol regime */
 
         const regimeVol = avgAbsReturnPct(closes.slice(-REGIME_WINDOW));
 
@@ -288,16 +270,12 @@ export async function startPriceLoop() {
           continue;
         }
 
-        /* Short vol */
-
         const vol = avgAbsReturnPct(closes.slice(-VOL_WINDOW));
 
         if (vol < MIN_VOL_PCT) {
           console.log("[SKIP] short volatility too low");
           continue;
         }
-
-        /* Spike guard */
 
         const prev = closes[closes.length - 2];
         const last = closes[closes.length - 1];
@@ -308,8 +286,6 @@ export async function startPriceLoop() {
           console.log("[SKIP] volatility spike");
           continue;
         }
-
-        /* Consolidation */
 
         const rangeValues = closes.slice(-RANGE_WINDOW);
 
@@ -335,17 +311,16 @@ export async function startPriceLoop() {
         timeframe: TIMEFRAME,
         candles,
       });
+
       if (TEST_MODE && !signal) {
         const pip = 0.0001;
-        const testDistance = pip * 5; // 5 pips
-
-        const sl = price - testDistance;
+        const dist = pip * 5;
 
         signal = {
           symbol: SYMBOL,
           direction: "BUY",
-          sl,
-          tp1: price + testDistance,
+          sl: price - dist,
+          tp1: price + dist,
           reason: "TEST_SIGNAL",
         };
 
@@ -354,29 +329,17 @@ export async function startPriceLoop() {
 
       if (!signal) continue;
 
-      /* EMA TREND FILTER */
-
       if (!TEST_MODE && emaNow !== null) {
         if (signal.direction === "BUY") {
-          if (price < emaNow) {
-            console.log("[SKIP] buy below ema");
-            continue;
-          }
-
-          if (emaSlope <= 0) {
-            console.log("[SKIP] buy ema slope not positive");
+          if (price < emaNow || emaSlope <= 0) {
+            console.log("[SKIP] buy trend filter");
             continue;
           }
         }
 
         if (signal.direction === "SELL") {
-          if (price > emaNow) {
-            console.log("[SKIP] sell above ema");
-            continue;
-          }
-
-          if (emaSlope >= 0) {
-            console.log("[SKIP] sell ema slope not negative");
+          if (price > emaNow || emaSlope >= 0) {
+            console.log("[SKIP] sell trend filter");
             continue;
           }
         }
@@ -410,9 +373,7 @@ export async function startPriceLoop() {
           `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
         );
 
-        if (rows.length) {
-          return;
-        }
+        if (rows.length) return;
 
         const res = await executeTradeIntent({
           signalId: signal.reason,
@@ -426,15 +387,6 @@ export async function startPriceLoop() {
 
         if (res.success) {
           console.log("[TRADE_OPENED]", res.tradeId);
-
-          console.log("[TRADE]", {
-            id: res.tradeId,
-            symbol: SYMBOL,
-            entry,
-            sl,
-            tp1,
-            lotSize,
-          });
         } else {
           console.log("[TRADE_FAILED]", res);
         }
