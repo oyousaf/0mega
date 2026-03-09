@@ -80,13 +80,19 @@ function checkExit(
   const tp1 = trade.tp1 != null ? Number(trade.tp1) : null;
 
   if (trade.side === "BUY") {
-    if (low <= sl) return "SL_HIT";
-    if (tp1 !== null && high >= tp1) return "TP_HIT";
+    const slHit = low <= sl;
+    const tpHit = tp1 !== null && high >= tp1;
+
+    if (slHit) return "SL_HIT";
+    if (tpHit) return "TP_HIT";
   }
 
   if (trade.side === "SELL") {
-    if (high >= sl) return "SL_HIT";
-    if (tp1 !== null && low <= tp1) return "TP_HIT";
+    const slHit = high >= sl;
+    const tpHit = tp1 !== null && low <= tp1;
+
+    if (slHit) return "SL_HIT";
+    if (tpHit) return "TP_HIT";
   }
 
   return null;

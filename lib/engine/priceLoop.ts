@@ -426,6 +426,15 @@ export async function startPriceLoop() {
 
         if (res.success) {
           console.log("[TRADE_OPENED]", res.tradeId);
+
+          console.log("[TRADE]", {
+            id: res.tradeId,
+            symbol: SYMBOL,
+            entry,
+            sl,
+            tp1,
+            lotSize,
+          });
         } else {
           console.log("[TRADE_FAILED]", res);
         }
