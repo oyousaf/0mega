@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       ORDER BY last_time DESC
       LIMIT $1 OFFSET $2
       `,
-      [limit + 1, offset]
+      [limit + 1, offset],
     );
 
     if (!tradeRows.length) {
@@ -62,7 +62,7 @@ export async function GET(req: Request) {
       WHERE trade_id = ANY($1)
       ORDER BY trade_id, timestamp ASC
       `,
-      [pageTradeIds]
+      [pageTradeIds],
     );
 
     /* -------------------------------------------------
@@ -77,7 +77,7 @@ export async function GET(req: Request) {
       FROM paper_trades
       WHERE id = ANY($1)
       `,
-      [pageTradeIds]
+      [pageTradeIds],
     );
 
     const metaMap: Record<string, any> = {};
@@ -155,7 +155,7 @@ export async function GET(req: Request) {
     console.error("History route error:", err);
     return NextResponse.json(
       { error: err.message || String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
