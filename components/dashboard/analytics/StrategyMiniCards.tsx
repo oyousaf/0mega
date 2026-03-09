@@ -18,23 +18,20 @@ export default function StrategyMiniCards({ trades }: Props) {
     let rrCount = 0;
 
     for (const t of trades) {
-      if (
-        !t.is_closed ||
-        t.realised_pl === null ||
-        !Number.isFinite(Number(t.realised_pl)) ||
-        Number(t.realised_pl) === 0
-      ) {
+      const pl = Number(t.realised_pl);
+
+      if (!t.is_closed || !Number.isFinite(pl) || pl === 0) {
         continue;
       }
 
       total++;
-      const pl = Number(t.realised_pl);
 
       if (pl > 0) wins++;
       else losses++;
 
-      if (t.rr !== null && Number.isFinite(Number(t.rr))) {
-        rrSum += Number(t.rr);
+      const rr = Number(t.rr);
+      if (Number.isFinite(rr)) {
+        rrSum += rr;
         rrCount++;
       }
     }

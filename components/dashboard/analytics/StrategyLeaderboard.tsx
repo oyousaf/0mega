@@ -78,7 +78,7 @@ function computeStrategies(trades: Trade[]): StrategySummary[] {
       wins: r.wins,
       losses: r.losses,
       winRate: r.trades ? (r.wins / r.trades) * 100 : 0,
-      pnl: r.pnl,
+      pnl: r.trades ? r.pnl / r.trades : 0,
       rr: r.rrCount ? r.rr / r.rrCount : 0,
     }))
     .sort((a, b) => b.winRate - a.winRate);

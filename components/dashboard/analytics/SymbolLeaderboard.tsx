@@ -22,6 +22,9 @@ function computeSymbols(trades: Trade[]): SymbolSummary[] {
   const map = new Map<string, SymbolSummary>();
 
   for (const t of trades) {
+    const pl = Number(t.realised_pl);
+    if (!Number.isFinite(pl) || pl === 0) continue;
+
     const symbol = (t.symbol && t.symbol.trim()) || "Unknown";
 
     if (!map.has(symbol)) {
@@ -34,17 +37,12 @@ function computeSymbols(trades: Trade[]): SymbolSummary[] {
       });
     }
 
-    if (t.realised_pl == null) continue;
-
-    const pl = Number(t.realised_pl);
-    if (!Number.isFinite(pl) || pl === 0) continue;
-
     const row = map.get(symbol)!;
     row.trades++;
-    if (pl > 0) row.wins++;
-    if (pl < 0) row.losses++;
-  }
 
+    if (pl > 0) row.wins++;
+    else row.losses++;
+  }
   return [...map.values()]
     .map((r) => ({
       ...r,
