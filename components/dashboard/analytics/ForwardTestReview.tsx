@@ -7,21 +7,12 @@ export default function ForwardTestReview({ trades }: { trades: Trade[] }) {
   const stats = analyseBehaviour(trades);
 
   return (
-    <div
-      className="rounded-xl border border-omega-dark-gold
-      bg-omega-green p-4 space-y-3"
-    >
-      <h3
-        className="text-lg font-semibold text-omega-gold
-        text-center"
-      >
+    <div className="rounded-xl border border-omega-dark-gold bg-omega-green p-4 space-y-3">
+      <h3 className="text-lg font-semibold text-omega-gold text-center">
         📋 Forward-Test Review
       </h3>
 
-      <div
-        className="grid grid-cols-3 gap-4
-        text-center text-omega-gold"
-      >
+      <div className="grid grid-cols-3 gap-4 text-center text-omega-gold">
         <div>
           <p className="text-xs opacity-70">TRADES</p>
           <p className="font-bold">{stats.trades}</p>
@@ -34,7 +25,11 @@ export default function ForwardTestReview({ trades }: { trades: Trade[] }) {
 
         <div>
           <p className="text-xs opacity-70">AVG TRADES / DAY</p>
-          <p className="font-bold">{stats.avgTradesPerDay.toFixed(2)}</p>
+          <p className="font-bold">
+            {Number.isFinite(stats.avgTradesPerDay)
+              ? stats.avgTradesPerDay.toFixed(2)
+              : "0.00"}
+          </p>
         </div>
       </div>
     </div>
