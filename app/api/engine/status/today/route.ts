@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 import { getDailyRisk } from "@/lib/engine/risk/dailyRisk";
 
-const MAX_DAILY_LOSS = 0.02;
+const ASSUMED_EQUITY = 100000;
+const MAX_DAILY_LOSS_PCT = 0.02;
 
 /* -------------------------------------------------
-   TODAY ENGINE STATUS (CANONICAL)
+   TODAY ENGINE STATUS
 -------------------------------------------------- */
 export async function GET() {
   const now = new Date();
   const start = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
 
   let pnlToday = 0;
@@ -20,88 +21,69 @@ export async function GET() {
   let tradingAllowed = true;
 
   /* -----------------------------------------
-     1. OPEN TRADES
+     OPEN TRADES
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(`
-      SELECT COUNT(*) AS open_trades
+      SELECT COUNT(*)::int AS c
       FROM paper_trades
       WHERE is_closed = false
     `);
 
-    openTrades = Number(rows[0]?.open_trades ?? 0);
+    openTrades = Number(rows[0]?.c ?? 0);
   } catch (err) {
     console.error("Open trades query failed", err);
   }
 
   /* -----------------------------------------
-     2. TRADES TOUCHED TODAY (execution truth)
+     TRADES OPENED TODAY
   ------------------------------------------ */
   try {
     const { rows } = await pool.query(
       `
-      SELECT COUNT(DISTINCT trade_id) AS trades_today
-      FROM trade_executions
-      WHERE timestamp >= $1
+      SELECT COUNT(*)::int AS c
+      FROM paper_trades
+      WHERE opened_at >= $1
       `,
-      [start.toISOString()]
+      [start.toISOString()],
     );
 
-    tradesToday = Number(rows[0]?.trades_today ?? 0);
+    tradesToday = Number(rows[0]?.c ?? 0);
   } catch (err) {
     console.error("Trades today query failed", err);
   }
 
   /* -----------------------------------------
-   3. REALISED PNL TODAY
------------------------------------------- */
+     REALISED PNL TODAY
+  ------------------------------------------ */
   try {
     const { rows } = await pool.query(
       `
-    SELECT
-      e.trade_id,
-      e.price AS exit_price,
-      e.qty,
-      entry.price AS entry_price
-    FROM trade_executions e
-    JOIN LATERAL (
-      SELECT price
-      FROM trade_executions
-      WHERE trade_id = e.trade_id
-        AND side = 'BUY'
-        AND status = 'FILLED'
-      ORDER BY timestamp ASC
-      LIMIT 1
-    ) entry ON true
-    WHERE
-      e.side = 'SELL'
-      AND e.status = 'FILLED'
-      AND e.timestamp >= $1
-    `,
-      [start.toISOString()]
+      SELECT COALESCE(SUM(realised_pl),0) AS pnl
+      FROM paper_trades
+      WHERE is_closed = true
+      AND closed_at >= $1
+      `,
+      [start.toISOString()],
     );
 
-    for (const r of rows) {
-      const entry = Number(r.entry_price);
-      const exit = Number(r.exit_price);
-      const qty = Number(r.qty);
-
-      if (!isFinite(entry) || !isFinite(exit) || !isFinite(qty)) continue;
-
-      pnlToday += (exit - entry) * qty;
-    }
-  } catch {}
+    pnlToday = Number(rows[0]?.pnl ?? 0);
+  } catch (err) {
+    console.error("PNL query failed", err);
+  }
 
   /* -----------------------------------------
-     4. DAILY RISK (engine state)
+     DAILY RISK STATE
   ------------------------------------------ */
   try {
     const risk = getDailyRisk("GLOBAL");
 
     if (risk) {
+      const maxLossAmount = ASSUMED_EQUITY * MAX_DAILY_LOSS_PCT;
+
       lossUsedPct =
-        risk.realisedPnl < 0
-          ? Math.min(Math.abs(risk.realisedPnl) / MAX_DAILY_LOSS, 1) * 100
+        pnlToday < 0
+          ? Math.min(Math.abs(pnlToday) / maxLossAmount, 1) * 100
           : 0;
 
       tradingAllowed = !risk.frozen;
