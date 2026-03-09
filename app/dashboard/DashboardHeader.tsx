@@ -9,39 +9,62 @@ import NotificationsPanel from "@/app/dashboard/NotificationsPanel";
 
 export default function DashboardHeader() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [engineRunning, setEngineRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
 
+  async function loadStatus() {
+    try {
+      const res = await fetch("/api/automation/status", {
+        cache: "no-store",
+      });
+
+      const j = await res.json();
+
+      setEnabled(
+        typeof j?.automation?.enabled === "boolean"
+          ? j.automation.enabled
+          : false,
+      );
+
+      setEngineRunning(Boolean(j?.engine?.running));
+    } catch {
+      setEnabled(false);
+      setEngineRunning(false);
+    }
+  }
+
   useEffect(() => {
-    fetch("/api/automation/status", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) =>
-        setEnabled(
-          typeof j?.automation?.enabled === "boolean"
-            ? j.automation.enabled
-            : false,
-        ),
-      )
-      .catch(() => setEnabled(false));
+    loadStatus();
+
+    const id = setInterval(loadStatus, 5000);
+    return () => clearInterval(id);
   }, []);
 
   async function toggleAutomation() {
     if (busy || enabled === null) return;
 
     const prev = enabled;
+
     setBusy(true);
     setEnabled(!prev);
 
     try {
       const res = await fetch("/api/automation/status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ enabled: !prev }),
       });
 
       const json = await res.json();
+
       if (typeof json.enabled !== "boolean") throw new Error();
+
       setEnabled(json.enabled);
+
+      setEngineRunning(Boolean(json.engineRunning));
     } catch {
       setEnabled(prev);
     } finally {
@@ -55,6 +78,8 @@ export default function DashboardHeader() {
       : enabled
         ? "text-green-400"
         : "text-red-400";
+
+  const pulse = engineRunning ? "animate-pulse" : "";
 
   return (
     <>
@@ -108,14 +133,16 @@ export default function DashboardHeader() {
             </motion.h1>
 
             <div className="flex justify-end gap-1.5 sm:gap-2">
+              {/* ENGINE TOGGLE */}
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={toggleAutomation}
-                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold ${cpuColor} hover-omega`}
+                className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold ${cpuColor} ${pulse} hover-omega`}
               >
                 <FiCpu size={16} />
               </motion.button>
 
+              {/* SETTINGS */}
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={() => setOpenSettings(true)}
