@@ -4,8 +4,17 @@ import { getBroker } from "@/providers/execution/router";
 import { startPriceLoop, stopPriceLoop } from "@/lib/engine/priceLoop";
 
 /* -------------------------------------------------
-   AUTOMATION STATUS
+GLOBAL ENGINE STATE
 -------------------------------------------------- */
+
+declare global {
+  var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
+}
+
+/* -------------------------------------------------
+AUTOMATION STATUS
+-------------------------------------------------- */
+
 export async function GET() {
   try {
     const broker = getBroker();
@@ -15,21 +24,28 @@ export async function GET() {
       positions,
       { rows: openTrades },
       { rows: executions },
-      { rows: automation },
+      { rows: automationRows },
     ] = await Promise.all([
       broker.fetchBalance(),
       broker.fetchPositions(),
-      pool.query(`SELECT COUNT(*) FROM paper_trades`),
-      pool.query(`SELECT COUNT(*) FROM trade_executions`),
-      pool.query(`SELECT enabled FROM automation_state WHERE id = 1`),
+      pool.query(`SELECT COUNT(*)::int FROM paper_trades`),
+      pool.query(`SELECT COUNT(*)::int FROM trade_executions`),
+      pool.query(`SELECT enabled FROM automation_state WHERE id = 1 LIMIT 1`),
     ]);
+
+    const enabled = Boolean(automationRows[0]?.enabled);
+    const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
 
     return NextResponse.json({
       success: true,
 
       automation: {
-        enabled: Boolean(automation[0]?.enabled),
-        mode: automation[0]?.enabled ? "auto" : "manual",
+        enabled,
+        mode: enabled ? "auto" : "manual",
+      },
+
+      engine: {
+        running: engineRunning,
       },
 
       broker: {
@@ -39,8 +55,8 @@ export async function GET() {
       },
 
       database: {
-        paper_trades: Number(openTrades[0].count),
-        trade_executions: Number(executions[0].count),
+        paper_trades: Number(openTrades[0]?.count ?? 0),
+        trade_executions: Number(executions[0]?.count ?? 0),
       },
 
       timestamp: new Date().toISOString(),
@@ -56,12 +72,13 @@ export async function GET() {
 }
 
 /* -------------------------------------------------
-   TOGGLE AUTOMATION
+TOGGLE AUTOMATION
 -------------------------------------------------- */
+
 export async function POST(req: Request) {
   try {
-    const { enabled } = await req.json();
-    const nextState = Boolean(enabled);
+    const body = await req.json();
+    const nextState = Boolean(body?.enabled);
 
     await pool.query(
       `
@@ -72,14 +89,18 @@ export async function POST(req: Request) {
       [nextState],
     );
 
+    const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
+
     /* --------------------------
        ENGINE CONTROL
     --------------------------- */
 
-    if (nextState) {
+    if (nextState && !engineRunning) {
       console.log("[AUTOMATION] starting engine");
       startPriceLoop();
-    } else {
+    }
+
+    if (!nextState && engineRunning) {
       console.log("[AUTOMATION] stopping engine");
       stopPriceLoop();
     }
@@ -87,6 +108,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       enabled: nextState,
+      engineRunning: Boolean(globalThis.__OMEGA_ENGINE_RUNNING__),
     });
   } catch (err: any) {
     console.error("Automation toggle error:", err);
