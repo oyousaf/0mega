@@ -20,9 +20,9 @@ export async function GET() {
   let tradesToday = 0;
   let openTrades = 0;
   let lossUsedPct = 0;
+  let tradingAllowed = false;
 
   let automationEnabled = false;
-  let tradingAllowed = false;
 
   /* -----------------------------------------
      AUTOMATION FLAG
@@ -57,7 +57,7 @@ export async function GET() {
   }
 
   /* -----------------------------------------
-     TRADES OPENED TODAY
+     TRADES TODAY
   ------------------------------------------ */
 
   try {
@@ -114,32 +114,12 @@ export async function GET() {
     console.error("Risk state read failed", err);
   }
 
-  /* -----------------------------------------
-     LAST ENGINE ACTIVITY
-  ------------------------------------------ */
-
-  let lastTick: string | null = null;
-
-  try {
-    const { rows } = await pool.query(`
-      SELECT GREATEST(
-        COALESCE(MAX(opened_at), 'epoch'),
-        COALESCE(MAX(closed_at), 'epoch')
-      ) AS last_tick
-      FROM paper_trades
-    `);
-
-    lastTick = rows[0]?.last_tick ?? null;
-  } catch (err) {
-    console.error("Last tick query failed", err);
-  }
-
   return NextResponse.json({
     pnlToday,
     tradesToday,
     openTrades,
     lossUsedPct,
     tradingAllowed,
-    lastTick,
+    lastTick: new Date().toISOString(),
   });
 }
