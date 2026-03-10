@@ -21,7 +21,6 @@ export async function GET() {
   let openTrades = 0;
   let lossUsedPct = 0;
   let tradingAllowed = false;
-
   let automationEnabled = false;
 
   /* -----------------------------------------
@@ -51,7 +50,7 @@ export async function GET() {
       WHERE is_closed = false
     `);
 
-    openTrades = Number(rows[0]?.c ?? 0);
+    openTrades = rows[0]?.c ?? 0;
   } catch (err) {
     console.error("Open trades query failed", err);
   }
@@ -67,10 +66,10 @@ export async function GET() {
       FROM paper_trades
       WHERE opened_at >= $1
       `,
-      [start.toISOString()],
+      [start],
     );
 
-    tradesToday = Number(rows[0]?.c ?? 0);
+    tradesToday = rows[0]?.c ?? 0;
   } catch (err) {
     console.error("Trades today query failed", err);
   }
@@ -87,7 +86,7 @@ export async function GET() {
       WHERE is_closed = true
       AND closed_at >= $1
       `,
-      [start.toISOString()],
+      [start],
     );
 
     const pnl = Number(rows[0]?.pnl ?? 0);
@@ -114,12 +113,29 @@ export async function GET() {
     console.error("Risk state read failed", err);
   }
 
+  /* -----------------------------------------
+     LAST ENGINE ACTIVITY
+  ------------------------------------------ */
+
+  let lastTick: string | null = null;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT MAX(timestamp) AS last_tick
+      FROM trade_executions
+    `);
+
+    lastTick = rows[0]?.last_tick ?? null;
+  } catch (err) {
+    console.error("Last tick query failed", err);
+  }
+
   return NextResponse.json({
     pnlToday,
     tradesToday,
     openTrades,
     lossUsedPct,
     tradingAllowed,
-    lastTick: new Date().toISOString(),
+    lastTick: lastTick ?? new Date().toISOString(),
   });
 }
