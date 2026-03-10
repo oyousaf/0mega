@@ -47,16 +47,6 @@ const RISK_PER_TRADE = 0.005;
 const PIP_SIZE = 0.0001;
 const PIP_VALUE_PER_LOT = 10;
 
-const MIN_REQUIRED_CANDLES = Math.max(
-  EMA_PERIOD + 1,
-  REGIME_WINDOW,
-  ACTIVATION_WINDOW,
-  VOL_WINDOW,
-  RANGE_WINDOW,
-  NEWS_LOOKBACK,
-  50,
-);
-
 const ENGINE_LOCK_KEY = 999001;
 
 /* ---------------------------------------
@@ -144,14 +134,8 @@ function newsSpike(values: number[]) {
 }
 
 function spreadPips(candle: Candle) {
-  if (
-    typeof candle.bid !== "number" ||
-    typeof candle.ask !== "number" ||
-    !Number.isFinite(candle.bid) ||
-    !Number.isFinite(candle.ask)
-  ) {
+  if (typeof candle.bid !== "number" || typeof candle.ask !== "number")
     return null;
-  }
 
   return (candle.ask - candle.bid) / PIP_SIZE;
 }
@@ -188,6 +172,24 @@ async function releaseEngineLock() {
 }
 
 /* ---------------------------------------
+AUTOMATION CHECK
+---------------------------------------- */
+
+async function automationEnabled(): Promise<boolean> {
+  try {
+    const { rows } = await pool.query(`
+      SELECT enabled
+      FROM automation_state
+      LIMIT 1
+    `);
+
+    return Boolean(rows[0]?.enabled);
+  } catch {
+    return false;
+  }
+}
+
+/* ---------------------------------------
 ENGINE
 ---------------------------------------- */
 
@@ -201,6 +203,12 @@ export async function startPriceLoop() {
 
   if (!locked) {
     console.log("[ENGINE] another instance already running");
+    return;
+  }
+
+  if (!(await automationEnabled())) {
+    console.log("[ENGINE] automation disabled");
+    await releaseEngineLock();
     return;
   }
 
@@ -219,22 +227,14 @@ export async function startPriceLoop() {
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
   let lastMinute: number | null = null;
-  let lastAutomationCheck = 0;
+  let lastAutomationCheck = Date.now();
 
   try {
     while (running && currentLoopId() === loopId) {
-      
-      // automation guard
       if (Date.now() - lastAutomationCheck > 30000) {
         lastAutomationCheck = Date.now();
 
-        const { rows } = await pool.query(`
-      SELECT enabled
-      FROM automation_state
-      LIMIT 1
-    `);
-
-        if (!rows[0]?.enabled) {
+        if (!(await automationEnabled())) {
           console.log("[ENGINE] automation disabled");
           break;
         }
@@ -243,11 +243,6 @@ export async function startPriceLoop() {
       const candles: Candle[] = await provider.fetchCandles();
 
       if (!candles?.length) {
-        await sleep(2000);
-        continue;
-      }
-
-      if (candles.length < MIN_REQUIRED_CANDLES) {
         await sleep(2000);
         continue;
       }
@@ -271,67 +266,15 @@ export async function startPriceLoop() {
       const exited = await runExitWatcher(latest);
       if (exited) continue;
 
-      if (!TEST_MODE && !sessionOpen()) {
-        console.log("[SKIP] session closed");
-        continue;
-      }
+      if (!TEST_MODE && !sessionOpen()) continue;
 
       const spread = spreadPips(latest);
 
-      if (!TEST_MODE && spread !== null && spread > MAX_SPREAD_PIPS) {
-        console.log("[SKIP] spread too wide", spread);
-        continue;
-      }
+      if (!TEST_MODE && spread !== null && spread > MAX_SPREAD_PIPS) continue;
 
       const closes = candles
         .map((c) => Number(c.close))
         .filter((v): v is number => Number.isFinite(v));
-
-      if (!TEST_MODE) {
-        const activationRange = rangePips(closes.slice(-ACTIVATION_WINDOW));
-
-        if (activationRange < MIN_ACTIVATION_RANGE_PIPS) {
-          console.log("[SKIP] london range not active");
-          continue;
-        }
-
-        if (newsSpike(closes)) {
-          console.log("[SKIP] news spike");
-          continue;
-        }
-
-        const regimeVol = avgAbsReturnPct(closes.slice(-REGIME_WINDOW));
-        if (regimeVol < REGIME_MIN_PCT) {
-          console.log("[SKIP] low volatility regime");
-          continue;
-        }
-
-        const vol = avgAbsReturnPct(closes.slice(-VOL_WINDOW));
-        if (vol < MIN_VOL_PCT) {
-          console.log("[SKIP] short volatility too low");
-          continue;
-        }
-
-        const prev = closes[closes.length - 2];
-        const last = closes[closes.length - 1];
-        const move = Math.abs(last - prev) / prev;
-
-        if (move > vol * SPIKE_MULTIPLIER) {
-          console.log("[SKIP] volatility spike");
-          continue;
-        }
-
-        const rangeValues = closes.slice(-RANGE_WINDOW);
-
-        const rangePct =
-          (Math.max(...rangeValues) - Math.min(...rangeValues)) /
-          Math.min(...rangeValues);
-
-        if (rangePct < MIN_RANGE_PCT) {
-          console.log("[SKIP] tight consolidation");
-          continue;
-        }
-      }
 
       const emaNow = calculateEMA(closes, EMA_PERIOD);
       const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
@@ -346,52 +289,15 @@ export async function startPriceLoop() {
         candles,
       });
 
-      if (TEST_MODE && !signal) {
-        const dist = PIP_SIZE * 5;
-
-        signal = {
-          symbol: SYMBOL,
-          direction: "BUY",
-          sl: price - dist,
-          tp1: price + dist,
-          reason: "TEST_SIGNAL",
-        };
-
-        console.log("[TEST_MODE] forced signal");
-      }
-
       if (!signal) continue;
-
-      if (!TEST_MODE && emaNow !== null) {
-        if (signal.direction === "BUY") {
-          if (price < emaNow || emaSlope <= 0) {
-            console.log("[SKIP] buy trend filter");
-            continue;
-          }
-        }
-
-        if (signal.direction === "SELL") {
-          if (price > emaNow || emaSlope >= 0) {
-            console.log("[SKIP] sell trend filter");
-            continue;
-          }
-        }
-      }
 
       const entry = price;
       const sl = Number(signal.sl);
 
-      if (!Number.isFinite(sl)) {
-        console.log("[SKIP] invalid stop loss");
-        continue;
-      }
+      if (!Number.isFinite(sl)) continue;
 
       const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
-
-      if (!(riskDist > 0)) {
-        console.log("[SKIP] invalid risk distance");
-        continue;
-      }
+      if (!(riskDist > 0)) continue;
 
       const tp1 =
         signal.direction === "BUY"
@@ -408,21 +314,14 @@ export async function startPriceLoop() {
       }
 
       const lotSize = calculateLotSize(entry, sl);
-
-      if (!(lotSize > 0)) {
-        console.log("[SKIP] lot size invalid");
-        continue;
-      }
+      if (!(lotSize > 0)) continue;
 
       await withDbLock(async () => {
         const { rows } = await pool.query(
           `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
         );
 
-        if (rows.length) {
-          console.log("[SKIP] open trade already exists");
-          return;
-        }
+        if (rows.length) return;
 
         const res = await executeTradeIntent({
           signalId: signal.reason,
@@ -472,10 +371,13 @@ async function withDbLock(fn: () => Promise<void>) {
 
   try {
     await pool.query("SELECT pg_advisory_xact_lock(424242)");
+
     await fn();
+
     await pool.query("COMMIT");
   } catch (e) {
     await pool.query("ROLLBACK");
+
     throw e;
   }
 }
