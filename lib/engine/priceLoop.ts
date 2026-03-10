@@ -5,6 +5,7 @@ import { riskGate } from "@/lib/trading/risk/riskGate";
 import { pool } from "@/lib/neon";
 import { runExitWatcher } from "./exitWatcher";
 import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
+import type { OrderSide } from "@/providers/execution/broker.interface";
 
 /* ---------------------------------------
 CONFIG
@@ -13,7 +14,7 @@ CONFIG
 const SYMBOL = "EURUSD";
 const TIMEFRAME = "1m";
 
-const TEST_MODE = process.env.OMEGA_TEST_MODE === "true";
+const TEST_MODE = String(process.env.OMEGA_TEST_MODE).toLowerCase() === "true";
 
 const RR_TARGET = 1.25;
 
@@ -48,6 +49,19 @@ const PIP_SIZE = 0.0001;
 const PIP_VALUE_PER_LOT = 10;
 
 const ENGINE_LOCK_KEY = 999001;
+const ENTRY_LOCK_KEY = 424242;
+
+const MIN_REQUIRED_CANDLES = Math.max(
+  EMA_PERIOD + 1,
+  REGIME_WINDOW,
+  ACTIVATION_WINDOW,
+  VOL_WINDOW,
+  RANGE_WINDOW,
+  NEWS_LOOKBACK,
+  50,
+);
+
+const AUTOMATION_CHECK_MS = 30000;
 
 /* ---------------------------------------
 ENGINE STATE
@@ -56,7 +70,9 @@ ENGINE STATE
 let running = false;
 
 declare global {
+  // eslint-disable-next-line no-var
   var __OMEGA_PRICE_LOOP_ID__: number | undefined;
+  // eslint-disable-next-line no-var
   var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
 }
 
@@ -134,8 +150,14 @@ function newsSpike(values: number[]) {
 }
 
 function spreadPips(candle: Candle) {
-  if (typeof candle.bid !== "number" || typeof candle.ask !== "number")
+  if (
+    typeof candle.bid !== "number" ||
+    typeof candle.ask !== "number" ||
+    !Number.isFinite(candle.bid) ||
+    !Number.isFinite(candle.ask)
+  ) {
     return null;
+  }
 
   return (candle.ask - candle.bid) / PIP_SIZE;
 }
@@ -184,8 +206,31 @@ async function automationEnabled(): Promise<boolean> {
     `);
 
     return Boolean(rows[0]?.enabled);
-  } catch {
+  } catch (err) {
+    console.error("[AUTOMATION_CHECK_FAILED]", err);
     return false;
+  }
+}
+
+/* ---------------------------------------
+ENTRY LOCK
+Serialises the open-trade check + execution block
+across concurrent loop attempts.
+---------------------------------------- */
+
+async function withEntryLock<T>(fn: () => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+
+  try {
+    await client.query(`SELECT pg_advisory_lock($1)`, [ENTRY_LOCK_KEY]);
+    return await fn();
+  } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock($1)`, [ENTRY_LOCK_KEY]);
+    } catch (err) {
+      console.error("[ENTRY_UNLOCK_FAILED]", err);
+    }
+    client.release();
   }
 }
 
@@ -231,7 +276,7 @@ export async function startPriceLoop() {
 
   try {
     while (running && currentLoopId() === loopId) {
-      if (Date.now() - lastAutomationCheck > 30000) {
+      if (Date.now() - lastAutomationCheck > AUTOMATION_CHECK_MS) {
         lastAutomationCheck = Date.now();
 
         if (!(await automationEnabled())) {
@@ -243,6 +288,11 @@ export async function startPriceLoop() {
       const candles: Candle[] = await provider.fetchCandles();
 
       if (!candles?.length) {
+        await sleep(2000);
+        continue;
+      }
+
+      if (candles.length < MIN_REQUIRED_CANDLES) {
         await sleep(2000);
         continue;
       }
@@ -261,25 +311,86 @@ export async function startPriceLoop() {
 
       console.log("[NEW_CANDLE]", price);
 
-      if (!Number.isFinite(price)) continue;
+      if (!Number.isFinite(price)) {
+        console.log("[SKIP] invalid candle price");
+        continue;
+      }
 
       const exited = await runExitWatcher(latest);
       if (exited) continue;
 
-      if (!TEST_MODE && !sessionOpen()) continue;
+      if (!TEST_MODE && !sessionOpen()) {
+        console.log("[SKIP] session closed");
+        continue;
+      }
 
       const spread = spreadPips(latest);
 
-      if (!TEST_MODE && spread !== null && spread > MAX_SPREAD_PIPS) continue;
+      if (!TEST_MODE && spread !== null && spread > MAX_SPREAD_PIPS) {
+        console.log("[SKIP] spread too wide", spread);
+        continue;
+      }
 
       const closes = candles
         .map((c) => Number(c.close))
         .filter((v): v is number => Number.isFinite(v));
 
+      if (closes.length < MIN_REQUIRED_CANDLES) {
+        console.log("[SKIP] insufficient valid closes");
+        continue;
+      }
+
+      if (!TEST_MODE) {
+        const activationRange = rangePips(closes.slice(-ACTIVATION_WINDOW));
+        if (activationRange < MIN_ACTIVATION_RANGE_PIPS) {
+          console.log("[SKIP] london range not active");
+          continue;
+        }
+
+        if (newsSpike(closes)) {
+          console.log("[SKIP] news spike");
+          continue;
+        }
+
+        const regimeVol = avgAbsReturnPct(closes.slice(-REGIME_WINDOW));
+        if (regimeVol < REGIME_MIN_PCT) {
+          console.log("[SKIP] low volatility regime");
+          continue;
+        }
+
+        const vol = avgAbsReturnPct(closes.slice(-VOL_WINDOW));
+        if (vol < MIN_VOL_PCT) {
+          console.log("[SKIP] short volatility too low");
+          continue;
+        }
+
+        const prev = closes[closes.length - 2];
+        const last = closes[closes.length - 1];
+        const move = Math.abs(last - prev) / prev;
+
+        if (move > vol * SPIKE_MULTIPLIER) {
+          console.log("[SKIP] volatility spike");
+          continue;
+        }
+
+        const rangeValues = closes.slice(-RANGE_WINDOW);
+        const rangePct =
+          (Math.max(...rangeValues) - Math.min(...rangeValues)) /
+          Math.min(...rangeValues);
+
+        if (rangePct < MIN_RANGE_PCT) {
+          console.log("[SKIP] tight consolidation");
+          continue;
+        }
+      }
+
       const emaNow = calculateEMA(closes, EMA_PERIOD);
       const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
 
-      if (!TEST_MODE && (!emaNow || !emaPrev)) continue;
+      if (!TEST_MODE && (!emaNow || !emaPrev)) {
+        console.log("[SKIP] ema unavailable");
+        continue;
+      }
 
       const emaSlope = (emaNow ?? 0) - (emaPrev ?? 0);
 
@@ -289,15 +400,52 @@ export async function startPriceLoop() {
         candles,
       });
 
+      if (TEST_MODE && !signal) {
+        const dist = PIP_SIZE * 5;
+
+        signal = {
+          symbol: SYMBOL,
+          direction: "BUY" as OrderSide,
+          sl: price - dist,
+          tp1: price + dist,
+          reason: "TEST_SIGNAL",
+        };
+
+        console.log("[TEST_MODE] forced signal");
+      }
+
       if (!signal) continue;
+
+      if (!TEST_MODE && emaNow !== null) {
+        if (signal.direction === "BUY") {
+          if (price < emaNow || emaSlope <= 0) {
+            console.log("[SKIP] buy trend filter");
+            continue;
+          }
+        }
+
+        if (signal.direction === "SELL") {
+          if (price > emaNow || emaSlope >= 0) {
+            console.log("[SKIP] sell trend filter");
+            continue;
+          }
+        }
+      }
 
       const entry = price;
       const sl = Number(signal.sl);
 
-      if (!Number.isFinite(sl)) continue;
+      if (!Number.isFinite(sl)) {
+        console.log("[SKIP] invalid stop loss");
+        continue;
+      }
 
       const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
-      if (!(riskDist > 0)) continue;
+
+      if (!(riskDist > 0)) {
+        console.log("[SKIP] invalid risk distance");
+        continue;
+      }
 
       const tp1 =
         signal.direction === "BUY"
@@ -314,14 +462,21 @@ export async function startPriceLoop() {
       }
 
       const lotSize = calculateLotSize(entry, sl);
-      if (!(lotSize > 0)) continue;
 
-      await withDbLock(async () => {
+      if (!(lotSize > 0)) {
+        console.log("[SKIP] lot size invalid");
+        continue;
+      }
+
+      await withEntryLock(async () => {
         const { rows } = await pool.query(
           `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
         );
 
-        if (rows.length) return;
+        if (rows.length) {
+          console.log("[SKIP] open trade already exists");
+          return;
+        }
 
         const res = await executeTradeIntent({
           signalId: signal.reason,
@@ -360,24 +515,4 @@ export function stopPriceLoop() {
   globalThis.__OMEGA_ENGINE_RUNNING__ = false;
 
   console.log("[ENGINE] stop requested");
-}
-
-/* ---------------------------------------
-DB LOCK
----------------------------------------- */
-
-async function withDbLock(fn: () => Promise<void>) {
-  await pool.query("BEGIN");
-
-  try {
-    await pool.query("SELECT pg_advisory_xact_lock(424242)");
-
-    await fn();
-
-    await pool.query("COMMIT");
-  } catch (e) {
-    await pool.query("ROLLBACK");
-
-    throw e;
-  }
 }
