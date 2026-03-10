@@ -9,6 +9,7 @@ import {
   Collapse,
 } from "@mui/material";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
+
 import { Trade } from "@/types/trade";
 import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 import { fmtPrice, fmtQty, fmtPnL } from "@/lib/format";
@@ -164,22 +165,26 @@ UI
           className="trade-history-scroll"
           style={{ maxHeight: 520, paddingRight: 6 }}
         >
-          {items.map((t: any) => {
-            const isOpen = openRow === t.trade_id;
+          {items.map((t, index) => {
+            const tradeId = Number((t as any).trade_id ?? index);
+            const isOpen = openRow === tradeId;
 
             const pl =
-              t.realised_pl != null ? cleanZero(num(t.realised_pl)) : null;
+              (t as any).realised_pl != null
+                ? cleanZero(num((t as any).realised_pl))
+                : null;
 
-            const pnlPct = pl !== null ? pnlPercent(pl, t.risk_amount) : null;
+            const pnlPct =
+              pl !== null ? pnlPercent(pl, (t as any).risk_amount) : null;
 
             return (
               <div
-                key={t.trade_id}
+                key={`trade-${tradeId}-${(t as any).closed_at ?? index}`}
                 className="border-b border-omega-dark-gold/30 py-2"
               >
                 <div
                   className="flex justify-between items-center cursor-pointer"
-                  onClick={() => setOpenRow(isOpen ? null : t.trade_id)}
+                  onClick={() => setOpenRow(isOpen ? null : tradeId)}
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
@@ -212,9 +217,9 @@ UI
 
                 <Collapse in={isOpen}>
                   <div className="mt-2 text-xs opacity-80">
-                    {(t.executions ?? []).map((e: any) => (
+                    {(t as any).executions?.map((e: any, i: number) => (
                       <div
-                        key={e.exec_id}
+                        key={`exec-${tradeId}-${e.exec_id ?? i}`}
                         className="flex justify-between py-1 border-b border-omega-dark-gold/20"
                       >
                         <div>

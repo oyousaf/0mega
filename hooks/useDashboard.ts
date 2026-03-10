@@ -42,6 +42,7 @@ export type DashboardPayload = {
   equityCurve?: {
     closed_at: string;
     equity: number;
+    drawdown: number;
   }[];
 };
 

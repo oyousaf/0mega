@@ -1,84 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Modal, Button } from "@mui/material";
 import { FiHome, FiSettings, FiCpu } from "react-icons/fi";
 
 import NotificationsPanel from "@/app/dashboard/NotificationsPanel";
+import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 
 export default function DashboardHeader() {
-  const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [engineRunning, setEngineRunning] = useState(false);
+  const dashboard = useDashboard(15000) as DashboardPayload | null;
+
+  const enabled = dashboard?.automation?.enabled ?? false;
+  const engineRunning = dashboard?.engine?.tradingAllowed ?? false;
+
   const [busy, setBusy] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
 
-  async function loadStatus() {
-    try {
-      const res = await fetch("/api/automation/status", {
-        cache: "no-store",
-      });
-
-      const j = await res.json();
-
-      setEnabled(
-        typeof j?.automation?.enabled === "boolean"
-          ? j.automation.enabled
-          : false,
-      );
-
-      setEngineRunning(Boolean(j?.engine?.running));
-    } catch {
-      setEnabled(false);
-      setEngineRunning(false);
-    }
-  }
-
-  useEffect(() => {
-    loadStatus();
-
-    const id = setInterval(loadStatus, 5000);
-    return () => clearInterval(id);
-  }, []);
-
   async function toggleAutomation() {
-    if (busy || enabled === null) return;
-
-    const prev = enabled;
+    if (busy) return;
 
     setBusy(true);
-    setEnabled(!prev);
 
     try {
-      const res = await fetch("/api/automation/status", {
+      await fetch("/api/automation/status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ enabled: !prev }),
+        body: JSON.stringify({ enabled: !enabled }),
       });
-
-      const json = await res.json();
-
-      if (typeof json.enabled !== "boolean") throw new Error();
-
-      setEnabled(json.enabled);
-
-      setEngineRunning(Boolean(json.engineRunning));
-    } catch {
-      setEnabled(prev);
     } finally {
       setBusy(false);
     }
   }
 
-  const cpuColor =
-    enabled === null
-      ? "text-omega-gold"
-      : enabled
-        ? "text-green-400"
-        : "text-red-400";
-
+  const cpuColor = enabled ? "text-green-400" : "text-red-400";
   const pulse = engineRunning ? "animate-pulse" : "";
 
   return (

@@ -2,11 +2,7 @@
 
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { useEffect, useState, useMemo } from "react";
-
-import { Trade } from "@/types/trade";
-import { computeMetricsFromTrades } from "@/lib/metrics";
-import { buildEquityAndDrawdown } from "@/lib/analytics/equity";
+import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 
 import DashboardHeader from "./DashboardHeader";
 import MetricsCards from "@/components/dashboard/MetricsCards";
@@ -32,48 +28,17 @@ const DrawdownChart = dynamic(
 );
 
 export default function DashboardClient() {
-  const [history, setHistory] = useState<Trade[]>([]);
-  const [lastUpdated, setLastUpdated] = useState("");
+  const dashboard = useDashboard(15000) as DashboardPayload | null;
 
-  async function loadHistory() {
-    try {
-      const res = await fetch("/api/trading/history?analytics=1&limit=10000", {
-        cache: "no-store",
-      });
-      const json = await res.json();
-      setHistory(Array.isArray(json.trades) ? json.trades : []);
-      setLastUpdated(
-        new Date().toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      );
-    } catch {}
-  }
+  const equity = dashboard?.equityCurve ?? [];
+  const trades = dashboard?.tradeHistory ?? [];
 
-  useEffect(() => {
-    loadHistory();
-    const id = setInterval(loadHistory, 5000);
-    return () => clearInterval(id);
-  }, []);
-
-  const equitySeries = useMemo(() => {
-    const closed = history.filter(
-      (t) =>
-        t.is_closed === true &&
-        t.closed_at &&
-        Number.isFinite(Number(t.realised_pl)),
-    );
-
-    return buildEquityAndDrawdown(
-      closed.map((t) => ({
-        closed_at: t.closed_at!,
-        realised_pl: Number(t.realised_pl) || 0,
-      })),
-    );
-  }, [history]);
-
-  const metrics = computeMetricsFromTrades(history);
+  const lastUpdated = dashboard?.engine?.lastTick
+    ? new Date(dashboard.engine.lastTick).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
 
   return (
     <>
@@ -86,14 +51,17 @@ export default function DashboardClient() {
         className="px-2 sm:px-4 pb-[env(safe-area-inset-bottom)] space-y-4 sm:space-y-6"
       >
         <TodayStatusWidget />
-        <MetricsCards metrics={metrics} />
-        <ForwardTestReview trades={history} />
+
+        <MetricsCards />
+
+        <ForwardTestReview trades={trades} />
+
         <OpenTradesWidget />
 
         <ChartWrapper height={300}>
           <PerformanceChart
-            data={equitySeries.map((e) => ({
-              date: e.date,
+            data={equity.map((e) => ({
+              date: e.closed_at,
               cumulative: e.equity,
             }))}
           />
@@ -101,9 +69,9 @@ export default function DashboardClient() {
 
         <ChartWrapper height={220}>
           <DrawdownChart
-            data={equitySeries.map((e) => ({
-              date: e.date,
-              drawdown: e.drawdown,
+            data={equity.map((e) => ({
+              date: e.closed_at,
+              drawdown: e.drawdown ?? 0,
             }))}
           />
         </ChartWrapper>
@@ -114,11 +82,16 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        <StrategyMiniCards trades={history} />
-        <StrategyLeaderboard trades={history} />
-        <SymbolLeaderboard trades={history} />
-        <MarketBreakdown trades={history} />
-        <HalaalTracker trades={history} />
+        <StrategyMiniCards trades={trades} />
+
+        <StrategyLeaderboard trades={trades} />
+
+        <SymbolLeaderboard trades={trades} />
+
+        <MarketBreakdown trades={trades} />
+
+        <HalaalTracker trades={trades} />
+
         <TradeHistoryWidget />
       </motion.main>
     </>
