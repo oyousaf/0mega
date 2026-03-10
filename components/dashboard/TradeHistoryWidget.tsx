@@ -34,12 +34,15 @@ function cleanZero(n: number) {
 }
 
 /* ---------------------------------------
-PERCENT CALC
+FOREX RETURN %
+Uses risk_amount instead of entry*qty
 --------------------------------------- */
 
-function pnlPercent(pl: number, entry: number, qty: number) {
-  if (entry <= 0 || qty <= 0) return null;
-  return cleanZero((pl / (entry * qty)) * 100);
+function pnlPercent(pl: number, risk: number | null | undefined) {
+  const r = Number(risk);
+  if (!Number.isFinite(r) || r <= 0) return null;
+
+  return cleanZero((pl / r) * 100);
 }
 
 export default function TradeHistoryWidget() {
@@ -185,15 +188,14 @@ UI
           className="trade-history-scroll"
           style={{ maxHeight: 520, paddingRight: 6 }}
         >
-          {items.map((t) => {
+          {items.map((t: any) => {
             const isOpen = openRow === t.trade_id;
+
             const pl =
               t.realised_pl != null ? cleanZero(num(t.realised_pl)) : null;
 
             const pnlPct =
-              pl !== null
-                ? pnlPercent(pl, num(t.entry_price), num(t.qty))
-                : null;
+              pl !== null ? pnlPercent(pl, t.risk_amount) : null;
 
             return (
               <div
@@ -235,7 +237,7 @@ UI
 
                 <Collapse in={isOpen}>
                   <div className="mt-2 text-xs opacity-80">
-                    {(t.executions ?? []).map((e) => (
+                    {(t.executions ?? []).map((e: any) => (
                       <div
                         key={e.exec_id}
                         className="flex justify-between py-1 border-b border-omega-dark-gold/20"
@@ -248,7 +250,7 @@ UI
                           Qty {fmtQty(e.qty)} • {e.broker}
                           <br />
                           <span className="opacity-60">
-                            {fmtDate((e as any).timestamp ?? (e as any).time)}
+                            {fmtDate(e.timestamp ?? e.time)}
                           </span>
                         </div>
                       </div>

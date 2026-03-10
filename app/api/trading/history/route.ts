@@ -40,6 +40,7 @@ export async function GET(req: Request) {
         p.qty,
         p.entry_price,
         p.realised_pl,
+        p.risk_amount,
         p.opened_at,
         p.closed_at,
         p.is_closed,
@@ -56,6 +57,7 @@ export async function GET(req: Request) {
         p.qty,
         p.entry_price,
         p.realised_pl,
+        p.risk_amount,
         p.opened_at,
         p.closed_at,
         p.is_closed,
@@ -136,6 +138,9 @@ export async function GET(req: Request) {
         qty: n(row.qty),
 
         entry_price: n(row.entry_price),
+
+        risk_amount: n(row.risk_amount),
+
         entry_fill_price: entry?.price ?? n(row.entry_price),
         exit_fill_price: exit?.price ?? null,
 
