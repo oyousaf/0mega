@@ -219,19 +219,27 @@ export async function startPriceLoop() {
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
   let lastMinute: number | null = null;
+  let lastAutomationCheck = 0;
 
   try {
     while (running && currentLoopId() === loopId) {
-      const { rows: stateRows } = await pool.query(`
-        SELECT enabled
-        FROM automation_state    
-        LIMIT 1
-        `);
+      
+      // automation guard
+      if (Date.now() - lastAutomationCheck > 30000) {
+        lastAutomationCheck = Date.now();
 
-      if (!stateRows[0]?.enabled) {
-        console.log("[ENGINE] automation disabled");
-        break;
+        const { rows } = await pool.query(`
+      SELECT enabled
+      FROM automation_state
+      LIMIT 1
+    `);
+
+        if (!rows[0]?.enabled) {
+          console.log("[ENGINE] automation disabled");
+          break;
+        }
       }
+
       const candles: Candle[] = await provider.fetchCandles();
 
       if (!candles?.length) {
