@@ -6,12 +6,19 @@ const ASSUMED_EQUITY = 100000;
 const MAX_DAILY_LOSS_PCT = 0.02;
 
 /* -------------------------------------------------
+   GLOBAL ENGINE STATE
+-------------------------------------------------- */
+
+declare global {
+  var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
+}
+
+/* -------------------------------------------------
    TODAY ENGINE STATUS
 -------------------------------------------------- */
 
 export async function GET() {
   const now = new Date();
-
   const start = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
@@ -20,30 +27,13 @@ export async function GET() {
   let tradesToday = 0;
   let openTrades = 0;
   let lossUsedPct = 0;
+  let tradingAllowed = true;
 
-  let automationEnabled = false;
-  let tradingAllowed = false;
-
-  /* -----------------------------------------
-     AUTOMATION FLAG (SOURCE OF TRUTH)
-  ------------------------------------------ */
-
-  try {
-    const { rows } = await pool.query(`
-      SELECT automation_enabled
-      FROM system_settings
-      LIMIT 1
-    `);
-
-    automationEnabled = Boolean(rows[0]?.automation_enabled);
-  } catch (err) {
-    console.error("Automation flag query failed", err);
-  }
+  const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
 
   /* -----------------------------------------
      OPEN TRADES
   ------------------------------------------ */
-
   try {
     const { rows } = await pool.query(`
       SELECT COUNT(*)::int AS c
@@ -59,7 +49,6 @@ export async function GET() {
   /* -----------------------------------------
      TRADES OPENED TODAY
   ------------------------------------------ */
-
   try {
     const { rows } = await pool.query(
       `
@@ -78,7 +67,6 @@ export async function GET() {
   /* -----------------------------------------
      REALISED PNL TODAY
   ------------------------------------------ */
-
   try {
     const { rows } = await pool.query(
       `
@@ -90,17 +78,14 @@ export async function GET() {
       [start.toISOString()],
     );
 
-    const pnl = Number(rows[0]?.pnl ?? 0);
-
-    pnlToday = Math.abs(pnl) < 0.005 ? 0 : pnl;
+    pnlToday = Number(rows[0]?.pnl ?? 0);
   } catch (err) {
     console.error("PNL query failed", err);
   }
 
   /* -----------------------------------------
-     DAILY RISK
+     DAILY RISK + ENGINE STATE
   ------------------------------------------ */
-
   try {
     const risk = getDailyRisk("GLOBAL");
 
@@ -109,29 +94,13 @@ export async function GET() {
     lossUsedPct =
       pnlToday < 0 ? Math.min(Math.abs(pnlToday) / maxLossAmount, 1) * 100 : 0;
 
-    tradingAllowed = automationEnabled && !risk?.frozen;
+    if (risk) {
+      tradingAllowed = engineRunning && !risk.frozen;
+    } else {
+      tradingAllowed = engineRunning;
+    }
   } catch (err) {
     console.error("Risk state read failed", err);
-  }
-
-  /* -----------------------------------------
-     LAST ENGINE ACTIVITY
-  ------------------------------------------ */
-
-  let lastTick: string | null = null;
-
-  try {
-    const { rows } = await pool.query(`
-      SELECT GREATEST(
-        COALESCE(MAX(opened_at), 'epoch'),
-        COALESCE(MAX(closed_at), 'epoch')
-      ) AS last_tick
-      FROM paper_trades
-    `);
-
-    lastTick = rows[0]?.last_tick ?? null;
-  } catch (err) {
-    console.error("Last tick query failed", err);
   }
 
   return NextResponse.json({
@@ -140,6 +109,6 @@ export async function GET() {
     openTrades,
     lossUsedPct,
     tradingAllowed,
-    lastTick,
+    lastTick: new Date().toISOString(),
   });
 }
