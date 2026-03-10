@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { startPriceLoop } from "@/lib/engine/priceLoop";
+import { enableAutomation } from "@/lib/trading/automation/automationState";
 
-function run() {
+async function run() {
+  await enableAutomation();
+
   startPriceLoop();
 
   return NextResponse.json({
     ok: true,
     engine: "OMEGA-30",
     mode: "paper",
+    automation: "enabled",
     status: "started",
   });
 }
@@ -17,7 +21,7 @@ export async function GET() {
   return run();
 }
 
-/* Manual trigger (Postman / curl) */
+/* Manual trigger */
 export async function POST() {
   return run();
 }
