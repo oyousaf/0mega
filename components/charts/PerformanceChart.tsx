@@ -12,8 +12,13 @@ import { motion } from "framer-motion";
 import { useMemo } from "react";
 import { useElementSize } from "@/hooks/useElementSize";
 
+type EquityPoint = {
+  date: string;
+  cumulative: number;
+};
+
 interface Props {
-  data: { date: string; cumulative: number }[];
+  data: EquityPoint[];
 }
 
 const omega = {
@@ -25,6 +30,7 @@ const omega = {
 function fmtShortDate(iso: string, compact: boolean) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
+
   return d.toLocaleDateString(
     "en-GB",
     compact
@@ -33,26 +39,24 @@ function fmtShortDate(iso: string, compact: boolean) {
   );
 }
 
-function fmtMoney(v: any) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return n.toLocaleString("en-GB", { maximumFractionDigits: 0 });
+function fmtMoney(v: number) {
+  if (!Number.isFinite(v)) return "—";
+  return v.toLocaleString("en-GB", { maximumFractionDigits: 0 });
 }
 
 export default function PerformanceChart({ data }: Props) {
   const { ref, size } = useElementSize<HTMLDivElement>();
+
   const compact = size.width > 0 && size.width < 520;
 
-  const formatted = useMemo(
-    () =>
-      Array.isArray(data)
-        ? data.map((d) => ({
-            date: fmtShortDate(d.date, compact),
-            cumulative: Number(d.cumulative) || 0,
-          }))
-        : [],
-    [data, compact],
-  );
+  const formatted = useMemo(() => {
+    if (!Array.isArray(data)) return [];
+
+    return data.map((d) => ({
+      date: fmtShortDate(d.date, compact),
+      cumulative: Number(d.cumulative) || 0,
+    }));
+  }, [data, compact]);
 
   const tickCount = compact ? 3 : 6;
   const yWidth = compact ? 40 : 56;
@@ -111,15 +115,28 @@ export default function PerformanceChart({ data }: Props) {
                 color: omega.gold,
                 fontSize: 12,
               }}
-              formatter={(v: any) => [`£${fmtMoney(v)}`, "Equity"]}
+              formatter={(v: any) => [`£${fmtMoney(Number(v))}`, "Equity"]}
+            />
+
+            <Line
+              type="monotone"
+              dataKey="cumulative"
+              stroke="rgba(212,175,55,0.25)"
+              strokeWidth={6}
+              dot={false}
+              strokeLinecap="round"
+              isAnimationActive={false}
             />
 
             <Line
               type="monotone"
               dataKey="cumulative"
               stroke={omega.gold}
-              strokeWidth={2.5}
+              strokeWidth={2.2}
               dot={false}
+              strokeLinecap="round"
+              activeDot={{ r: 4, fill: omega.gold }}
+              isAnimationActive={false}
             />
           </LineChart>
         )}

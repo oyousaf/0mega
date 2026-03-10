@@ -26,24 +26,33 @@ type DrawdownPoint = {
 export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
   const { ref, size } = useElementSize<HTMLDivElement>();
 
-  const safeData = useMemo(
-    () =>
-      Array.isArray(data)
-        ? data.filter(
-            (d) =>
-              typeof d.drawdown === "number" && Number.isFinite(d.drawdown),
-          )
-        : [],
-    [data],
-  );
+  /* ---------------------------------------
+  Sanitize dataset
+  --------------------------------------- */
+
+  const safeData = useMemo(() => {
+    if (!Array.isArray(data)) return [];
+
+    return data.filter(
+      (d) => typeof d.drawdown === "number" && Number.isFinite(d.drawdown),
+    );
+  }, [data]);
+
+  /* ---------------------------------------
+  Determine max drawdown scale
+  --------------------------------------- */
 
   const maxDD = useMemo(() => {
     if (!safeData.length) return -1;
-    return Math.min(
-      -1,
-      Math.floor(Math.min(...safeData.map((d) => d.drawdown))),
-    );
+
+    const min = Math.min(...safeData.map((d) => d.drawdown));
+
+    return Math.floor(Math.min(-1, min));
   }, [safeData]);
+
+  /* ---------------------------------------
+  Chart
+  --------------------------------------- */
 
   return (
     <div
@@ -76,14 +85,15 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               axisLine={false}
               tickLine={false}
               domain={[maxDD, 0]}
-              ticks={Array.from({ length: Math.abs(maxDD) + 1 }, (_, i) => -i)}
-              tickFormatter={(v) => `${Math.abs(v)}%`}
               width={40}
+              tickFormatter={(v: any) =>
+                Number.isFinite(v) ? `${Math.abs(Number(v))}%` : "—"
+              }
             />
 
             <Tooltip
-              formatter={(v) =>
-                typeof v === "number" ? `${Math.abs(v).toFixed(2)}%` : "—"
+              formatter={(v: any) =>
+                Number.isFinite(v) ? `${Math.abs(Number(v)).toFixed(2)}%` : "—"
               }
               contentStyle={{
                 background: omega.green,
@@ -100,6 +110,8 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               fill="rgba(255,82,82,0.25)"
               strokeWidth={2}
               dot={false}
+              strokeLinecap="round"
+              isAnimationActive={false}
             />
           </AreaChart>
         )}
