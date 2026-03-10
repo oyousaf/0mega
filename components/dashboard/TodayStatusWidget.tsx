@@ -1,82 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { fmtPnL } from "@/lib/format";
-
-type Status = {
-  pnlToday: number;
-  tradesToday: number;
-  openTrades: number;
-  lossUsedPct: number;
-  tradingAllowed: boolean;
-  lastTick: string;
-};
+import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 
 export default function TodayStatusWidget() {
-  const [data, setData] = useState<Status | null>(null);
+  const data = useDashboard(15000) as DashboardPayload | null;
 
-  useEffect(() => {
-    let alive = true;
+  const engine = data?.engine;
 
-    async function load() {
-      try {
-        const res = await fetch("/api/engine/status/today", {
-          cache: "no-store",
-        });
+  const pnlRaw = Number(engine?.pnlToday ?? 0);
+  const pnlToday = Math.abs(pnlRaw) < 0.005 ? 0 : pnlRaw;
 
-        if (!res.ok) {
-          console.error("Status API failed", res.status);
-          return;
-        }
-
-        const json = await res.json();
-
-        if (!alive) return;
-
-        const pnl = Number(json.pnlToday) || 0;
-
-        // prevent "-0.00"
-        const normalizedPnL = Math.abs(pnl) < 0.005 ? 0 : pnl;
-
-        setData({
-          pnlToday: normalizedPnL,
-          tradesToday: Number(json.tradesToday) || 0,
-          openTrades: Number(json.openTrades) || 0,
-          lossUsedPct: Number(json.lossUsedPct) || 0,
-          tradingAllowed: Boolean(json.tradingAllowed),
-          lastTick: json.lastTick || "",
-        });
-      } catch (err) {
-        console.error("Failed to load engine status", err);
-      }
-    }
-
-    load();
-
-    const id = setInterval(load, 5000);
-
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  if (!data) return null;
+  const tradesToday = Number(engine?.tradesToday ?? 0);
+  const openTrades = Number(engine?.openTrades ?? 0);
+  const lossUsedPct = Number(engine?.lossUsedPct ?? 0);
+  const tradingAllowed = Boolean(engine?.tradingAllowed);
+  const lastTick = engine?.lastTick ?? "";
 
   const pnlColor =
-    data.pnlToday > 0
+    pnlToday > 0
       ? "text-green-400"
-      : data.pnlToday < 0
+      : pnlToday < 0
         ? "text-red-400"
         : "text-neutral-300";
 
-  const statusColor = data.tradingAllowed ? "text-green-400" : "text-red-500";
+  const statusColor = tradingAllowed ? "text-green-400" : "text-red-500";
 
   const lossColor =
-    data.lossUsedPct >= 80
+    lossUsedPct >= 80
       ? "text-red-400"
-      : data.lossUsedPct >= 50
+      : lossUsedPct >= 50
         ? "text-yellow-300"
         : "text-omega-gold";
 
@@ -90,31 +44,29 @@ export default function TodayStatusWidget() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 text-center">
         <Block label="TODAY PNL">
           <span className={`text-xl font-bold ${pnlColor}`}>
-            {fmtPnL(data.pnlToday)}
+            {fmtPnL(pnlToday)}
           </span>
         </Block>
 
-        <Block label="TRADES TODAY" value={data.tradesToday} />
+        <Block label="TRADES TODAY" value={tradesToday} />
 
-        <Block label="OPEN TRADES" value={data.openTrades} />
+        <Block label="OPEN TRADES" value={openTrades} />
 
         <Block label="LOSS USED">
           <span className={`text-lg font-bold ${lossColor}`}>
-            {data.lossUsedPct.toFixed(1)}%
+            {lossUsedPct.toFixed(1)}%
           </span>
         </Block>
 
         <Block label="STATUS">
           <span className={`text-lg font-bold ${statusColor}`}>
-            {data.tradingAllowed ? "TRADING" : "FROZEN"}
+            {tradingAllowed ? "TRADING" : "FROZEN"}
           </span>
         </Block>
 
         <Block label="LAST TICK">
           <span className="text-xs opacity-70 tracking-wide">
-            {data.lastTick
-              ? new Date(data.lastTick).toLocaleTimeString("en-GB")
-              : "—"}
+            {lastTick ? new Date(lastTick).toLocaleTimeString("en-GB") : "—"}
           </span>
         </Block>
       </div>

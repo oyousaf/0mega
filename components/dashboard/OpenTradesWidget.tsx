@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card, CardContent, Divider, Typography } from "@mui/material";
 import { fmtPrice, fmtQty, fmtPnL } from "@/lib/format";
+import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 
 type Trade = {
-  trade_id: number;
+  id: number;
   symbol: string;
   side: "BUY" | "SELL";
   entry_price: number;
@@ -18,39 +18,11 @@ type Trade = {
   unrealised_pl: number | null;
 };
 
-type OpenTradesPayload = {
-  positions: Trade[];
-  balance: number;
-};
-
 export default function OpenTradesWidget() {
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [balance, setBalance] = useState(0);
+  const data = useDashboard(15000) as DashboardPayload | null;
 
-  useEffect(() => {
-    let alive = true;
-
-    async function load() {
-      try {
-        const res = await fetch("/api/trading/open", { cache: "no-store" });
-        if (!res.ok) return;
-
-        const json: OpenTradesPayload = await res.json();
-        if (!alive) return;
-
-        setTrades(json.positions ?? []);
-        setBalance(Number(json.balance) || 0);
-      } catch {}
-    }
-
-    load();
-    const id = setInterval(load, 3000);
-
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, []);
+  const trades = (data?.openTrades ?? []) as Trade[];
+  const balance = Number(data?.account?.balance ?? 0);
 
   return (
     <Card
@@ -92,7 +64,7 @@ export default function OpenTradesWidget() {
 
             return (
               <div
-                key={`${t.trade_id}-${t.opened_at}`}
+                key={`${t.id}-${t.opened_at}`}
                 className="rounded-lg border border-omega-dark-gold/40 px-3 py-2 flex flex-col gap-2"
               >
                 <div className="flex justify-between items-center">

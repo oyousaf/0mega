@@ -3,9 +3,10 @@
 import { Card, CardContent, Typography, Grid } from "@mui/material";
 import { motion, easeOut, useInView } from "framer-motion";
 import { useRef } from "react";
-import { DashboardMetrics } from "@/lib/metrics";
+import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 
 /* Animations */
+
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
@@ -20,6 +21,7 @@ const itemVariants = {
 };
 
 /* Styling */
+
 const cardStyle = {
   backgroundColor: "var(--omega-green)",
   border: "1px solid var(--omega-dark-gold)",
@@ -62,14 +64,20 @@ function MetricBox({
   );
 }
 
-/* Main */
-export default function MetricsCards({
-  metrics,
-}: {
-  metrics: DashboardMetrics;
-}) {
+export default function MetricsCards() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
+
+  const data = useDashboard(15000) as DashboardPayload | null;
+
+  const m = data?.metrics;
+
+  const metrics = {
+    winRate: m?.winRate ?? 0,
+    expectancy: m?.expectancy ?? 0,
+    profitFactor: m?.profitFactor ?? 0,
+    halaalRatio: m?.halaalRatio ?? 100,
+  };
 
   return (
     <motion.div
@@ -83,12 +91,15 @@ export default function MetricsCards({
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox title="Win Rate" value={metrics.winRate} suffix="%" />
         </Grid>
+
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox title="Expectancy (R)" value={metrics.expectancy} />
         </Grid>
+
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox title="Profit Factor" value={metrics.profitFactor} />
         </Grid>
+
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricBox
             title="Halaal Ratio"

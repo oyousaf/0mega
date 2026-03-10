@@ -10,11 +10,10 @@ import {
 } from "@mui/material";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { Trade } from "@/types/trade";
-import { usePnlSummary } from "@/hooks/usePnlSummary";
+import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 import { fmtPrice, fmtQty, fmtPnL } from "@/lib/format";
 
 const PAGE_SIZE = 20;
-const POLL_INTERVAL = 5000;
 
 /* ---------------------------------------
 SAFE NUMBER
@@ -35,17 +34,17 @@ function cleanZero(n: number) {
 
 /* ---------------------------------------
 FOREX RETURN %
-Uses risk_amount instead of entry*qty
 --------------------------------------- */
 
 function pnlPercent(pl: number, risk: number | null | undefined) {
   const r = Number(risk);
   if (!Number.isFinite(r) || r <= 0) return null;
-
   return cleanZero((pl / r) * 100);
 }
 
 export default function TradeHistoryWidget() {
+  const dashboard = useDashboard(15000) as DashboardPayload | null;
+
   const [items, setItems] = useState<Trade[]>([]);
   const [openRow, setOpenRow] = useState<number | null>(null);
 
@@ -54,9 +53,6 @@ export default function TradeHistoryWidget() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const latestTradeRef = useRef<number | null>(null);
-
-  const pnlSummary = usePnlSummary(POLL_INTERVAL);
 
   const fmtDate = (d: unknown) => {
     const dt = new Date(String(d));
@@ -64,69 +60,43 @@ export default function TradeHistoryWidget() {
   };
 
   /* ---------------------------------------
-MERGE TRADE SETS
+INITIAL DASHBOARD LOAD
 --------------------------------------- */
 
-  function mergeTrades(prev: Trade[], next: Trade[]) {
-    const map = new Map<number, Trade>();
+  useEffect(() => {
+    if (!dashboard?.tradeHistory) return;
 
-    for (const t of prev) map.set(t.trade_id, t);
-    for (const t of next) map.set(t.trade_id, t);
-
-    return Array.from(map.values());
-  }
+    setItems(dashboard.tradeHistory as Trade[]);
+  }, [dashboard]);
 
   /* ---------------------------------------
-LOAD PAGE
+LOAD MORE HISTORY
 --------------------------------------- */
 
-  async function loadPage(nextOffset = 0, append = false) {
-    if (loadingMore) return;
+  async function loadMore() {
+    if (loadingMore || !hasMore) return;
 
     setLoadingMore(true);
 
     try {
       const res = await fetch(
-        `/api/trading/history?limit=${PAGE_SIZE}&offset=${nextOffset}`,
+        `/api/trading/history?limit=${PAGE_SIZE}&offset=${offset + PAGE_SIZE}`,
         { cache: "no-store" },
       );
 
       const json = await res.json();
+
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
-      if (!append && trades.length > 0) {
-        const newest = trades[0].trade_id;
-
-        if (latestTradeRef.current === newest) {
-          setLoadingMore(false);
-          return;
-        }
-
-        latestTradeRef.current = newest;
-      }
-
-      setItems((prev) => (append ? mergeTrades(prev, trades) : trades));
-
+      setItems((prev) => [...prev, ...trades]);
       setHasMore(Boolean(json.hasMore));
-      setOffset(nextOffset);
+      setOffset((o) => o + PAGE_SIZE);
     } catch (err) {
       console.error("Trade history load failed:", err);
     } finally {
       setLoadingMore(false);
     }
   }
-
-  /* ---------------------------------------
-INITIAL LOAD + POLLING
---------------------------------------- */
-
-  useEffect(() => {
-    loadPage(0, false);
-
-    const id = setInterval(() => loadPage(0, false), POLL_INTERVAL);
-
-    return () => clearInterval(id);
-  }, []);
 
   /* ---------------------------------------
 INFINITE SCROLL
@@ -140,13 +110,19 @@ INFINITE SCROLL
       if (!hasMore || loadingMore) return;
 
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
-        loadPage(offset + PAGE_SIZE, true);
+        loadMore();
       }
     };
 
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
   }, [offset, hasMore, loadingMore]);
+
+  const pnlSummary = dashboard?.pnlSummary ?? {
+    daily: 0,
+    weekly: 0,
+    monthly: 0,
+  };
 
   /* ---------------------------------------
 UI
@@ -176,9 +152,9 @@ UI
             color: "var(--omega-gold)",
           }}
         >
-          <span>Daily {fmtPnL(pnlSummary?.daily)}</span>
-          <span>Weekly {fmtPnL(pnlSummary?.weekly)}</span>
-          <span>Monthly {fmtPnL(pnlSummary?.monthly)}</span>
+          <span>Daily {fmtPnL(pnlSummary.daily)}</span>
+          <span>Weekly {fmtPnL(pnlSummary.weekly)}</span>
+          <span>Monthly {fmtPnL(pnlSummary.monthly)}</span>
         </Typography>
 
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 1.5 }} />
@@ -194,8 +170,7 @@ UI
             const pl =
               t.realised_pl != null ? cleanZero(num(t.realised_pl)) : null;
 
-            const pnlPct =
-              pl !== null ? pnlPercent(pl, t.risk_amount) : null;
+            const pnlPct = pl !== null ? pnlPercent(pl, t.risk_amount) : null;
 
             return (
               <div
