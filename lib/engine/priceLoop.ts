@@ -222,6 +222,16 @@ export async function startPriceLoop() {
 
   try {
     while (running && currentLoopId() === loopId) {
+      const { rows: stateRows } = await pool.query(`
+        SELECT enabled
+        FROM automation_state    
+        LIMIT 1
+        `);
+
+      if (!stateRows[0]?.enabled) {
+        console.log("[ENGINE] automation disabled");
+        break;
+      }
       const candles: Candle[] = await provider.fetchCandles();
 
       if (!candles?.length) {
@@ -247,7 +257,7 @@ export async function startPriceLoop() {
       const price = Number(latest.close);
 
       console.log("[NEW_CANDLE]", price);
-      
+
       if (!Number.isFinite(price)) continue;
 
       const exited = await runExitWatcher(latest);
