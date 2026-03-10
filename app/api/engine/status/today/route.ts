@@ -31,7 +31,7 @@ export async function GET() {
   try {
     const { rows } = await pool.query(`
       SELECT enabled
-      FROM automation_status
+      FROM automation_state
       LIMIT 1
     `);
 
