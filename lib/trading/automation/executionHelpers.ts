@@ -86,7 +86,6 @@ function calculateRiskAmount(entry: number, sl: number, qtyLots: number) {
 
 /* -------------------------------------------------
    REALISED PNL
-   Use direct currency PnL so UI + DB stay aligned
 -------------------------------------------------- */
 function calculateRealisedPl(params: {
   side: OrderSide;
@@ -96,8 +95,13 @@ function calculateRealisedPl(params: {
 }) {
   const { side, entry, exit, qty } = params;
 
-  const diff = side === "BUY" ? exit - entry : entry - exit;
-  return cleanZero(diff * qty);
+  const priceMove = side === "BUY" ? exit - entry : entry - exit;
+
+  const pipMove = priceMove / PIP_SIZE;
+
+  const pnl = pipMove * (qty * PIP_VALUE_PER_LOT);
+
+  return cleanZero(pnl);
 }
 
 /* -------------------------------------------------
