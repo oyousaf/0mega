@@ -244,9 +244,10 @@ export async function startPriceLoop() {
 
       lastMinute = minute;
 
-      console.log("[NEW_CANDLE]", new Date(latest.timestamp).toISOString());
-
       const price = Number(latest.close);
+
+      console.log("[NEW_CANDLE]", price);
+      
       if (!Number.isFinite(price)) continue;
 
       const exited = await runExitWatcher(latest);
