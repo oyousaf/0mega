@@ -1,27 +1,26 @@
 import { NextResponse } from "next/server";
-import { runPriceTick } from "@/lib/engine/priceLoop";
+import { startPriceLoop } from "@/lib/engine/priceLoop";
 
 /* ---------------------------------------
-ENGINE TICK
+START ENGINE
 ---------------------------------------- */
 
 export async function GET() {
   try {
-    const result = await runPriceTick();
+    await startPriceLoop();
 
     return NextResponse.json({
       ok: true,
       engine: "OMEGA-30",
-      mode: "paper",
-      result,
+      status: "started",
     });
   } catch (err: any) {
-    console.error("[ENGINE_TICK_ERROR]", err);
+    console.error("[ENGINE_START_ERROR]", err);
 
     return NextResponse.json(
       {
         ok: false,
-        error: err?.message ?? "UNKNOWN_ENGINE_ERROR",
+        error: err?.message ?? "ENGINE_START_FAILED",
       },
       { status: 500 },
     );
