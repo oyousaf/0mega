@@ -23,7 +23,7 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
   let wins = 0;
   let losses = 0;
 
-  let totalWinR = 0;
+  let totalR = 0;
 
   let grossProfit = 0;
   let grossLoss = 0;
@@ -46,10 +46,11 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
 
     if (pl > 0) {
       wins++;
-      totalWinR += rr;
+      totalR += rr;
       grossProfit += pl;
     } else {
       losses++;
+      totalR -= 1; // losing trades = -1R
       grossLoss += Math.abs(pl);
     }
   }
@@ -60,12 +61,7 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
 
   /* -------- EXPECTANCY (R) -------- */
 
-  const avgWinR = wins > 0 ? totalWinR / wins : 0;
-
-  const expectancy =
-    total > 0
-      ? Number(((wins / total) * avgWinR - (losses / total) * 1).toFixed(2))
-      : 0;
+  const expectancy = total > 0 ? Number((totalR / total).toFixed(2)) : 0;
 
   /* -------- PROFIT FACTOR -------- */
 
