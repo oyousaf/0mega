@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
-import { stopPriceLoop } from "@/lib/engine/priceLoop";
 import { disableAutomation } from "@/lib/trading/automation/automationState";
+
+/* ---------------------------------------
+DISABLE AUTOMATION
+---------------------------------------- */
 
 async function run() {
   await disableAutomation();
 
-  stopPriceLoop();
+  console.log("[AUTOMATION_DISABLED]");
 
   return NextResponse.json({
     ok: true,
-    engine: "OMEGA-30",
     automation: "disabled",
-    status: "stopped",
+    engine: "OMEGA-30",
   });
 }
 

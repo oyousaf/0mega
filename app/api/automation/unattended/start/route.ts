@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
-import { startPriceLoop } from "@/lib/engine/priceLoop";
 import { enableAutomation } from "@/lib/trading/automation/automationState";
+
+/* ---------------------------------------
+ENABLE AUTOMATION
+---------------------------------------- */
 
 async function run() {
   await enableAutomation();
 
-  startPriceLoop();
+  console.log("[AUTOMATION_ENABLED]");
 
   return NextResponse.json({
     ok: true,
-    engine: "OMEGA-30",
-    mode: "paper",
     automation: "enabled",
-    status: "started",
+    engine: "OMEGA-30",
   });
 }
 
