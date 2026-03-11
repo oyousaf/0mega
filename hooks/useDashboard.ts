@@ -51,9 +51,11 @@ SHARED STATE (SINGLETON)
 --------------------------------------- */
 
 let cache: DashboardPayload | null = null;
+
 let listeners = new Set<(d: DashboardPayload | null) => void>();
 
-let timer: NodeJS.Timeout | null = null;
+let timer: ReturnType<typeof setInterval> | null = null;
+
 let fetching = false;
 
 /* ---------------------------------------
@@ -124,11 +126,16 @@ export function useDashboard(interval = 15000) {
       fetchDashboard();
     }
 
-    window.addEventListener("omega-trade-update", handleTradeUpdate);
+    if (typeof window !== "undefined") {
+      window.addEventListener("omega-trade-update", handleTradeUpdate);
+    }
 
     return () => {
       listeners.delete(setData);
-      window.removeEventListener("omega-trade-update", handleTradeUpdate);
+
+      if (typeof window !== "undefined") {
+        window.removeEventListener("omega-trade-update", handleTradeUpdate);
+      }
 
       if (listeners.size === 0 && timer) {
         clearInterval(timer);
