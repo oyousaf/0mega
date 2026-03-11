@@ -497,22 +497,38 @@ export async function runPriceTick(): Promise<EngineTickResult> {
 
       const riskPips = Math.abs(entry - sl) / PIP_SIZE;
 
+      const tp2 =
+        signal.direction === "BUY"
+          ? entry + riskDist * RR_TARGET * 2
+          : entry - riskDist * RR_TARGET * 2;
+
       console.log("[TRADE_OPENED]", {
-        tradeId: res.tradeId,
-        symbol: SYMBOL,
-        timeframe: TIMEFRAME,
-        side: signal.direction,
-        reason: signal.reason,
-        entry: fmt(entry),
-        sl: fmt(sl),
-        tp1: fmt(tp1),
-        rr: RR_TARGET,
-        lotSize: fmt(lotSize, 3),
-        riskPips: fmt(riskPips, 2),
-        spreadPips: spread !== null ? fmt(spread, 2) : null,
-        ema: emaNow !== null ? fmt(emaNow) : null,
-        emaSlope: fmt(emaSlope, 6),
-        testMode: TEST_MODE,
+        TRADE_ID: res.tradeId,
+
+        SYMBOL: SYMBOL,
+        TIMEFRAME: TIMEFRAME,
+
+        SIDE: signal.direction,
+        STRATEGY: signal.reason,
+
+        ENTRY_PRICE: fmt(entry),
+        STOP_LOSS: fmt(sl),
+
+        TAKE_PROFIT_1: fmt(tp1),
+        TAKE_PROFIT_2: fmt(tp2),
+
+        RR_TARGET: RR_TARGET,
+
+        LOT_SIZE: fmt(lotSize, 3),
+
+        RISK_PIPS: fmt(riskPips, 2),
+
+        SPREAD_PIPS: spread !== null ? fmt(spread, 2) : null,
+
+        EMA_200: emaNow !== null ? fmt(emaNow) : null,
+        EMA_SLOPE: fmt(emaSlope, 6),
+
+        TEST_MODE: TEST_MODE,
       });
 
       result = {
