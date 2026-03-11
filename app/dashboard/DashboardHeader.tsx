@@ -65,14 +65,12 @@ UI STATE
   return (
     <>
       {/* SETTINGS MODAL */}
-      ```
       <Modal open={openSettings} onClose={() => setOpenSettings(false)}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="absolute top-1/2 left-1/2 w-[90%] max-w-lg -translate-x-1/2 -translate-y-1/2
-      bg-omega-green border border-neutral-700 rounded-xl p-6 shadow-xl"
+          className="absolute top-1/2 left-1/2 w-[90%] max-w-lg -translate-x-1/2 -translate-y-1/2 bg-omega-green border border-neutral-700 rounded-xl p-6 shadow-xl"
         >
           <h2 className="text-2xl font-semibold text-omega-gold mb-4 text-center">
             Settings

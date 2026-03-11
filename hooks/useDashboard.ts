@@ -78,7 +78,8 @@ async function fetchDashboard() {
       !cache ||
       json.engine?.openTrades !== cache.engine?.openTrades ||
       json.engine?.pnlToday !== cache.engine?.pnlToday ||
-      json.tradeHistory?.length !== cache.tradeHistory?.length;
+      json.tradeHistory?.length !== cache.tradeHistory?.length ||
+      json.automation?.enabled !== cache.automation?.enabled;
 
     if (changed) {
       cache = json;
