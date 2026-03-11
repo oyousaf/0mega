@@ -45,6 +45,9 @@ const NEWS_SPIKE_PIPS = 18;
 const PAPER_ACCOUNT_EQUITY = 10000;
 const RISK_PER_TRADE = 0.005;
 
+const ENTRY_COOLDOWN_MINUTES = 10;
+const MAX_CONSECUTIVE_LOSSES = 3;
+
 const PIP_SIZE = 0.0001;
 const PIP_VALUE_PER_LOT = 10;
 
@@ -58,7 +61,7 @@ const MIN_REQUIRED_CANDLES = Math.max(
   VOL_WINDOW,
   RANGE_WINDOW,
   NEWS_LOOKBACK,
-  50
+  50,
 );
 
 const AUTOMATION_CHECK_MS = 10000;
@@ -120,7 +123,6 @@ function calculateEMA(values: number[], period: number) {
   if (values.length < period) return null;
 
   const k = 2 / (period + 1);
-
   let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
   for (let i = period; i < values.length; i++) {
@@ -180,8 +182,9 @@ ENGINE LOCK
 async function acquireEngineLock() {
   const { rows } = await pool.query(
     `SELECT pg_try_advisory_lock($1) AS locked`,
-    [ENGINE_LOCK_KEY]
+    [ENGINE_LOCK_KEY],
   );
+
   return Boolean(rows[0]?.locked);
 }
 
@@ -198,9 +201,54 @@ async function automationEnabled(): Promise<boolean> {
       SELECT enabled
       FROM automation_state
       LIMIT 1
-    `);
+  `);
 
   return Boolean(rows[0]?.enabled);
+}
+
+/* ---------------------------------------
+GUARD TYPES
+---------------------------------------- */
+
+type GuardResult = { allowed: true } | { allowed: false; reason: string };
+
+/* ---------------------------------------
+ENTRY GUARD
+---------------------------------------- */
+
+async function entryGuard(): Promise<GuardResult> {
+  const { rows } = await pool.query(`
+    SELECT realised_pl, closed_at
+    FROM paper_trades
+    WHERE is_closed = true
+    ORDER BY closed_at DESC
+    LIMIT 10
+  `);
+
+  if (!rows.length) return { allowed: true };
+
+  const lastTradeTime = new Date(rows[0].closed_at).getTime();
+
+  if (Date.now() - lastTradeTime < ENTRY_COOLDOWN_MINUTES * 60000) {
+    return { allowed: false, reason: "COOLDOWN_ACTIVE" };
+  }
+
+  let losses = 0;
+
+  for (const r of rows) {
+    const pl = Number(r.realised_pl);
+
+    if (!Number.isFinite(pl)) continue;
+
+    if (pl < 0) {
+      losses++;
+      if (losses >= MAX_CONSECUTIVE_LOSSES) {
+        return { allowed: false, reason: "LOSS_CLUSTER_PROTECTION" };
+      }
+    } else break;
+  }
+
+  return { allowed: true };
 }
 
 /* ---------------------------------------
@@ -238,7 +286,6 @@ export async function startPriceLoop() {
   globalThis.__OMEGA_ENGINE_RUNNING__ = true;
 
   const loopId = nextLoopId();
-
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
 
   let lastMinute: number | null = null;
@@ -246,7 +293,6 @@ export async function startPriceLoop() {
 
   try {
     while (running && currentLoopId() === loopId) {
-
       if (Date.now() - lastAutomationCheck > AUTOMATION_CHECK_MS) {
         lastAutomationCheck = Date.now();
         if (!(await automationEnabled())) break;
@@ -269,9 +315,8 @@ export async function startPriceLoop() {
 
       lastMinute = minute;
 
+      const closes = candles.map((c) => Number(c.close));
       const price = Number(latest.close);
-
-      console.log("[NEW_CANDLE]", { SYMBOL, CLOSE: fmt(price) });
 
       const exited = await runExitWatcher(latest);
       if (exited) continue;
@@ -281,11 +326,11 @@ export async function startPriceLoop() {
       const spread = spreadPips(latest);
       if (!TEST_MODE && spread !== null && spread > MAX_SPREAD_PIPS) continue;
 
-      const closes = candles.map((c) => Number(c.close));
-
       if (!TEST_MODE) {
-
-        if (rangePips(closes.slice(-ACTIVATION_WINDOW)) < MIN_ACTIVATION_RANGE_PIPS)
+        if (
+          rangePips(closes.slice(-ACTIVATION_WINDOW)) <
+          MIN_ACTIVATION_RANGE_PIPS
+        )
           continue;
 
         if (newsSpike(closes)) continue;
@@ -302,6 +347,7 @@ export async function startPriceLoop() {
         if (Math.abs(last - prev) / prev > vol * SPIKE_MULTIPLIER) continue;
 
         const rangeValues = closes.slice(-RANGE_WINDOW);
+
         const rangePct =
           (Math.max(...rangeValues) - Math.min(...rangeValues)) /
           Math.min(...rangeValues);
@@ -313,11 +359,25 @@ export async function startPriceLoop() {
       const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
       const emaSlope = (emaNow ?? 0) - (emaPrev ?? 0);
 
-      const signal = await runStructureCheck({
+      let signal = await runStructureCheck({
         symbol: SYMBOL,
         timeframe: TIMEFRAME,
         candles,
       });
+
+      if (TEST_MODE && !signal) {
+        const dist = PIP_SIZE * 5;
+
+        signal = {
+          symbol: SYMBOL,
+          direction: "BUY" as OrderSide,
+          sl: price - dist,
+          tp1: price + dist,
+          reason: "TEST_SIGNAL",
+        };
+
+        console.log("[TEST_MODE] forced signal");
+      }
 
       if (!signal) continue;
 
@@ -327,21 +387,19 @@ export async function startPriceLoop() {
           : Number(latest.bid ?? latest.close);
 
       if (!TEST_MODE && emaNow !== null) {
-
         if (signal.direction === "BUY") {
-          if (entry < emaNow && emaSlope <= 0) continue;
+          if (entry < emaNow || emaSlope <= 0) continue;
         }
 
         if (signal.direction === "SELL") {
-          if (entry > emaNow && emaSlope >= 0) continue;
+          if (entry > emaNow || emaSlope >= 0) continue;
         }
       }
 
       const sl = Number(signal.sl);
       if (!Number.isFinite(sl)) continue;
 
-      const riskDist =
-        signal.direction === "BUY" ? entry - sl : sl - entry;
+      const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
 
       if (!(riskDist > 0)) continue;
 
@@ -350,19 +408,30 @@ export async function startPriceLoop() {
           ? entry + riskDist * RR_TARGET
           : entry - riskDist * RR_TARGET;
 
+      const guard: GuardResult = TEST_MODE
+        ? { allowed: true }
+        : await entryGuard();
+
+      if (!guard.allowed) {
+        console.log("[ENTRY_BLOCKED]", guard.reason);
+        continue;
+      }
+
       const risk = TEST_MODE
-        ? { allowed: true as const }
+        ? ({ allowed: true } as const)
         : await riskGate(signal);
 
-      if (!risk.allowed) continue;
+      if (!risk.allowed) {
+        console.log("[ENTRY_BLOCKED]", risk.reason);
+        continue;
+      }
 
       const lotSize = calculateLotSize(entry, sl);
       if (!(lotSize > 0)) continue;
 
       await withEntryLock(async () => {
-
         const { rows } = await pool.query(
-          `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`
+          `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
         );
 
         if (rows.length) return;
@@ -388,11 +457,10 @@ export async function startPriceLoop() {
         }
       });
     }
-
   } finally {
-
     running = false;
     globalThis.__OMEGA_ENGINE_RUNNING__ = false;
+
     await releaseEngineLock();
 
     console.log("[ENGINE] stopped");
