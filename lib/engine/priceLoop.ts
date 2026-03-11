@@ -62,10 +62,27 @@ const MIN_REQUIRED_CANDLES = Math.max(
 );
 
 /* ---------------------------------------
+TYPES
+---------------------------------------- */
+
+type StructureSignal = NonNullable<
+  Awaited<ReturnType<typeof runStructureCheck>>
+>;
+
+type EngineTickResult =
+  | { ok: true; action: "EXIT_ONLY" }
+  | { ok: true; action: "NO_SIGNAL" }
+  | { ok: true; action: "NO_ENTRY" }
+  | { ok: true; action: "TRADE_OPENED"; tradeId: number | string }
+  | { ok: false; reason: string; error?: unknown };
+
+/* ---------------------------------------
 UTILS
 ---------------------------------------- */
 
 function avgAbsReturnPct(values: number[]) {
+  if (values.length < 2) return 0;
+
   let sum = 0;
   let count = 0;
 
@@ -79,7 +96,7 @@ function avgAbsReturnPct(values: number[]) {
     }
   }
 
-  return count ? sum / count : 0;
+  return count > 0 ? sum / count : 0;
 }
 
 function calculateEMA(values: number[], period: number) {
@@ -101,11 +118,13 @@ function sessionOpen() {
 }
 
 function rangePips(values: number[]) {
+  if (!values.length) return 0;
   return (Math.max(...values) - Math.min(...values)) / PIP_SIZE;
 }
 
 function newsSpike(values: number[]) {
   const recent = values.slice(-NEWS_LOOKBACK);
+  if (recent.length < 2) return false;
 
   return (
     (Math.max(...recent) - Math.min(...recent)) / PIP_SIZE >= NEWS_SPIKE_PIPS
@@ -137,6 +156,18 @@ function calculateLotSize(entry: number, stop: number) {
 
 function fmt(n: number, dp = 5) {
   return Number.isFinite(n) ? Number(n.toFixed(dp)) : n;
+}
+
+function buildTestSignal(price: number): StructureSignal {
+  const dist = PIP_SIZE * 5;
+
+  return {
+    symbol: SYMBOL,
+    direction: "BUY" as OrderSide,
+    sl: price - dist,
+    tp1: price + dist,
+    reason: "TEST_SIGNAL",
+  } as StructureSignal;
 }
 
 /* ---------------------------------------
@@ -195,6 +226,7 @@ async function withEntryLock<T>(fn: () => Promise<T>): Promise<T> {
     } catch (err) {
       console.error("[ENTRY_UNLOCK_FAILED]", err);
     }
+
     client.release();
   }
 }
@@ -204,7 +236,7 @@ ENGINE TICK
 Vercel-safe: one pass only
 ---------------------------------------- */
 
-export async function runPriceTick() {
+export async function runPriceTick(): Promise<EngineTickResult> {
   const locked = await acquireEngineLock();
 
   if (!locked) {
@@ -237,6 +269,7 @@ export async function runPriceTick() {
         count: candles.length,
         required: MIN_REQUIRED_CANDLES,
       });
+
       return { ok: false, reason: "INSUFFICIENT_CANDLES" };
     }
 
@@ -274,7 +307,7 @@ export async function runPriceTick() {
 
     const closes = candles
       .map((c) => Number(c.close))
-      .filter((v): v is number => Number.isFinite(v));
+      .filter((v): v is number => Number.isFinite(v) && v > 0);
 
     if (closes.length < MIN_REQUIRED_CANDLES) {
       console.log("[SKIP] insufficient valid closes");
@@ -282,11 +315,14 @@ export async function runPriceTick() {
     }
 
     if (!TEST_MODE) {
-      const activationRange = rangePips(closes.slice(-ACTIVATION_WINDOW));
+      const activationValues = closes.slice(-ACTIVATION_WINDOW);
+      const activationRange = rangePips(activationValues);
+
       if (activationRange < MIN_ACTIVATION_RANGE_PIPS) {
         console.log("[SKIP] london range not active", {
           activationRange: fmt(activationRange, 2),
         });
+
         return { ok: false, reason: "LONDON_RANGE_INACTIVE" };
       }
 
@@ -300,6 +336,7 @@ export async function runPriceTick() {
         console.log("[SKIP] low volatility regime", {
           regimeVol: fmt(regimeVol, 6),
         });
+
         return { ok: false, reason: "LOW_REGIME_VOL" };
       }
 
@@ -308,30 +345,34 @@ export async function runPriceTick() {
         console.log("[SKIP] short volatility too low", {
           vol: fmt(vol, 6),
         });
+
         return { ok: false, reason: "LOW_SHORT_VOL" };
       }
 
       const prev = closes[closes.length - 2];
       const last = closes[closes.length - 1];
-      const move = Math.abs(last - prev) / prev;
+      const move = prev > 0 ? Math.abs(last - prev) / prev : 0;
 
       if (move > vol * SPIKE_MULTIPLIER) {
         console.log("[SKIP] volatility spike", {
           move: fmt(move, 6),
           vol: fmt(vol, 6),
         });
+
         return { ok: false, reason: "VOL_SPIKE" };
       }
 
       const rangeValues = closes.slice(-RANGE_WINDOW);
+      const minRangeValue = Math.min(...rangeValues);
+      const maxRangeValue = Math.max(...rangeValues);
       const rangePct =
-        (Math.max(...rangeValues) - Math.min(...rangeValues)) /
-        Math.min(...rangeValues);
+        minRangeValue > 0 ? (maxRangeValue - minRangeValue) / minRangeValue : 0;
 
       if (rangePct < MIN_RANGE_PCT) {
         console.log("[SKIP] tight consolidation", {
           rangePct: fmt(rangePct, 6),
         });
+
         return { ok: false, reason: "TIGHT_CONSOLIDATION" };
       }
     }
@@ -339,30 +380,23 @@ export async function runPriceTick() {
     const emaNow = calculateEMA(closes, EMA_PERIOD);
     const emaPrev = calculateEMA(closes.slice(0, -1), EMA_PERIOD);
 
-    if (!TEST_MODE && (!emaNow || !emaPrev)) {
+    if (!TEST_MODE && (emaNow === null || emaPrev === null)) {
       console.log("[SKIP] ema unavailable");
       return { ok: false, reason: "EMA_UNAVAILABLE" };
     }
 
     const emaSlope = (emaNow ?? 0) - (emaPrev ?? 0);
 
-    let signal = await runStructureCheck({
+    const structureSignal = await runStructureCheck({
       symbol: SYMBOL,
       timeframe: TIMEFRAME,
       candles,
     });
 
-    if (TEST_MODE && !signal) {
-      const dist = PIP_SIZE * 5;
+    const signal: StructureSignal | null =
+      structureSignal ?? (TEST_MODE ? buildTestSignal(price) : null);
 
-      signal = {
-        symbol: SYMBOL,
-        direction: "BUY" as OrderSide,
-        sl: price - dist,
-        tp1: price + dist,
-        reason: "TEST_SIGNAL",
-      };
-
+    if (TEST_MODE && !structureSignal) {
       console.log("[TEST_MODE] forced signal");
     }
 
@@ -371,25 +405,21 @@ export async function runPriceTick() {
     }
 
     if (!TEST_MODE && emaNow !== null) {
-      if (signal.direction === "BUY") {
-        if (price < emaNow || emaSlope <= 0) {
-          console.log("[SKIP] buy trend filter");
-          return { ok: false, reason: "BUY_TREND_FILTER" };
-        }
+      if (signal.direction === "BUY" && (price < emaNow || emaSlope <= 0)) {
+        console.log("[SKIP] buy trend filter");
+        return { ok: false, reason: "BUY_TREND_FILTER" };
       }
 
-      if (signal.direction === "SELL") {
-        if (price > emaNow || emaSlope >= 0) {
-          console.log("[SKIP] sell trend filter");
-          return { ok: false, reason: "SELL_TREND_FILTER" };
-        }
+      if (signal.direction === "SELL" && (price > emaNow || emaSlope >= 0)) {
+        console.log("[SKIP] sell trend filter");
+        return { ok: false, reason: "SELL_TREND_FILTER" };
       }
     }
 
     const entry = price;
     const sl = Number(signal.sl);
 
-    if (!Number.isFinite(sl)) {
+    if (!Number.isFinite(sl) || sl <= 0) {
       console.log("[SKIP] invalid stop loss");
       return { ok: false, reason: "INVALID_SL" };
     }
@@ -405,6 +435,11 @@ export async function runPriceTick() {
       signal.direction === "BUY"
         ? entry + riskDist * RR_TARGET
         : entry - riskDist * RR_TARGET;
+
+    if (!Number.isFinite(tp1) || tp1 <= 0) {
+      console.log("[SKIP] invalid tp1");
+      return { ok: false, reason: "INVALID_TP1" };
+    }
 
     const risk = TEST_MODE
       ? { allowed: true as const }
@@ -422,7 +457,7 @@ export async function runPriceTick() {
       return { ok: false, reason: "INVALID_LOT_SIZE" };
     }
 
-    let result: any = { ok: true, action: "NO_ENTRY" };
+    let result: EngineTickResult = { ok: true, action: "NO_ENTRY" };
 
     await withEntryLock(async () => {
       const { rows } = await pool.query(
@@ -445,29 +480,7 @@ export async function runPriceTick() {
         entryPrice: entry,
       });
 
-      if (res.success) {
-        const riskPips = Math.abs(entry - sl) / PIP_SIZE;
-
-        console.log("[TRADE_OPENED]", {
-          tradeId: res.tradeId,
-          symbol: SYMBOL,
-          timeframe: TIMEFRAME,
-          side: signal.direction,
-          reason: signal.reason,
-          entry: fmt(entry),
-          sl: fmt(sl),
-          tp1: fmt(tp1),
-          rr: RR_TARGET,
-          lotSize: fmt(lotSize, 3),
-          riskPips: fmt(riskPips, 2),
-          spreadPips: spread !== null ? fmt(spread, 2) : null,
-          ema: emaNow !== null ? fmt(emaNow) : null,
-          emaSlope: fmt(emaSlope, 6),
-          testMode: TEST_MODE,
-        });
-
-        result = { ok: true, action: "TRADE_OPENED", tradeId: res.tradeId };
-      } else {
+      if (!res.success) {
         console.log("[TRADE_FAILED]", {
           symbol: SYMBOL,
           side: signal.direction,
@@ -479,10 +492,44 @@ export async function runPriceTick() {
         });
 
         result = { ok: false, reason: "TRADE_FAILED", error: res.error };
+        return;
       }
+
+      const riskPips = Math.abs(entry - sl) / PIP_SIZE;
+
+      console.log("[TRADE_OPENED]", {
+        tradeId: res.tradeId,
+        symbol: SYMBOL,
+        timeframe: TIMEFRAME,
+        side: signal.direction,
+        reason: signal.reason,
+        entry: fmt(entry),
+        sl: fmt(sl),
+        tp1: fmt(tp1),
+        rr: RR_TARGET,
+        lotSize: fmt(lotSize, 3),
+        riskPips: fmt(riskPips, 2),
+        spreadPips: spread !== null ? fmt(spread, 2) : null,
+        ema: emaNow !== null ? fmt(emaNow) : null,
+        emaSlope: fmt(emaSlope, 6),
+        testMode: TEST_MODE,
+      });
+
+      result = {
+        ok: true,
+        action: "TRADE_OPENED",
+        tradeId: res.tradeId,
+      };
     });
 
     return result;
+  } catch (err) {
+    console.error("[ENGINE_TICK_ERROR]", err);
+    return {
+      ok: false,
+      reason: "ENGINE_TICK_ERROR",
+      error: err,
+    };
   } finally {
     await releaseEngineLock();
   }
