@@ -7,7 +7,7 @@ DASHBOARD PAYLOAD TYPE
 export type DashboardPayload = {
   engine?: {
     tradingAllowed?: boolean;
-    openTrades?: number;
+    running?: boolean;
     tradesToday?: number;
     pnlToday?: number;
     lastTick?: string;
