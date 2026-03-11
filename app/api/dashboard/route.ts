@@ -151,8 +151,8 @@ export async function GET() {
 
     return NextResponse.json({
       engine: {
-        tradingAllowed: automationEnabled,
         running: Boolean(globalThis.__OMEGA_ENGINE_RUNNING__),
+        tradingAllowed: automationEnabled,
         openTrades: openTrades.length,
         tradesToday,
         pnlToday: pnlSummary.daily,

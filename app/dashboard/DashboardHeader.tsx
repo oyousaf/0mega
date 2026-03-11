@@ -16,7 +16,12 @@ export default function DashboardHeader() {
   const dashboard = useDashboard(15000) as DashboardPayload | null;
 
   const enabled = Boolean(dashboard?.automation?.enabled);
-  const engineRunning = Boolean(dashboard?.engine?.tradingAllowed);
+
+  /* ---------------------------------------
+  FIXED ENGINE STATE
+  ---------------------------------------- */
+
+  const engineRunning = Boolean(dashboard?.engine?.running);
 
   const [busy, setBusy] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
