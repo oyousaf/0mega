@@ -27,7 +27,6 @@ export type DashboardPayload = {
   };
 
   openTrades?: any[];
-
   tradeHistory?: any[];
 
   pnlSummary?: {
@@ -52,12 +51,13 @@ SHARED STATE (SINGLETON)
 --------------------------------------- */
 
 let cache: DashboardPayload | null = null;
-let listeners: Set<(d: DashboardPayload | null) => void> = new Set();
+let listeners = new Set<(d: DashboardPayload | null) => void>();
+
 let timer: NodeJS.Timeout | null = null;
 let fetching = false;
 
 /* ---------------------------------------
-FETCH FUNCTION
+FETCH DASHBOARD
 --------------------------------------- */
 
 async function fetchDashboard() {
@@ -74,7 +74,11 @@ async function fetchDashboard() {
 
     const json: DashboardPayload = await res.json();
 
-    const changed = JSON.stringify(json) !== JSON.stringify(cache);
+    const changed =
+      !cache ||
+      json.engine?.openTrades !== cache.engine?.openTrades ||
+      json.engine?.pnlToday !== cache.engine?.pnlToday ||
+      json.tradeHistory?.length !== cache.tradeHistory?.length;
 
     if (changed) {
       cache = json;
@@ -111,8 +115,19 @@ export function useDashboard(interval = 15000) {
       timer = setInterval(fetchDashboard, interval);
     }
 
+    /* ---------------------------------
+    REALTIME TRADE EVENT REFRESH
+    --------------------------------- */
+
+    function handleTradeUpdate() {
+      fetchDashboard();
+    }
+
+    window.addEventListener("omega-trade-update", handleTradeUpdate);
+
     return () => {
       listeners.delete(setData);
+      window.removeEventListener("omega-trade-update", handleTradeUpdate);
 
       if (listeners.size === 0 && timer) {
         clearInterval(timer);
