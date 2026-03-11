@@ -48,18 +48,23 @@ export type DashboardPayload = {
 };
 
 /* ---------------------------------------
-SHARED STATE (singleton)
+SHARED STATE (SINGLETON)
 --------------------------------------- */
 
 let cache: DashboardPayload | null = null;
 let listeners: Set<(d: DashboardPayload | null) => void> = new Set();
 let timer: NodeJS.Timeout | null = null;
+let fetching = false;
 
 /* ---------------------------------------
 FETCH FUNCTION
 --------------------------------------- */
 
 async function fetchDashboard() {
+  if (fetching) return;
+
+  fetching = true;
+
   try {
     const res = await fetch("/api/dashboard", {
       cache: "no-store",
@@ -69,12 +74,25 @@ async function fetchDashboard() {
 
     const json: DashboardPayload = await res.json();
 
-    cache = json;
+    const changed = JSON.stringify(json) !== JSON.stringify(cache);
 
-    listeners.forEach((l) => l(cache));
+    if (changed) {
+      cache = json;
+      listeners.forEach((l) => l(cache));
+    }
   } catch (err) {
     console.error("Dashboard fetch failed", err);
+  } finally {
+    fetching = false;
   }
+}
+
+/* ---------------------------------------
+MANUAL REFRESH
+--------------------------------------- */
+
+export async function refreshDashboard() {
+  await fetchDashboard();
 }
 
 /* ---------------------------------------
