@@ -97,7 +97,10 @@ export async function POST(req: Request) {
 
     if (nextState && !engineRunning) {
       console.log("[AUTOMATION] starting engine");
-      startPriceLoop();
+
+      setTimeout(() => {
+        startPriceLoop();
+      }, 250);
     }
 
     if (!nextState && engineRunning) {

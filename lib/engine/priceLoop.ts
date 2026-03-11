@@ -275,7 +275,11 @@ export async function startPriceLoop() {
   if (running) return;
 
   const locked = await acquireEngineLock();
-  if (!locked) return;
+
+  if (!locked) {
+    console.log("[ENGINE] lock exists — already running");
+    return;
+  }
 
   if (!(await automationEnabled())) {
     await releaseEngineLock();
