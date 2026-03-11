@@ -497,11 +497,6 @@ export async function runPriceTick(): Promise<EngineTickResult> {
 
       const riskPips = Math.abs(entry - sl) / PIP_SIZE;
 
-      const tp2 =
-        signal.direction === "BUY"
-          ? entry + riskDist * RR_TARGET * 2
-          : entry - riskDist * RR_TARGET * 2;
-
       console.log("[TRADE_OPENED]", {
         TRADE_ID: res.tradeId,
 
@@ -512,10 +507,9 @@ export async function runPriceTick(): Promise<EngineTickResult> {
         STRATEGY: signal.reason,
 
         ENTRY_PRICE: fmt(entry),
-        STOP_LOSS: fmt(sl),
+        SL: fmt(sl),
 
-        TAKE_PROFIT_1: fmt(tp1),
-        TAKE_PROFIT_2: fmt(tp2),
+        TP1: fmt(tp1),
 
         RR_TARGET: RR_TARGET,
 
