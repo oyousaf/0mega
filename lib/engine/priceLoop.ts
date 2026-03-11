@@ -317,7 +317,6 @@ export async function startPriceLoop() {
         SYMBOL,
         TIMEFRAME,
         CLOSE: fmt(price),
-        TIME: latest.timestamp,
       });
 
       if (!Number.isFinite(price)) {
