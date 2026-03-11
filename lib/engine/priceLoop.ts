@@ -61,7 +61,7 @@ const MIN_REQUIRED_CANDLES = Math.max(
   50,
 );
 
-const AUTOMATION_CHECK_MS = 30000;
+const AUTOMATION_CHECK_MS = 10000;
 
 /* ---------------------------------------
 ENGINE STATE
