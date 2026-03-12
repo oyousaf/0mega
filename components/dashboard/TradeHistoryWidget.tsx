@@ -25,10 +25,6 @@ function num(v: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
-/* ---------------------------------------
-NORMALISE -0
---------------------------------------- */
-
 function cleanZero(n: number) {
   return Math.abs(n) < 0.000001 ? 0 : n;
 }
@@ -66,7 +62,6 @@ INITIAL DASHBOARD LOAD
 
   useEffect(() => {
     if (!dashboard?.tradeHistory) return;
-
     setItems(dashboard.tradeHistory as Trade[]);
   }, [dashboard]);
 
@@ -86,7 +81,6 @@ LOAD MORE HISTORY
       );
 
       const json = await res.json();
-
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
       setItems((prev) => [...prev, ...trades]);
@@ -138,10 +132,10 @@ UI
       }}
     >
       <CardContent sx={{ color: "var(--omega-gold)", p: 2 }}>
+        {" "}
         <h2 className="text-lg font-semibold text-omega-gold text-center mb-1">
-          📜 Trade History
+          📜 Trade History{" "}
         </h2>
-
         <Typography
           sx={{
             mt: 0.5,
@@ -157,31 +151,29 @@ UI
           <span>Weekly {fmtPnL(pnlSummary.weekly)}</span>
           <span>Monthly {fmtPnL(pnlSummary.monthly)}</span>
         </Typography>
-
         <Divider sx={{ borderColor: "var(--omega-dark-gold)", my: 1.5 }} />
-
         <div
           ref={containerRef}
           className="trade-history-scroll"
           style={{ maxHeight: 520, paddingRight: 6 }}
         >
           {items.map((t, index) => {
-            const tradeId = Number((t as any).trade_id ?? index);
+            const tradeId = Number((t as any).id ?? index);
             const isOpen = openRow === tradeId;
 
             const pl =
-              (t as any).realised_pl != null
-                ? cleanZero(num((t as any).realised_pl))
-                : null;
+              t.realised_pl != null ? cleanZero(num(t.realised_pl)) : null;
 
             const pnlPct =
               pl !== null ? pnlPercent(pl, (t as any).risk_amount) : null;
 
             return (
               <div
-                key={`trade-${tradeId}-${(t as any).closed_at ?? index}`}
+                key={`trade-${tradeId}-${t.closed_at ?? index}`}
                 className="border-b border-omega-dark-gold/30 py-2"
               >
+                {/* HEADER */}
+
                 <div
                   className="flex justify-between items-center cursor-pointer"
                   onClick={() => setOpenRow(isOpen ? null : tradeId)}
@@ -215,26 +207,73 @@ UI
                   </div>
                 </div>
 
-                <Collapse in={isOpen}>
-                  <div className="mt-2 text-xs opacity-80">
-                    {(t as any).executions?.map((e: any, i: number) => (
-                      <div
-                        key={`exec-${tradeId}-${e.exec_id ?? i}`}
-                        className="flex justify-between py-1 border-b border-omega-dark-gold/20"
-                      >
-                        <div>
-                          {e.side} @ {fmtPrice(e.price, t.symbol)}
-                        </div>
+                {/* DETAILS */}
 
-                        <div className="text-right">
-                          Qty {fmtQty(e.qty)} • {e.broker}
-                          <br />
-                          <span className="opacity-60">
-                            {fmtDate(e.timestamp ?? e.time)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                <Collapse in={isOpen}>
+                  <div className="mt-2 text-xs opacity-80 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Entry</span>
+                      <span>{fmtPrice(t.entry_price, t.symbol)}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Exit</span>
+                      <span>
+                        {t.exit_price ? fmtPrice(t.exit_price, t.symbol) : "—"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>SL</span>
+                      <span>{fmtPrice(t.sl, t.symbol)}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>TP</span>
+                      <span>{fmtPrice(t.tp1, t.symbol)}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Result</span>
+                      <span>{(t as any).exit_reason ?? "—"}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Opened</span>
+                      <span>{fmtDate(t.opened_at)}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Closed</span>
+                      <span>{fmtDate(t.closed_at)}</span>
+                    </div>
+
+                    {(t as any).executions?.length > 0 && (
+                      <>
+                        <Divider
+                          sx={{ borderColor: "var(--omega-dark-gold)" }}
+                        />
+
+                        {(t as any).executions.map((e: any, i: number) => (
+                          <div
+                            key={`exec-${tradeId}-${e.exec_id ?? i}`}
+                            className="flex justify-between py-1 border-b border-omega-dark-gold/20"
+                          >
+                            <div>
+                              {e.side} @ {fmtPrice(e.price, t.symbol)}
+                            </div>
+
+                            <div className="text-right">
+                              Qty {fmtQty(e.qty)} • {e.broker}
+                              <br />
+                              <span className="opacity-60">
+                                {fmtDate(e.timestamp ?? e.time)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </Collapse>
               </div>

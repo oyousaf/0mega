@@ -30,6 +30,7 @@ export interface Trade {
 
   strategy?: string | null;
   entry_price: number;
+  exit_price: number;
   sl: number;
   tp1: number | null;
 
