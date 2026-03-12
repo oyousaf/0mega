@@ -44,15 +44,17 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
 
     if ((t as any).halaal !== false) halaalTrades++;
 
+    const rMultiple = pl > 0 ? rr : -1;
+
     if (pl > 0) {
       wins++;
-      totalR += rr;
       grossProfit += pl;
     } else {
       losses++;
-      totalR -= 1; // losing trades = -1R
       grossLoss += Math.abs(pl);
     }
+
+    totalR += rMultiple;
   }
 
   const total = wins + losses;
