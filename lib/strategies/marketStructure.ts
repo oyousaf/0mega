@@ -19,72 +19,105 @@ type StructureSignal = {
 };
 
 /* -------------------------------------------------
-FAST DEBUG MODE PARAMETERS
+CONFIG
 -------------------------------------------------- */
 
 const LOOKBACK = 6;
+
 const MIN_RISK_PCT = 0.00015; // 0.015%
 const MAX_RISK_PCT = 0.05; // 5%
+
+/* -------------------------------------------------
+UTILS
+-------------------------------------------------- */
+
+function safeNum(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 /* -------------------------------------------------
 STRUCTURE CHECK
 -------------------------------------------------- */
 
-export async function runStructureCheck(
+export function runStructureCheck(
   input: StructureInput,
-): Promise<StructureSignal | null> {
+): StructureSignal | null {
   const { symbol, candles } = input;
 
-  if (candles.length < LOOKBACK + 1) return null;
+  if (!Array.isArray(candles) || candles.length < LOOKBACK + 1) {
+    return null;
+  }
 
   const recent = candles.slice(-LOOKBACK);
 
-  const last = recent.at(-1)!;
-  const prev = recent.at(-2)!;
+  const last = recent[recent.length - 1];
+  const prev = recent[recent.length - 2];
 
-  const highs = recent.map((c) => c.high);
-  const lows = recent.map((c) => c.low);
+  const lastClose = safeNum(last?.close);
+  const prevClose = safeNum(prev?.close);
+
+  if (lastClose === null || prevClose === null) {
+    return null;
+  }
+
+  const highs: number[] = [];
+  const lows: number[] = [];
+
+  for (const c of recent) {
+    const h = safeNum(c.high);
+    const l = safeNum(c.low);
+
+    if (h === null || l === null) return null;
+
+    highs.push(h);
+    lows.push(l);
+  }
 
   const rangeHigh = Math.max(...highs);
   const rangeLow = Math.min(...lows);
 
   /* ------------------------------
-     BUY MOMENTUM
-  ------------------------------ */
+BUY MOMENTUM
+------------------------------ */
 
-  if (last.close > prev.close) {
+  if (lastClose > prevClose) {
     const sl = rangeLow;
 
-    const risk = last.close - sl;
-    const riskPct = risk / last.close;
+    const risk = lastClose - sl;
+    if (!(risk > 0)) return null;
+
+    const riskPct = risk / lastClose;
 
     if (riskPct >= MIN_RISK_PCT && riskPct <= MAX_RISK_PCT) {
       return {
         symbol,
         direction: "BUY",
         sl,
-        tp1: last.close + risk,
+        tp1: lastClose + risk,
         reason: "FAST_MOMENTUM_UP",
       };
     }
   }
 
   /* ------------------------------
-     SELL MOMENTUM
-  ------------------------------ */
+SELL MOMENTUM
+------------------------------ */
 
-  if (last.close < prev.close) {
+  if (lastClose < prevClose) {
     const sl = rangeHigh;
 
-    const risk = sl - last.close;
-    const riskPct = risk / last.close;
+    const risk = sl - lastClose;
+    if (!(risk > 0)) return null;
+
+    const riskPct = risk / lastClose;
 
     if (riskPct >= MIN_RISK_PCT && riskPct <= MAX_RISK_PCT) {
       return {
         symbol,
         direction: "SELL",
         sl,
-        tp1: last.close - risk,
+        tp1: lastClose - risk,
         reason: "FAST_MOMENTUM_DOWN",
       };
     }
