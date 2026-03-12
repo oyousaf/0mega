@@ -32,29 +32,32 @@ export function computeMetricsFromTrades(trades: Trade[]): DashboardMetrics {
   let countedTrades = 0;
 
   for (const t of trades) {
-    if (!t.is_closed) continue;
+    if (!t?.is_closed) continue;
 
-    const pl = Number(t.realised_pl);
-    if (!Number.isFinite(pl) || pl === 0) continue;
+    const pl = Number((t as any).realised_pl);
+    if (!Number.isFinite(pl)) continue;
 
-    const rr = Number(t.rr);
-    if (!Number.isFinite(rr) || rr <= 0) continue;
+    const risk = Number((t as any).risk_amount);
+    if (!Number.isFinite(risk) || risk <= 0) continue;
 
     countedTrades++;
 
     if ((t as any).halaal !== false) halaalTrades++;
 
-    const rMultiple = pl > 0 ? rr : -1;
+    /* -------- R MULTIPLE -------- */
+
+    const rMultiple = pl / risk;
+    totalR += rMultiple;
+
+    /* -------- WIN / LOSS -------- */
 
     if (pl > 0) {
       wins++;
       grossProfit += pl;
-    } else {
+    } else if (pl < 0) {
       losses++;
       grossLoss += Math.abs(pl);
     }
-
-    totalR += rMultiple;
   }
 
   const total = wins + losses;
