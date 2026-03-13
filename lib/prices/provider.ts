@@ -13,10 +13,15 @@ export function getPriceProvider(symbol: string, timeframe: Timeframe) {
   }
 
   /* ---------------------------------
-     FOREX
+     FOREX + METALS
   ---------------------------------- */
 
-  if (symbol === "EURUSD" || symbol === "GBPUSD" || symbol === "USDJPY") {
+  if (
+    symbol === "EURUSD" ||
+    symbol === "GBPUSD" ||
+    symbol === "USDJPY" ||
+    symbol === "XAUUSD"
+  ) {
     return getForexProvider(symbol, timeframe);
   }
 

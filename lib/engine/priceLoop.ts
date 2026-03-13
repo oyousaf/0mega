@@ -6,6 +6,7 @@ import { pool } from "@/lib/neon";
 import { runExitWatcher } from "./exitWatcher";
 import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 import type { OrderSide } from "@/providers/execution/broker.interface";
+import { SYMBOL_CONFIG } from "@/lib/trading/config/symbolConfig";
 
 /* ---------------------------------------
 CONFIG
@@ -45,8 +46,35 @@ const NEWS_SPIKE_PIPS = 18;
 const PAPER_ACCOUNT_EQUITY = 10000;
 const RISK_PER_TRADE = 0.005;
 
-const PIP_SIZE = 0.0001;
-const PIP_VALUE_PER_LOT = 10;
+/* ---------------------------------------
+SYMBOL CONFIG
+---------------------------------------- */
+
+const symbolCfg = SYMBOL_CONFIG[SYMBOL];
+
+if (!symbolCfg) {
+  throw new Error(`[ENGINE] unsupported symbol ${SYMBOL}`);
+}
+
+const PIP_SIZE = symbolCfg.pipSize;
+const PIP_VALUE_PER_LOT = symbolCfg.pipValuePerLot;
+
+/* ---------------------------------------
+TWEAKS / THROTTLES
+---------------------------------------- */
+
+/* ---------------------------------------
+TWELVEDATA API OPTIMISATION
+----------------------------------------
+---------------------------------------- */
+
+const API_FETCH_EVERY_N_MINUTES = 2;
+
+/**
+ * If the daily consecutive-loss cap is reached and there is NO open trade,
+ * the engine pauses provider calls until the next UTC day.
+ */
+const MAX_CONSECUTIVE_LOSSES = 3;
 
 const ENGINE_LOCK_KEY = 999001;
 const ENTRY_LOCK_KEY = 424242;
@@ -97,6 +125,34 @@ function msUntilNextMinute() {
   return 60000 - (now % 60000) + 50;
 }
 
+function msUntilNextFetchBoundary() {
+  const intervalMs = API_FETCH_EVERY_N_MINUTES * 60000;
+  const now = Date.now();
+  return intervalMs - (now % intervalMs) + 50;
+}
+
+function msUntilNextUtcDay() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCDate(now.getUTCDate() + 1);
+  next.setUTCHours(0, 0, 5, 0);
+  return Math.max(1000, next.getTime() - now.getTime());
+}
+
+function msUntilNextSessionOpen() {
+  const now = new Date();
+  const next = new Date(now);
+
+  if (now.getUTCHours() < SESSION_START) {
+    next.setUTCHours(SESSION_START, 0, 5, 0);
+    return Math.max(1000, next.getTime() - now.getTime());
+  }
+
+  next.setUTCDate(now.getUTCDate() + 1);
+  next.setUTCHours(SESSION_START, 0, 5, 0);
+  return Math.max(1000, next.getTime() - now.getTime());
+}
+
 function minuteBucket(ts: number) {
   return Math.floor(ts / 60000);
 }
@@ -122,7 +178,6 @@ function calculateEMA(values: number[], period: number) {
   if (values.length < period) return null;
 
   const k = 2 / (period + 1);
-
   let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
   for (let i = period; i < values.length; i++) {
@@ -217,6 +272,50 @@ async function automationEnabled(): Promise<boolean> {
 }
 
 /* ---------------------------------------
+TRADE / RISK STATE
+---------------------------------------- */
+
+async function hasOpenTrade(): Promise<boolean> {
+  try {
+    const { rows } = await pool.query(`
+      SELECT 1
+      FROM paper_trades
+      WHERE is_closed = false
+      LIMIT 1
+    `);
+
+    return rows.length > 0;
+  } catch (err) {
+    console.error("[OPEN_TRADE_CHECK_FAILED]", err);
+    return false;
+  }
+}
+
+async function maxConsecutiveLossesReached(): Promise<boolean> {
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT realised_pl
+      FROM paper_trades
+      WHERE is_closed = true
+        AND realised_pl IS NOT NULL
+      ORDER BY closed_at DESC NULLS LAST, id DESC
+      LIMIT $1
+      `,
+      [MAX_CONSECUTIVE_LOSSES],
+    );
+
+    if (rows.length < MAX_CONSECUTIVE_LOSSES) return false;
+
+    const losses = rows.every((r) => Number(r.realised_pl) < 0);
+    return losses;
+  } catch (err) {
+    console.error("[CONSECUTIVE_LOSS_CHECK_FAILED]", err);
+    return false;
+  }
+}
+
+/* ---------------------------------------
 ENTRY LOCK
 Serialises the open-trade check + execution block
 across concurrent loop attempts.
@@ -271,6 +370,9 @@ export async function startPriceLoop() {
     symbol: SYMBOL,
     timeframe: TIMEFRAME,
     testMode: TEST_MODE,
+    apiFetchEveryNMinutes: API_FETCH_EVERY_N_MINUTES,
+    pipSize: PIP_SIZE,
+    pipValuePerLot: PIP_VALUE_PER_LOT,
   });
 
   const provider = getPriceProvider(SYMBOL, TIMEFRAME);
@@ -289,10 +391,45 @@ export async function startPriceLoop() {
         }
       }
 
-      if (!TEST_MODE && !sessionOpen()) {
-        console.log("[SKIP] session closed");
-        await sleep(msUntilNextMinute());
+      const openTrade = await hasOpenTrade();
+
+      /* ---------------------------------
+         HARD API-SAVING GATES
+      ---------------------------------- */
+
+      if (!TEST_MODE && !openTrade && !sessionOpen()) {
+        const waitMs = msUntilNextSessionOpen();
+        console.log("[PAUSE] session closed", {
+          waitMinutes: Math.ceil(waitMs / 60000),
+        });
+        await sleep(waitMs);
         continue;
+      }
+
+      if (!TEST_MODE && !openTrade && (await maxConsecutiveLossesReached())) {
+        const waitMs = msUntilNextUtcDay();
+        console.log("[PAUSE] max consecutive losses reached", {
+          maxConsecutiveLosses: MAX_CONSECUTIVE_LOSSES,
+          waitMinutes: Math.ceil(waitMs / 60000),
+        });
+        await sleep(waitMs);
+        continue;
+      }
+
+      /**
+       * API optimisation:
+       * - no open trade -> fetch only on configured boundary (default 2m)
+       * - open trade    -> fetch every minute so exits are still managed
+       */
+      if (openTrade) {
+        await sleep(msUntilNextMinute());
+      } else {
+        await sleep(msUntilNextFetchBoundary());
+      }
+
+      if (!(await automationEnabled())) {
+        console.log("[ENGINE] automation disabled");
+        break;
       }
 
       const candles: Candle[] = await provider.fetchCandles();
