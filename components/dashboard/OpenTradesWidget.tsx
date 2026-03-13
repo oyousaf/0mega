@@ -37,7 +37,7 @@ export default function OpenTradesWidget() {
           ⏳ Open Trades
         </h2>
 
-        <p className="text-xs text-center opacity-70 mb-2">
+        <p className="text-center opacity-70 mb-2">
           Balance: {fmtPnL(balance)}
         </p>
 

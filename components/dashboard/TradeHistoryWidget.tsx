@@ -139,7 +139,7 @@ UI
         <Typography
           sx={{
             mt: 0.5,
-            fontSize: 12,
+            fontSize: 15,
             display: "flex",
             justifyContent: "center",
             gap: 2,
