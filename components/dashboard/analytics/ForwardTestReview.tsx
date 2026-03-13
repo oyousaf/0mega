@@ -8,7 +8,7 @@ export default function ForwardTestReview({ trades }: { trades: Trade[] }) {
 
   return (
     <div className="rounded-xl border border-omega-dark-gold bg-omega-green p-4 space-y-3">
-      <h3 className="text-lg font-semibold text-omega-gold text-center">
+      <h3 className="text-xl font-semibold text-omega-gold text-center">
         📋 Forward-Test Review
       </h3>
 

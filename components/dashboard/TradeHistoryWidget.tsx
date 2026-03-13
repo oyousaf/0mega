@@ -133,7 +133,7 @@ UI
     >
       <CardContent sx={{ color: "var(--omega-gold)", p: 2 }}>
         {" "}
-        <h2 className="text-lg font-semibold text-omega-gold text-center mb-1">
+        <h2 className="text-xl font-semibold text-omega-gold text-center mb-1">
           📜 Trade History{" "}
         </h2>
         <Typography

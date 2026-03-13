@@ -33,7 +33,7 @@ export default function OpenTradesWidget() {
       }}
     >
       <CardContent className="p-3 sm:p-4 text-omega-gold">
-        <h2 className="text-lg font-semibold text-center mb-1">
+        <h2 className="text-xl font-semibold text-center mb-1">
           ⏳ Open Trades
         </h2>
 
