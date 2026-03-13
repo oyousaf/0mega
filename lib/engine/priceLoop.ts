@@ -289,6 +289,12 @@ export async function startPriceLoop() {
         }
       }
 
+      if (!TEST_MODE && !sessionOpen()) {
+        console.log("[SKIP] session closed");
+        await sleep(msUntilNextMinute());
+        continue;
+      }
+
       const candles: Candle[] = await provider.fetchCandles();
 
       if (!candles?.length) {
@@ -326,11 +332,6 @@ export async function startPriceLoop() {
 
       const exited = await runExitWatcher(latest);
       if (exited) continue;
-
-      if (!TEST_MODE && !sessionOpen()) {
-        console.log("[SKIP] session closed");
-        continue;
-      }
 
       const spread = spreadPips(latest);
 
