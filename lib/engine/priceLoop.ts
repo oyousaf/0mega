@@ -192,6 +192,33 @@ function sessionOpen() {
   return hour >= SESSION_START && hour <= SESSION_END;
 }
 
+/* ---------------------------------------
+WEEKEND GUARD
+---------------------------------------- */
+
+function isWeekend(): boolean {
+  const day = new Date().getUTCDay(); // 0 = Sun, 6 = Sat
+  return day === 0 || day === 6;
+}
+
+function msUntilNextMondaySession(): number {
+  const now = new Date();
+  const next = new Date(now);
+
+  const day = now.getUTCDay();
+
+  if (day === 6) next.setUTCDate(now.getUTCDate() + 2); // Sat → Mon
+  if (day === 0) next.setUTCDate(now.getUTCDate() + 1); // Sun → Mon
+
+  next.setUTCHours(SESSION_START, 0, 5, 0);
+
+  if (next.getTime() <= now.getTime()) {
+    next.setUTCDate(next.getUTCDate() + 7);
+  }
+
+  return next.getTime() - now.getTime();
+}
+
 function rangePips(values: number[]) {
   return (Math.max(...values) - Math.min(...values)) / PIP_SIZE;
 }
@@ -390,7 +417,20 @@ export async function startPriceLoop() {
           break;
         }
       }
+      /* ---------------------------------
+        WEEKEND PAUSE
+      ---------------------------------- */
 
+      if (!TEST_MODE && isWeekend()) {
+        const waitMs = msUntilNextMondaySession();
+
+        console.log("[PAUSE] weekend market closed", {
+          waitMinutes: Math.ceil(waitMs / 60000),
+        });
+
+        await sleep(waitMs);
+        continue;
+      }
       const openTrade = await hasOpenTrade();
 
       /* ---------------------------------
