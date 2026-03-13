@@ -82,7 +82,6 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
           SELECT realised_pl
           FROM paper_trades
           WHERE is_closed = true
-          AND closed_at::date = CURRENT_DATE
           ORDER BY closed_at DESC
           LIMIT $1
         ) AS last_results
