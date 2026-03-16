@@ -47,17 +47,11 @@ const ENGINE = {
   riskPerTrade: 0.005,
 
   /**
-   * TwelveData optimisation:
+   * API optimisation:
    * - no open trade -> fetch only every N minutes
    * - open trade    -> fetch every minute for exit monitoring
    */
   apiFetchEveryNMinutes: 2,
-
-  /**
-   * If the daily consecutive-loss cap is reached and there is NO open trade,
-   * the engine pauses provider calls until the next UTC day.
-   */
-  maxConsecutiveLosses: 3,
 
   engineLockKey: 999001,
   entryLockKey: 424242,
@@ -124,8 +118,9 @@ async function interruptibleSleep(ms: number, loopId: number) {
 
   while (running && currentLoopId() === loopId && waited < ms) {
     const remaining = ms - waited;
-    await sleep(Math.min(step, remaining));
-    waited += Math.min(step, remaining);
+    const chunk = Math.min(step, remaining);
+    await sleep(chunk);
+    waited += chunk;
   }
 }
 
@@ -138,14 +133,6 @@ function msUntilNextFetchBoundary() {
   const intervalMs = ENGINE.apiFetchEveryNMinutes * 60000;
   const now = Date.now();
   return intervalMs - (now % intervalMs) + 50;
-}
-
-function msUntilNextUtcDay() {
-  const now = new Date();
-  const next = new Date(now);
-  next.setUTCDate(now.getUTCDate() + 1);
-  next.setUTCHours(0, 0, 5, 0);
-  return Math.max(1000, next.getTime() - now.getTime());
 }
 
 function msUntilNextSessionOpen() {
@@ -314,7 +301,7 @@ async function automationEnabled(): Promise<boolean> {
 }
 
 /* ---------------------------------------
-TRADE / RISK STATE
+TRADE STATE
 ---------------------------------------- */
 
 async function hasOpenTrade(): Promise<boolean> {
@@ -329,29 +316,6 @@ async function hasOpenTrade(): Promise<boolean> {
     return rows.length > 0;
   } catch (err) {
     console.error("[OPEN_TRADE_CHECK_FAILED]", err);
-    return false;
-  }
-}
-
-async function maxConsecutiveLossesReached(): Promise<boolean> {
-  try {
-    const { rows } = await pool.query(
-      `
-      SELECT realised_pl
-      FROM paper_trades
-      WHERE is_closed = true
-        AND realised_pl IS NOT NULL
-      ORDER BY closed_at DESC NULLS LAST, id DESC
-      LIMIT $1
-      `,
-      [ENGINE.maxConsecutiveLosses],
-    );
-
-    if (rows.length < ENGINE.maxConsecutiveLosses) return false;
-
-    return rows.every((r) => Number(r.realised_pl) < 0);
-  } catch (err) {
-    console.error("[CONSECUTIVE_LOSS_CHECK_FAILED]", err);
     return false;
   }
 }
@@ -447,6 +411,10 @@ export async function startPriceLoop() {
         });
 
         await interruptibleSleep(waitMs, loopId);
+
+        if (!running || currentLoopId() !== loopId) break;
+
+        console.log("[ENGINE] weekend pause finished");
         continue;
       }
 
@@ -464,22 +432,10 @@ export async function startPriceLoop() {
         });
 
         await interruptibleSleep(waitMs, loopId);
-        continue;
-      }
 
-      if (
-        !ENGINE.testMode &&
-        !openTrade &&
-        (await maxConsecutiveLossesReached())
-      ) {
-        const waitMs = msUntilNextUtcDay();
+        if (!running || currentLoopId() !== loopId) break;
 
-        console.log("[PAUSE] max consecutive losses reached", {
-          maxConsecutiveLosses: ENGINE.maxConsecutiveLosses,
-          waitMinutes: Math.ceil(waitMs / 60000),
-        });
-
-        await interruptibleSleep(waitMs, loopId);
+        console.log("[ENGINE] session pause finished");
         continue;
       }
 
@@ -691,6 +647,25 @@ export async function startPriceLoop() {
 
       if (!risk.allowed) {
         console.log("[ENTRY_BLOCKED]", risk.reason);
+
+        if (
+          risk.reason === "MAX_CONSECUTIVE_LOSSES" &&
+          !openTrade &&
+          !ENGINE.testMode
+        ) {
+          const waitMs = msUntilNextSessionOpen();
+
+          console.log("[PAUSE] entry blocked by consecutive losses", {
+            waitMinutes: Math.ceil(waitMs / 60000),
+          });
+
+          await interruptibleSleep(waitMs, loopId);
+
+          if (!running || currentLoopId() !== loopId) break;
+
+          console.log("[ENGINE] consecutive-loss pause finished");
+        }
+
         continue;
       }
 

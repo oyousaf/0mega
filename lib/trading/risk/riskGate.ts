@@ -67,15 +67,15 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
         MAX(closed_at) AS last_closed,
 
         COUNT(*) FILTER (
-        WHERE (opened_at AT TIME ZONE 'UTC')::date =
-        (NOW() AT TIME ZONE 'UTC')::date
+          WHERE (opened_at AT TIME ZONE 'UTC')::date =
+                (NOW() AT TIME ZONE 'UTC')::date
         ) AS trades_today,
 
         COALESCE(
           SUM(realised_pl) FILTER (
             WHERE is_closed = true
-            AND (closed_at AT TIME ZONE 'UTC')::date =
-                (NOW() AT TIME ZONE 'UTC')::date
+              AND (closed_at AT TIME ZONE 'UTC')::date =
+                  (NOW() AT TIME ZONE 'UTC')::date
           ),
           0
         ) AS pnl_today,
@@ -84,7 +84,8 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
           SELECT realised_pl
           FROM paper_trades
           WHERE is_closed = true
-          ORDER BY closed_at DESC
+            AND realised_pl IS NOT NULL
+          ORDER BY closed_at DESC NULLS LAST, id DESC
           LIMIT $1
         ) AS last_results
 
@@ -96,9 +97,12 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
     const r = rows[0] ?? {};
 
     const lastClosed = r.last_closed ? new Date(r.last_closed).getTime() : null;
-
     const tradesToday = safeNum(r.trades_today);
     const dailyPnl = safeNum(r.pnl_today);
+
+    const lastResults: number[] = Array.isArray(r.last_results)
+      ? r.last_results.map(safeNum)
+      : [];
 
     /* -----------------------------------------
        COOLDOWN
@@ -118,6 +122,17 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
 
     if (tradesToday >= MAX_TRADES_PER_DAY) {
       return { allowed: false, reason: "MAX_TRADES_PER_DAY" };
+    }
+
+    /* -----------------------------------------
+       CONSECUTIVE LOSSES
+    ------------------------------------------ */
+
+    if (
+      lastResults.length === MAX_CONSECUTIVE_LOSSES &&
+      lastResults.every((pl) => pl < 0)
+    ) {
+      return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
     }
 
     /* -----------------------------------------
