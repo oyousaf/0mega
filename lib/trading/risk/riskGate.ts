@@ -67,13 +67,15 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
         MAX(closed_at) AS last_closed,
 
         COUNT(*) FILTER (
-          WHERE opened_at::date = CURRENT_DATE
+        WHERE (opened_at AT TIME ZONE 'UTC')::date =
+        (NOW() AT TIME ZONE 'UTC')::date
         ) AS trades_today,
 
         COALESCE(
           SUM(realised_pl) FILTER (
             WHERE is_closed = true
-            AND closed_at::date = CURRENT_DATE
+            AND (closed_at AT TIME ZONE 'UTC')::date =
+                (NOW() AT TIME ZONE 'UTC')::date
           ),
           0
         ) AS pnl_today,
@@ -98,10 +100,6 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
     const tradesToday = safeNum(r.trades_today);
     const dailyPnl = safeNum(r.pnl_today);
 
-    const lastResults: number[] = Array.isArray(r.last_results)
-      ? r.last_results.map(safeNum)
-      : [];
-
     /* -----------------------------------------
        COOLDOWN
     ------------------------------------------ */
@@ -120,17 +118,6 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
 
     if (tradesToday >= MAX_TRADES_PER_DAY) {
       return { allowed: false, reason: "MAX_TRADES_PER_DAY" };
-    }
-
-    /* -----------------------------------------
-       CONSECUTIVE LOSSES
-    ------------------------------------------ */
-
-    if (
-      lastResults.length === MAX_CONSECUTIVE_LOSSES &&
-      lastResults.every((pl) => pl < 0)
-    ) {
-      return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
     }
 
     /* -----------------------------------------
