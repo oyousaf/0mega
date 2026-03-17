@@ -58,60 +58,80 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
     }
 
     /* -----------------------------------------
-       FETCH RISK DATA (single query)
+       FETCH RISK DATA
     ------------------------------------------ */
 
     const { rows } = await pool.query(
       `
+      WITH today_closed AS (
+        SELECT
+          id,
+          closed_at,
+          realised_pl
+        FROM paper_trades
+        WHERE is_closed = true
+          AND closed_at IS NOT NULL
+          AND realised_pl IS NOT NULL
+          AND (closed_at AT TIME ZONE 'UTC')::date =
+              (NOW() AT TIME ZONE 'UTC')::date
+      ),
+      today_opened AS (
+        SELECT id
+        FROM paper_trades
+        WHERE (opened_at AT TIME ZONE 'UTC')::date =
+              (NOW() AT TIME ZONE 'UTC')::date
+      )
       SELECT
-        MAX(closed_at) AS last_closed,
+        (
+          SELECT MAX(closed_at)
+          FROM today_closed
+        ) AS last_closed_today,
 
-        COUNT(*) FILTER (
-          WHERE (opened_at AT TIME ZONE 'UTC')::date =
-                (NOW() AT TIME ZONE 'UTC')::date
+        (
+          SELECT COUNT(*)
+          FROM today_opened
         ) AS trades_today,
 
         COALESCE(
-          SUM(realised_pl) FILTER (
-            WHERE is_closed = true
-              AND (closed_at AT TIME ZONE 'UTC')::date =
-                  (NOW() AT TIME ZONE 'UTC')::date
+          (
+            SELECT SUM(realised_pl)
+            FROM today_closed
           ),
           0
         ) AS pnl_today,
 
         ARRAY(
           SELECT realised_pl
-          FROM paper_trades
-          WHERE is_closed = true
-            AND realised_pl IS NOT NULL
-          ORDER BY closed_at DESC NULLS LAST, id DESC
+          FROM today_closed
+          ORDER BY closed_at DESC, id DESC
           LIMIT $1
-        ) AS last_results
-
-      FROM paper_trades
+        ) AS last_results_today
       `,
       [MAX_CONSECUTIVE_LOSSES],
     );
 
     const r = rows[0] ?? {};
 
-    const lastClosed = r.last_closed ? new Date(r.last_closed).getTime() : null;
+    const lastClosedToday = r.last_closed_today
+      ? new Date(r.last_closed_today).getTime()
+      : null;
+
     const tradesToday = safeNum(r.trades_today);
     const dailyPnl = safeNum(r.pnl_today);
 
-    const lastResults: number[] = Array.isArray(r.last_results)
-      ? r.last_results.map(safeNum)
+    const lastResultsToday: number[] = Array.isArray(r.last_results_today)
+      ? r.last_results_today.map(safeNum)
       : [];
 
     /* -----------------------------------------
        COOLDOWN
+       Applies only if there was a close today.
     ------------------------------------------ */
 
     if (
-      lastClosed &&
-      Number.isFinite(lastClosed) &&
-      Date.now() - lastClosed < minutes(COOLDOWN_MINUTES)
+      lastClosedToday &&
+      Number.isFinite(lastClosedToday) &&
+      Date.now() - lastClosedToday < minutes(COOLDOWN_MINUTES)
     ) {
       return { allowed: false, reason: "COOLDOWN" };
     }
@@ -126,11 +146,12 @@ export async function riskGate(signal: Signal): Promise<RiskResult> {
 
     /* -----------------------------------------
        CONSECUTIVE LOSSES
+       Day-scoped. Resets automatically at UTC midnight.
     ------------------------------------------ */
 
     if (
-      lastResults.length === MAX_CONSECUTIVE_LOSSES &&
-      lastResults.every((pl) => pl < 0)
+      lastResultsToday.length === MAX_CONSECUTIVE_LOSSES &&
+      lastResultsToday.every((pl) => pl < 0)
     ) {
       return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
     }

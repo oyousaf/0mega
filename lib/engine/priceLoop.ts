@@ -220,6 +220,16 @@ function msUntilNextMondaySession(): number {
   return Math.max(1000, next.getTime() - now.getTime());
 }
 
+function msUntilNextTradingDaySessionOpen() {
+  const now = new Date();
+  const next = new Date(now);
+
+  next.setUTCDate(now.getUTCDate() + 1);
+  next.setUTCHours(ENGINE.sessionStart, 0, 5, 0);
+
+  return Math.max(1000, next.getTime() - now.getTime());
+}
+
 function rangePips(values: number[]) {
   return (Math.max(...values) - Math.min(...values)) / RUNTIME.pipSize;
 }
@@ -653,9 +663,10 @@ export async function startPriceLoop() {
           !openTrade &&
           !ENGINE.testMode
         ) {
-          const waitMs = msUntilNextSessionOpen();
+          const waitMs = msUntilNextTradingDaySessionOpen();
 
-          console.log("[PAUSE] entry blocked by consecutive losses", {
+          console.log("[PAUSE] max consecutive losses reached", {
+            maxConsecutiveLosses: 3,
             waitMinutes: Math.ceil(waitMs / 60000),
           });
 
