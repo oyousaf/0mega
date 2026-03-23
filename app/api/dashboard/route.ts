@@ -104,7 +104,7 @@ export async function GET() {
         FROM paper_trades
         WHERE is_closed = true
         ORDER BY closed_at DESC
-        LIMIT 20
+  
       `),
 
       pool.query(`
