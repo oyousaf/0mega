@@ -19,7 +19,8 @@
     ],
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "esModuleInterop": true
   },
   "include": [
     "next-env.d.ts",
@@ -27,7 +28,8 @@
     "**/*.tsx",
     "tailwind.config.ts",
     ".next/types/**/*.ts",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }
