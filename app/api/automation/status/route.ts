@@ -1,3 +1,5 @@
+"use server";
+
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/neon";
 import { getBroker } from "@/providers/execution/router";
@@ -10,6 +12,12 @@ GLOBAL ENGINE STATE
 declare global {
   var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
 }
+
+/* -------------------------------------------------
+BOOT RECOVERY GUARD
+-------------------------------------------------- */
+
+let bootChecked = false;
 
 /* -------------------------------------------------
 AUTOMATION STATUS
@@ -36,6 +44,22 @@ export async function GET() {
     const enabled = Boolean(automationRows[0]?.enabled);
     const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
 
+    /* --------------------------
+       BOOT RECOVERY
+    --------------------------- */
+
+    if (enabled && !engineRunning && !bootChecked) {
+      bootChecked = true;
+
+      console.log("[ENGINE_BOOT] recovering engine after restart");
+
+      setTimeout(() => {
+        void startPriceLoop().catch((err) => {
+          console.error("[ENGINE_BOOT_FAILED]", err);
+        });
+      }, 300);
+    }
+
     return NextResponse.json({
       success: true,
 
@@ -45,7 +69,7 @@ export async function GET() {
       },
 
       engine: {
-        running: engineRunning,
+        running: Boolean(globalThis.__OMEGA_ENGINE_RUNNING__),
       },
 
       broker: {
@@ -99,7 +123,9 @@ export async function POST(req: Request) {
       console.log("[AUTOMATION] starting engine");
 
       setTimeout(() => {
-        startPriceLoop();
+        void startPriceLoop().catch((err) => {
+          console.error("[ENGINE_START_FAILED]", err);
+        });
       }, 250);
     }
 
