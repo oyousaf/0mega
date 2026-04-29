@@ -386,10 +386,6 @@ export async function startPriceLoop() {
     loopId,
     symbol: ENGINE.symbol,
     timeframe: ENGINE.timeframe,
-    testMode: ENGINE.testMode,
-    apiFetchEveryNMinutes: ENGINE.apiFetchEveryNMinutes,
-    pipSize: RUNTIME.pipSize,
-    pipValuePerLot: RUNTIME.pipValuePerLot,
   });
 
   const provider = getPriceProvider(ENGINE.symbol, ENGINE.timeframe);
@@ -400,330 +396,232 @@ export async function startPriceLoop() {
 
   try {
     while (running && currentLoopId() === loopId) {
-      if (Date.now() - lastAutomationCheck > ENGINE.automationCheckMs) {
-        lastAutomationCheck = Date.now();
+      try {
+        /* ---------------- AUTOMATION HEARTBEAT ---------------- */
 
-        if (!(await automationEnabled())) {
-          console.log("[ENGINE] automation disabled");
-          break;
-        }
-      }
+        if (Date.now() - lastAutomationCheck > ENGINE.automationCheckMs) {
+          lastAutomationCheck = Date.now();
 
-      /* ---------------------------------
-         WEEKEND PAUSE
-      ---------------------------------- */
-
-      if (!ENGINE.testMode && isWeekend()) {
-        const waitMs = msUntilNextMondaySession();
-
-        console.log("[PAUSE] weekend market closed", {
-          waitMinutes: Math.ceil(waitMs / 60000),
-        });
-
-        await interruptibleSleep(waitMs, loopId);
-
-        if (!running || currentLoopId() !== loopId) break;
-
-        console.log("[ENGINE] weekend pause finished");
-        continue;
-      }
-
-      const openTrade = await hasOpenTrade();
-
-      /* ---------------------------------
-         HARD API-SAVING GATES
-      ---------------------------------- */
-
-      if (!ENGINE.testMode && !openTrade && !sessionOpen()) {
-        const waitMs = msUntilNextSessionOpen();
-
-        console.log("[PAUSE] session closed", {
-          waitMinutes: Math.ceil(waitMs / 60000),
-        });
-
-        await interruptibleSleep(waitMs, loopId);
-
-        if (!running || currentLoopId() !== loopId) break;
-
-        console.log("[ENGINE] session pause finished");
-        continue;
-      }
-
-      /* ---------------------------------
-         FETCH THROTTLING
-      ---------------------------------- */
-
-      if (openTrade) {
-        await interruptibleSleep(msUntilNextMinute(), loopId);
-      } else {
-        await interruptibleSleep(msUntilNextFetchBoundary(), loopId);
-      }
-
-      if (!running || currentLoopId() !== loopId) break;
-
-      if (!(await automationEnabled())) {
-        console.log("[ENGINE] automation disabled");
-        break;
-      }
-
-      const now = Date.now();
-      const currentFetchBucket = openTrade
-        ? minuteBucket(now)
-        : fetchBucket(now);
-
-      if (currentFetchBucket === lastFetchBucket) {
-        continue;
-      }
-
-      lastFetchBucket = currentFetchBucket;
-
-      const candles: Candle[] = await provider.fetchCandles();
-
-      if (!candles?.length) {
-        await sleep(2000);
-        continue;
-      }
-
-      if (candles.length < RUNTIME.minRequiredCandles) {
-        await sleep(2000);
-        continue;
-      }
-
-      const latest = candles[candles.length - 1];
-      const minute = minuteBucket(Number(latest.timestamp));
-
-      if (minute === lastCandleMinute) {
-        await interruptibleSleep(msUntilNextMinute(), loopId);
-        continue;
-      }
-
-      lastCandleMinute = minute;
-
-      const price = Number(latest.close);
-      const spread = spreadPips(latest);
-
-      console.log("[NEW_CANDLE]", {
-        SYMBOL: ENGINE.symbol,
-        TIMEFRAME: ENGINE.timeframe,
-        CLOSE: fmt(price),
-        SPREAD_PIPS: spread === null ? null : fmt(spread, 2),
-        OPEN_TRADE: openTrade,
-      });
-
-      if (!Number.isFinite(price)) {
-        console.log("[SKIP] invalid candle price");
-        continue;
-      }
-
-      const exited = await runExitWatcher(latest);
-      if (exited) continue;
-
-      if (
-        !ENGINE.testMode &&
-        spread !== null &&
-        spread > ENGINE.maxSpreadPips
-      ) {
-        console.log("[SKIP] spread too wide", spread);
-        continue;
-      }
-
-      const closes = candles
-        .map((c) => Number(c.close))
-        .filter((v): v is number => Number.isFinite(v));
-
-      if (closes.length < RUNTIME.minRequiredCandles) {
-        console.log("[SKIP] insufficient valid closes");
-        continue;
-      }
-
-      if (!ENGINE.testMode) {
-        const activationRange = rangePips(
-          closes.slice(-ENGINE.activationWindow),
-        );
-
-        if (activationRange < ENGINE.minActivationRangePips) {
-          console.log("[SKIP] london range not active");
-          continue;
-        }
-
-        if (newsSpike(closes)) {
-          console.log("[SKIP] news spike");
-          continue;
-        }
-
-        const regimeVol = avgAbsReturnPct(closes.slice(-ENGINE.regimeWindow));
-        if (regimeVol < ENGINE.regimeMinPct) {
-          console.log("[SKIP] low volatility regime");
-          continue;
-        }
-
-        const vol = avgAbsReturnPct(closes.slice(-ENGINE.volWindow));
-        if (vol < ENGINE.minVolPct) {
-          console.log("[SKIP] short volatility too low");
-          continue;
-        }
-
-        const prev = closes[closes.length - 2];
-        const last = closes[closes.length - 1];
-        const move = Math.abs(last - prev) / prev;
-
-        if (move > vol * ENGINE.spikeMultiplier) {
-          console.log("[SKIP] volatility spike");
-          continue;
-        }
-
-        const rangeValues = closes.slice(-ENGINE.rangeWindow);
-        const rangePct =
-          (Math.max(...rangeValues) - Math.min(...rangeValues)) /
-          Math.min(...rangeValues);
-
-        if (rangePct < ENGINE.minRangePct) {
-          console.log("[SKIP] tight consolidation");
-          continue;
-        }
-      }
-
-      const emaNow = calculateEMA(closes, ENGINE.emaPeriod);
-      const emaPrev = calculateEMA(closes.slice(0, -1), ENGINE.emaPeriod);
-
-      if (!ENGINE.testMode && (!emaNow || !emaPrev)) {
-        console.log("[SKIP] ema unavailable");
-        continue;
-      }
-
-      const emaSlope = (emaNow ?? 0) - (emaPrev ?? 0);
-
-      let signal = await runStructureCheck({
-        symbol: ENGINE.symbol,
-        timeframe: ENGINE.timeframe,
-        candles,
-      });
-
-      if (ENGINE.testMode && !signal) {
-        const dist = RUNTIME.pipSize * 5;
-
-        signal = {
-          symbol: ENGINE.symbol,
-          direction: "BUY" as OrderSide,
-          sl: price - dist,
-          tp1: price + dist,
-          reason: "TEST_SIGNAL",
-        };
-
-        console.log("[TEST_MODE] forced signal");
-      }
-
-      if (!signal) continue;
-
-      if (!ENGINE.testMode && emaNow !== null) {
-        if (signal.direction === "BUY") {
-          if (price < emaNow || emaSlope <= 0) {
-            console.log("[SKIP] buy trend filter");
-            continue;
+          if (!(await automationEnabled())) {
+            console.log("[ENGINE] automation disabled");
+            break;
           }
         }
 
-        if (signal.direction === "SELL") {
-          if (price > emaNow || emaSlope >= 0) {
-            console.log("[SKIP] sell trend filter");
-            continue;
-          }
-        }
-      }
+        /* ---------------- WEEKEND PAUSE ---------------- */
 
-      const entry = price;
-      const sl = Number(signal.sl);
+        if (!ENGINE.testMode && isWeekend()) {
+          const waitMs = msUntilNextMondaySession();
 
-      if (!Number.isFinite(sl)) {
-        console.log("[SKIP] invalid stop loss");
-        continue;
-      }
-
-      const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
-
-      if (!(riskDist > 0)) {
-        console.log("[SKIP] invalid risk distance");
-        continue;
-      }
-
-      const tp1 =
-        signal.direction === "BUY"
-          ? entry + riskDist * ENGINE.rrTarget
-          : entry - riskDist * ENGINE.rrTarget;
-
-      const risk = ENGINE.testMode
-        ? { allowed: true as const }
-        : await riskGate(signal);
-
-      if (!risk.allowed) {
-        console.log("[ENTRY_BLOCKED]", risk.reason);
-
-        if (
-          risk.reason === "MAX_CONSECUTIVE_LOSSES" &&
-          !openTrade &&
-          !ENGINE.testMode
-        ) {
-          const waitMs = msUntilNextTradingDaySessionOpen();
-
-          console.log("[PAUSE] max consecutive losses reached", {
-            maxConsecutiveLosses: 3,
+          console.log("[PAUSE] weekend", {
             waitMinutes: Math.ceil(waitMs / 60000),
           });
 
           await interruptibleSleep(waitMs, loopId);
-
-          if (!running || currentLoopId() !== loopId) break;
-
-          console.log("[ENGINE] consecutive-loss pause finished");
+          continue;
         }
 
-        continue;
-      }
+        const openTrade = await hasOpenTrade();
 
-      const lotSize = calculateLotSize(entry, sl);
+        /* ---------------- SESSION PAUSE ---------------- */
 
-      if (!(lotSize > 0)) {
-        console.log("[SKIP] lot size invalid");
-        continue;
-      }
+        if (!ENGINE.testMode && !openTrade && !sessionOpen()) {
+          const waitMs = msUntilNextSessionOpen();
 
-      await withEntryLock(async () => {
-        const { rows } = await pool.query(
-          `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
-        );
+          console.log("[PAUSE] session closed", {
+            waitMinutes: Math.ceil(waitMs / 60000),
+          });
 
-        if (rows.length) {
-          console.log("[SKIP] open trade already exists");
-          return;
+          await interruptibleSleep(waitMs, loopId);
+          continue;
         }
 
-        const res = await executeTradeIntent({
-          signalId: signal.reason,
-          symbol: ENGINE.symbol,
-          qty: lotSize,
-          side: signal.direction,
-          rawSl: sl,
-          rawTp1: tp1,
-          entryPrice: entry,
+        /* ---------------- FETCH TIMING ---------------- */
+
+        if (openTrade) {
+          await interruptibleSleep(msUntilNextMinute(), loopId);
+        } else {
+          await interruptibleSleep(msUntilNextFetchBoundary(), loopId);
+        }
+
+        if (!running || currentLoopId() !== loopId) break;
+
+        /* ---------------- FETCH BUCKET ---------------- */
+
+        const now = Date.now();
+        const bucket = openTrade ? minuteBucket(now) : fetchBucket(now);
+
+        if (bucket === lastFetchBucket) continue;
+        lastFetchBucket = bucket;
+
+        /* ---------------- SAFE FETCH ---------------- */
+
+        let candles: Candle[] = [];
+
+        try {
+          candles = await provider.fetchCandles();
+        } catch (err) {
+          console.error("[FETCH_FAILED]", err);
+          await sleep(2000);
+          continue;
+        }
+
+        if (!candles?.length || candles.length < RUNTIME.minRequiredCandles) {
+          await sleep(2000);
+          continue;
+        }
+
+        const latest = candles[candles.length - 1];
+        const minute = minuteBucket(Number(latest.timestamp));
+
+        if (minute === lastCandleMinute) continue;
+        lastCandleMinute = minute;
+
+        const price = Number(latest.close);
+        if (!Number.isFinite(price)) continue;
+
+        const spread = spreadPips(latest);
+
+        console.log("[NEW_CANDLE]", {
+          price: fmt(price),
+          spread: spread ? fmt(spread, 2) : null,
+          openTrade,
         });
 
-        if (res.success) {
-          const riskPips = Math.abs(entry - sl) / RUNTIME.pipSize;
+        /* ---------------- EXIT CHECK ---------------- */
 
-          console.log("[TRADE_OPENED]", {
-            TRADE_ID: res.tradeId,
-            SYMBOL: ENGINE.symbol,
-            SIDE: signal.direction,
-            ENTRY_PRICE: fmt(entry),
-            SL: fmt(sl),
-            TP1: fmt(tp1),
-            LOT_SIZE: lotSize,
-            RISK_PIPS: fmt(riskPips, 2),
-          });
-        } else {
-          console.log("[TRADE_FAILED]", res);
+        const exited = await runExitWatcher(latest);
+        if (exited) continue;
+
+        /* ---------------- SPREAD FILTER ---------------- */
+
+        if (
+          !ENGINE.testMode &&
+          spread !== null &&
+          spread > ENGINE.maxSpreadPips
+        ) {
+          console.log("[SKIP] spread");
+          continue;
         }
-      });
+
+        /* ---------------- PREP DATA ---------------- */
+
+        const closes = candles
+          .map((c) => Number(c.close))
+          .filter((v): v is number => Number.isFinite(v));
+
+        if (closes.length < RUNTIME.minRequiredCandles) continue;
+
+        /* ---------------- MARKET FILTERS ---------------- */
+
+        if (!ENGINE.testMode) {
+          if (
+            rangePips(closes.slice(-ENGINE.activationWindow)) <
+            ENGINE.minActivationRangePips
+          ) {
+            continue;
+          }
+
+          if (newsSpike(closes)) continue;
+
+          if (
+            avgAbsReturnPct(closes.slice(-ENGINE.regimeWindow)) <
+            ENGINE.regimeMinPct
+          )
+            continue;
+
+          if (
+            avgAbsReturnPct(closes.slice(-ENGINE.volWindow)) < ENGINE.minVolPct
+          )
+            continue;
+        }
+
+        /* ---------------- TREND ---------------- */
+
+        const emaNow = calculateEMA(closes, ENGINE.emaPeriod);
+        const emaPrev = calculateEMA(closes.slice(0, -1), ENGINE.emaPeriod);
+
+        if (!ENGINE.testMode && (!emaNow || !emaPrev)) continue;
+
+        const emaSlope = (emaNow ?? 0) - (emaPrev ?? 0);
+
+        /* ---------------- SIGNAL ---------------- */
+
+        let signal = await runStructureCheck({
+          symbol: ENGINE.symbol,
+          timeframe: ENGINE.timeframe,
+          candles,
+        });
+
+        if (!signal) continue;
+
+        /* ---------------- TREND FILTER ---------------- */
+
+        if (!ENGINE.testMode && emaNow !== null) {
+          if (
+            (signal.direction === "BUY" && (price < emaNow || emaSlope <= 0)) ||
+            (signal.direction === "SELL" && (price > emaNow || emaSlope >= 0))
+          ) {
+            continue;
+          }
+        }
+
+        /* ---------------- TRADE GEOMETRY ---------------- */
+
+        const entry = price;
+        const sl = Number(signal.sl);
+
+        if (!Number.isFinite(sl)) continue;
+
+        const riskDist = signal.direction === "BUY" ? entry - sl : sl - entry;
+
+        if (!(riskDist > 0)) continue;
+
+        const tp1 =
+          signal.direction === "BUY"
+            ? entry + riskDist * ENGINE.rrTarget
+            : entry - riskDist * ENGINE.rrTarget;
+
+        /* ---------------- RISK GATE ---------------- */
+
+        const risk = ENGINE.testMode
+          ? { allowed: true as const }
+          : await riskGate(signal);
+
+        if (!risk.allowed) continue;
+
+        const lotSize = calculateLotSize(entry, sl);
+        if (!(lotSize > 0)) continue;
+
+        /* ---------------- EXECUTION ---------------- */
+
+        await withEntryLock(async () => {
+          const { rows } = await pool.query(
+            `SELECT 1 FROM paper_trades WHERE is_closed = false LIMIT 1`,
+          );
+
+          if (rows.length) return;
+
+          const res = await executeTradeIntent({
+            signalId: signal.reason,
+            symbol: ENGINE.symbol,
+            qty: lotSize,
+            side: signal.direction,
+            rawSl: sl,
+            rawTp1: tp1,
+            entryPrice: entry,
+          });
+
+          if (res.success) {
+            console.log("[TRADE_OPENED]", res.tradeId);
+          } else {
+            console.log("[TRADE_FAILED]", res);
+          }
+        });
+      } catch (err) {
+        console.error("[ENGINE_LOOP_ERROR]", err);
+        await sleep(2000);
+      }
     }
   } finally {
     running = false;

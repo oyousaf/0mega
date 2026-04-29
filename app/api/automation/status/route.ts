@@ -11,13 +11,8 @@ GLOBAL ENGINE STATE
 
 declare global {
   var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
+  var __OMEGA_BOOT_CHECKED__: boolean | undefined;
 }
-
-/* -------------------------------------------------
-BOOT RECOVERY GUARD
--------------------------------------------------- */
-
-let bootChecked = false;
 
 /* -------------------------------------------------
 AUTOMATION STATUS
@@ -45,13 +40,13 @@ export async function GET() {
     const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
 
     /* --------------------------
-       BOOT RECOVERY
+       BOOT RECOVERY (CORE)
     --------------------------- */
 
-    if (enabled && !engineRunning && !bootChecked) {
-      bootChecked = true;
+    if (enabled && !engineRunning && !globalThis.__OMEGA_BOOT_CHECKED__) {
+      globalThis.__OMEGA_BOOT_CHECKED__ = true;
 
-      console.log("[ENGINE_BOOT] recovering engine after restart");
+      console.log("[ENGINE_BOOT] recovering engine");
 
       setTimeout(() => {
         void startPriceLoop().catch((err) => {
@@ -86,7 +81,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error("Automation status error:", err);
+    console.error("[AUTOMATION_STATUS_ERROR]", err);
 
     return NextResponse.json(
       { success: false, error: err.message ?? String(err) },
@@ -122,6 +117,8 @@ export async function POST(req: Request) {
     if (nextState && !engineRunning) {
       console.log("[AUTOMATION] starting engine");
 
+      globalThis.__OMEGA_BOOT_CHECKED__ = true;
+
       setTimeout(() => {
         void startPriceLoop().catch((err) => {
           console.error("[ENGINE_START_FAILED]", err);
@@ -131,7 +128,11 @@ export async function POST(req: Request) {
 
     if (!nextState && engineRunning) {
       console.log("[AUTOMATION] stopping engine");
+
       stopPriceLoop();
+
+      // allow future boot recovery
+      globalThis.__OMEGA_BOOT_CHECKED__ = false;
     }
 
     return NextResponse.json({
@@ -140,7 +141,7 @@ export async function POST(req: Request) {
       engineRunning: Boolean(globalThis.__OMEGA_ENGINE_RUNNING__),
     });
   } catch (err: any) {
-    console.error("Automation toggle error:", err);
+    console.error("[AUTOMATION_TOGGLE_ERROR]", err);
 
     return NextResponse.json(
       { success: false, error: err.message ?? String(err) },
