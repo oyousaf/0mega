@@ -49,18 +49,50 @@ export function getForexProvider(symbol: string, timeframe: string) {
           `&outputsize=300` +
           `&apikey=${process.env.TWELVE_DATA_API_KEY}`;
 
-        const res = await fetch(url);
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(10000),
+          headers: {
+            Accept: "application/json",
+          },
+        });
 
-        const data = await res.json();
-
-        if (data.code) {
-          console.error("[FOREX_PROVIDER_ERROR]", data);
+        if (!res.ok) {
+          console.warn("[FOREX_PROVIDER_HTTP_ERROR]", {
+            symbol: apiSymbol,
+            status: res.status,
+            statusText: res.statusText,
+          });
 
           return cached?.candles ?? [];
         }
 
-        if (!data.values) {
-          console.warn("[FOREX_PROVIDER] no values", {
+        const text = await res.text();
+
+        let data: any;
+
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.warn("[FOREX_PROVIDER_INVALID_JSON]", {
+            symbol: apiSymbol,
+            preview: text.slice(0, 120),
+          });
+
+          return cached?.candles ?? [];
+        }
+
+        if (data.code) {
+          console.warn("[FOREX_PROVIDER_API_ERROR]", {
+            symbol: apiSymbol,
+            code: data.code,
+            message: data.message,
+          });
+
+          return cached?.candles ?? [];
+        }
+
+        if (!Array.isArray(data.values)) {
+          console.warn("[FOREX_PROVIDER_NO_VALUES]", {
             symbol: apiSymbol,
           });
 
@@ -87,10 +119,13 @@ export function getForexProvider(symbol: string, timeframe: string) {
         });
 
         return candles;
-      } catch (err) {
-        console.error("[FOREX_PROVIDER_FETCH_ERROR]", err);
+      } catch (err: any) {
+        console.warn("[FOREX_PROVIDER_FETCH_ERROR]", {
+          symbol: apiSymbol,
+          message: err?.message,
+        });
 
-        return CACHE.get(cacheKey)?.candles ?? [];
+        return cached?.candles ?? [];
       }
     },
   };
