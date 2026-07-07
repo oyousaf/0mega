@@ -6,12 +6,20 @@ type ExitResult = "SL_HIT" | "TP_HIT" | null;
 
 type OpenTradeRow = {
   id: number;
+  symbol: string;
   side: "BUY" | "SELL";
   sl: number;
   tp1: number | null;
 };
 
 export async function runExitWatcher(candle: Candle): Promise<boolean> {
+  const symbol = String((candle as any).symbol ?? "");
+
+  if (!symbol) {
+    console.warn("[EXIT] candle missing symbol");
+    return false;
+  }
+
   const high = Number(candle.high);
   const low = Number(candle.low);
   const close = Number(candle.close);
@@ -25,13 +33,23 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
   }
 
   return withDbLock(async () => {
-    const { rows } = await pool.query<OpenTradeRow>(`
-      SELECT id, side, sl, tp1
+    const { rows } = await pool.query<OpenTradeRow>(
+      `
+      SELECT
+        id,
+        symbol,
+        side,
+        sl,
+        tp1
       FROM paper_trades
-      WHERE is_closed = false
+      WHERE
+        symbol = $1
+        AND is_closed = false
       ORDER BY id ASC
       FOR UPDATE
-    `);
+      `,
+      [symbol],
+    );
 
     if (!rows.length) return false;
 
@@ -39,6 +57,7 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
 
     for (const trade of rows) {
       const exit = checkExit(trade, high, low);
+
       if (!exit) continue;
 
       const exitPrice = getExitPrice(trade, exit, close);
@@ -48,14 +67,17 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
       if (!res.success) {
         console.warn("[EXIT_FAILED]", {
           tradeId: trade.id,
+          symbol,
           exit,
           error: res.error,
         });
+
         continue;
       }
 
       console.log("[EXIT]", {
         tradeId: trade.id,
+        symbol,
         reason: exit,
         exitPrice,
         high,
@@ -72,35 +94,43 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
 }
 
 function checkExit(
-  trade: { side: "BUY" | "SELL"; sl: number; tp1: number | null },
+  trade: {
+    side: "BUY" | "SELL";
+    sl: number;
+    tp1: number | null;
+  },
   high: number,
   low: number,
 ): ExitResult {
   const sl = Number(trade.sl);
+
   const tp1 = trade.tp1 != null ? Number(trade.tp1) : null;
 
   if (trade.side === "BUY") {
-    const slHit = low <= sl;
-    const tpHit = tp1 !== null && high >= tp1;
+    if (low <= sl) return "SL_HIT";
 
-    if (slHit) return "SL_HIT";
-    if (tpHit) return "TP_HIT";
+    if (tp1 !== null && high >= tp1) {
+      return "TP_HIT";
+    }
   }
 
   if (trade.side === "SELL") {
-    const slHit = high >= sl;
-    const tpHit = tp1 !== null && low <= tp1;
+    if (high >= sl) return "SL_HIT";
 
-    if (slHit) return "SL_HIT";
-    if (tpHit) return "TP_HIT";
+    if (tp1 !== null && low <= tp1) {
+      return "TP_HIT";
+    }
   }
 
   return null;
 }
 
 function getExitPrice(
-  trade: { side: "BUY" | "SELL"; sl: number; tp1: number | null },
-  exit: "SL_HIT" | "TP_HIT",
+  trade: {
+    sl: number;
+    tp1: number | null;
+  },
+  exit: ExitResult,
   fallbackClose: number,
 ) {
   if (exit === "SL_HIT") {
@@ -119,11 +149,14 @@ async function withDbLock<T>(fn: () => Promise<T>): Promise<T> {
 
   try {
     await pool.query("SELECT pg_advisory_xact_lock(424242)");
+
     const result = await fn();
+
     await pool.query("COMMIT");
+
     return result;
-  } catch (e) {
+  } catch (err) {
     await pool.query("ROLLBACK");
-    throw e;
+    throw err;
   }
 }

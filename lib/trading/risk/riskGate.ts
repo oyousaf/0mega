@@ -18,9 +18,12 @@ const ACCOUNT_EQUITY = 10000;
 TYPES
 -------------------------------------------------- */
 
-type RiskResult = { allowed: true } | { allowed: false; reason: string };
+type RiskResult =
+  | { allowed: true }
+  | { allowed: false; reason: string };
 
 type Signal = {
+  symbol: string;
   sl: number;
 };
 
@@ -33,7 +36,7 @@ function safeNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function minutes(n: number): number {
+function minutes(n: number) {
   return n * 60 * 1000;
 }
 
@@ -41,142 +44,185 @@ function minutes(n: number): number {
 RISK GATE
 -------------------------------------------------- */
 
-export async function riskGate(signal: Signal): Promise<RiskResult> {
+export async function riskGate(
+  signal: Signal,
+): Promise<RiskResult> {
   try {
     if (!RISK_ENABLED) {
       return { allowed: true };
     }
 
-    /* -----------------------------------------
-       STOP LOSS VALIDATION
-    ------------------------------------------ */
-
-    const sl = safeNum(signal?.sl);
+    const sl = safeNum(signal.sl);
 
     if (!(sl > 0)) {
-      return { allowed: false, reason: "INVALID_SL" };
+      return {
+        allowed: false,
+        reason: "INVALID_SL",
+      };
     }
-
-    /* -----------------------------------------
-       FETCH RISK DATA
-    ------------------------------------------ */
 
     const { rows } = await pool.query(
       `
-      WITH today_closed AS (
+      WITH
+
+      /* -----------------------------------------
+         PER-SYMBOL CLOSED TRADES
+      ------------------------------------------ */
+
+      symbol_closed AS (
         SELECT
           id,
           closed_at,
           realised_pl
         FROM paper_trades
-        WHERE is_closed = true
+        WHERE
+          symbol = $2
+          AND is_closed = true
           AND closed_at IS NOT NULL
           AND realised_pl IS NOT NULL
           AND (closed_at AT TIME ZONE 'UTC')::date =
               (NOW() AT TIME ZONE 'UTC')::date
       ),
+
+      /* -----------------------------------------
+         GLOBAL OPENED TODAY
+      ------------------------------------------ */
+
       today_opened AS (
         SELECT id
         FROM paper_trades
-        WHERE (opened_at AT TIME ZONE 'UTC')::date =
+        WHERE
+          (opened_at AT TIME ZONE 'UTC')::date =
+          (NOW() AT TIME ZONE 'UTC')::date
+      ),
+
+      /* -----------------------------------------
+         GLOBAL CLOSED TODAY
+      ------------------------------------------ */
+
+      global_closed AS (
+        SELECT realised_pl
+        FROM paper_trades
+        WHERE
+          is_closed = true
+          AND realised_pl IS NOT NULL
+          AND closed_at IS NOT NULL
+          AND (closed_at AT TIME ZONE 'UTC')::date =
               (NOW() AT TIME ZONE 'UTC')::date
       )
+
       SELECT
+
         (
           SELECT MAX(closed_at)
-          FROM today_closed
-        ) AS last_closed_today,
+          FROM symbol_closed
+        ) AS last_closed_symbol,
 
         (
           SELECT COUNT(*)
           FROM today_opened
         ) AS trades_today,
 
-        COALESCE(
-          (
-            SELECT SUM(realised_pl)
-            FROM today_closed
-          ),
-          0
+        (
+          SELECT COALESCE(SUM(realised_pl),0)
+          FROM global_closed
         ) AS pnl_today,
 
         ARRAY(
           SELECT realised_pl
-          FROM today_closed
-          ORDER BY closed_at DESC, id DESC
+          FROM symbol_closed
+          ORDER BY closed_at DESC,id DESC
           LIMIT $1
-        ) AS last_results_today
+        ) AS last_results_symbol
       `,
-      [MAX_CONSECUTIVE_LOSSES],
+      [
+        MAX_CONSECUTIVE_LOSSES,
+        signal.symbol,
+      ],
     );
 
     const r = rows[0] ?? {};
 
-    const lastClosedToday = r.last_closed_today
-      ? new Date(r.last_closed_today).getTime()
+    const lastClosedSymbol = r.last_closed_symbol
+      ? new Date(r.last_closed_symbol).getTime()
       : null;
 
     const tradesToday = safeNum(r.trades_today);
+
     const dailyPnl = safeNum(r.pnl_today);
 
-    const lastResultsToday: number[] = Array.isArray(r.last_results_today)
-      ? r.last_results_today.map(safeNum)
-      : [];
+    const lastResults: number[] =
+      Array.isArray(r.last_results_symbol)
+        ? r.last_results_symbol.map(safeNum)
+        : [];
 
     /* -----------------------------------------
-       COOLDOWN
-       Applies only if there was a close today.
+       SYMBOL COOLDOWN
     ------------------------------------------ */
 
     if (
-      lastClosedToday &&
-      Number.isFinite(lastClosedToday) &&
-      Date.now() - lastClosedToday < minutes(COOLDOWN_MINUTES)
+      lastClosedSymbol &&
+      Date.now() - lastClosedSymbol <
+        minutes(COOLDOWN_MINUTES)
     ) {
-      return { allowed: false, reason: "COOLDOWN" };
+      return {
+        allowed: false,
+        reason: "COOLDOWN",
+      };
     }
 
     /* -----------------------------------------
-       DAILY TRADE LIMIT
+       GLOBAL TRADE LIMIT
     ------------------------------------------ */
 
     if (tradesToday >= MAX_TRADES_PER_DAY) {
-      return { allowed: false, reason: "MAX_TRADES_PER_DAY" };
+      return {
+        allowed: false,
+        reason: "MAX_TRADES_PER_DAY",
+      };
     }
 
     /* -----------------------------------------
-       CONSECUTIVE LOSSES
-       Day-scoped. Resets automatically at UTC midnight.
+       SYMBOL LOSS STREAK
     ------------------------------------------ */
 
     if (
-      lastResultsToday.length === MAX_CONSECUTIVE_LOSSES &&
-      lastResultsToday.every((pl) => pl < 0)
+      lastResults.length ===
+        MAX_CONSECUTIVE_LOSSES &&
+      lastResults.every((x) => x < 0)
     ) {
-      return { allowed: false, reason: "MAX_CONSECUTIVE_LOSSES" };
+      return {
+        allowed: false,
+        reason: "MAX_CONSECUTIVE_LOSSES",
+      };
     }
 
     /* -----------------------------------------
-       DAILY LOSS LIMIT
+       GLOBAL DAILY LOSS
     ------------------------------------------ */
 
-    const maxDailyLoss = ACCOUNT_EQUITY * MAX_DAILY_LOSS_PCT;
+    const maxDailyLoss =
+      ACCOUNT_EQUITY *
+      MAX_DAILY_LOSS_PCT;
 
-    if (dailyPnl < -maxDailyLoss) {
-      return { allowed: false, reason: "MAX_DAILY_LOSS" };
+    if (dailyPnl <= -maxDailyLoss) {
+      return {
+        allowed: false,
+        reason: "MAX_DAILY_LOSS",
+      };
     }
 
-    /* -----------------------------------------
-       PASS
-    ------------------------------------------ */
-
-    return { allowed: true };
+    return {
+      allowed: true,
+    };
   } catch (err: any) {
     console.error("[RISK_GATE_ERROR]", err);
 
     return {
       allowed: false,
-      reason: err?.message ?? "RISK_GATE_ERROR",
+      reason:
+        err?.message ??
+        "RISK_GATE_ERROR",
     };
   }
 }
