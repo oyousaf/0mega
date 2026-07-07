@@ -229,30 +229,21 @@ export async function executeTradeIntent(intent: {
 
     await pool.query(
       `
-      INSERT INTO trade_executions (
-        trade_id,
-        signal_id,
-        side,
-        qty,
-        price,
-        broker,
-        order_id,
-        status,
-        risk_amount,
-        error,
-        timestamp
-      )
-      VALUES ($1,$2,$3,$4,$5,'paper',$6,'FILLED',$7,NULL,NOW())
-      `,
-      [
-        tradeId,
-        intent.signalId,
-        intent.side,
-        qty,
-        entry,
-        res.orderId ?? null,
-        riskAmount,
-      ],
+  INSERT INTO trade_executions (
+    trade_id,
+    side,
+    qty,
+    price,
+    broker,
+    order_id,
+    status,
+    risk_amount,
+    error,
+    timestamp
+  )
+  VALUES ($1,$2,$3,$4,'paper',$5,'FILLED',$6,NULL,NOW())
+  `,
+      [tradeId, intent.side, qty, entry, res.orderId ?? null, riskAmount],
     );
 
     return { success: true, tradeId };
