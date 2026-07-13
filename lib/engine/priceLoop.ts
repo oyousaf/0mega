@@ -12,6 +12,10 @@ import {
   type SymbolConfig,
 } from "@/lib/trading/config/symbolConfig";
 
+import type { PoolClient } from "pg";
+
+let engineLockClient: PoolClient | null = null;
+
 /* ---------------------------------------
 ENGINE CONFIG
 ---------------------------------------- */
@@ -229,19 +233,39 @@ ENGINE LOCK
 ---------------------------------------- */
 
 async function acquireEngineLock() {
-  const { rows } = await pool.query(
-    `SELECT pg_try_advisory_lock($1) AS locked`,
-    [ENGINE.engineLockKey],
-  );
+  const client = await pool.connect();
 
-  return Boolean(rows[0]?.locked);
+  try {
+    const { rows } = await client.query(
+      `SELECT pg_try_advisory_lock($1) AS locked`,
+      [ENGINE.engineLockKey],
+    );
+
+    if (!rows[0]?.locked) {
+      client.release();
+      return false;
+    }
+
+    engineLockClient = client;
+    return true;
+  } catch (error) {
+    client.release();
+    throw error;
+  }
 }
 
 async function releaseEngineLock() {
+  const client = engineLockClient;
+  engineLockClient = null;
+
+  if (!client) return;
+
   try {
-    await pool.query(`SELECT pg_advisory_unlock($1)`, [ENGINE.engineLockKey]);
-  } catch (err) {
-    console.error("[ENGINE_UNLOCK_FAILED]", err);
+    await client.query(`SELECT pg_advisory_unlock($1)`, [ENGINE.engineLockKey]);
+  } catch (error) {
+    console.error("[ENGINE_UNLOCK_FAILED]", error);
+  } finally {
+    client.release();
   }
 }
 
@@ -269,23 +293,18 @@ TRADE STATE
 ---------------------------------------- */
 
 async function hasOpenTrade(symbol: string): Promise<boolean> {
-  try {
-    const { rows } = await pool.query(
-      `
-      SELECT 1
-      FROM paper_trades
-      WHERE symbol = $1
+  const { rows } = await pool.query(
+    `
+    SELECT 1
+    FROM paper_trades
+    WHERE symbol = $1
       AND is_closed = false
-      LIMIT 1
-      `,
-      [symbol],
-    );
+    LIMIT 1
+    `,
+    [symbol],
+  );
 
-    return rows.length > 0;
-  } catch (err) {
-    console.error("[OPEN_TRADE_CHECK_FAILED]", { symbol, err });
-    return false;
-  }
+  return rows.length > 0;
 }
 
 /* ---------------------------------------
@@ -416,6 +435,10 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
 
   const exited = await runExitWatcher(latest);
   if (exited) return;
+
+  if (openTrade) {
+    return;
+  }
 
   if (!ENGINE.testMode && spread !== null && spread > config.maxSpreadPips) {
     console.log("[SKIP] spread too wide", {

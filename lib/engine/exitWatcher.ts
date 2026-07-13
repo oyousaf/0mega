@@ -12,8 +12,10 @@ type OpenTradeRow = {
   tp1: number | null;
 };
 
+const EXIT_LOCK_KEY = 424242;
+
 export async function runExitWatcher(candle: Candle): Promise<boolean> {
-  const symbol = String((candle as any).symbol ?? "");
+  const symbol = String((candle as Candle & { symbol?: string }).symbol ?? "");
 
   if (!symbol) {
     console.warn("[EXIT] candle missing symbol");
@@ -32,7 +34,7 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
     return false;
   }
 
-  return withDbLock(async () => {
+  return withExitLock(async () => {
     const { rows } = await pool.query<OpenTradeRow>(
       `
       SELECT
@@ -42,11 +44,9 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
         sl,
         tp1
       FROM paper_trades
-      WHERE
-        symbol = $1
+      WHERE symbol = $1
         AND is_closed = false
       ORDER BY id ASC
-      FOR UPDATE
       `,
       [symbol],
     );
@@ -57,21 +57,18 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
 
     for (const trade of rows) {
       const exit = checkExit(trade, high, low);
-
       if (!exit) continue;
 
       const exitPrice = getExitPrice(trade, exit, close);
+      const result = await closeTrade(trade.id, exit, exitPrice);
 
-      const res = await closeTrade(Number(trade.id), exit, exitPrice);
-
-      if (!res.success) {
+      if (!result.success) {
         console.warn("[EXIT_FAILED]", {
           tradeId: trade.id,
           symbol,
           exit,
-          error: res.error,
+          error: result.error,
         });
-
         continue;
       }
 
@@ -83,7 +80,7 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
         high,
         low,
         sl: Number(trade.sl),
-        tp1: trade.tp1 != null ? Number(trade.tp1) : null,
+        tp1: trade.tp1 === null ? null : Number(trade.tp1),
       });
 
       closedAny = true;
@@ -94,69 +91,55 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
 }
 
 function checkExit(
-  trade: {
-    side: "BUY" | "SELL";
-    sl: number;
-    tp1: number | null;
-  },
+  trade: Pick<OpenTradeRow, "side" | "sl" | "tp1">,
   high: number,
   low: number,
 ): ExitResult {
   const sl = Number(trade.sl);
+  const tp1 = trade.tp1 === null ? null : Number(trade.tp1);
 
-  const tp1 = trade.tp1 != null ? Number(trade.tp1) : null;
+  if (!Number.isFinite(sl)) return null;
+  if (tp1 !== null && !Number.isFinite(tp1)) return null;
 
   if (trade.side === "BUY") {
+    // Conservative rule when both levels occur in one candle.
     if (low <= sl) return "SL_HIT";
-
-    if (tp1 !== null && high >= tp1) {
-      return "TP_HIT";
-    }
-  }
-
-  if (trade.side === "SELL") {
+    if (tp1 !== null && high >= tp1) return "TP_HIT";
+  } else {
     if (high >= sl) return "SL_HIT";
-
-    if (tp1 !== null && low <= tp1) {
-      return "TP_HIT";
-    }
+    if (tp1 !== null && low <= tp1) return "TP_HIT";
   }
 
   return null;
 }
 
 function getExitPrice(
-  trade: {
-    sl: number;
-    tp1: number | null;
-  },
-  exit: ExitResult,
+  trade: Pick<OpenTradeRow, "sl" | "tp1">,
+  exit: Exclude<ExitResult, null>,
   fallbackClose: number,
-) {
+): number {
   if (exit === "SL_HIT") {
     return Number(trade.sl);
   }
 
-  if (exit === "TP_HIT" && trade.tp1 != null) {
+  if (trade.tp1 !== null) {
     return Number(trade.tp1);
   }
 
   return fallbackClose;
 }
 
-async function withDbLock<T>(fn: () => Promise<T>): Promise<T> {
-  await pool.query("BEGIN");
+async function withExitLock<T>(fn: () => Promise<T>): Promise<T> {
+  const client = await pool.connect();
 
   try {
-    await pool.query("SELECT pg_advisory_xact_lock(424242)");
-
-    const result = await fn();
-
-    await pool.query("COMMIT");
-
-    return result;
-  } catch (err) {
-    await pool.query("ROLLBACK");
-    throw err;
+    await client.query("SELECT pg_advisory_lock($1)", [EXIT_LOCK_KEY]);
+    return await fn();
+  } finally {
+    try {
+      await client.query("SELECT pg_advisory_unlock($1)", [EXIT_LOCK_KEY]);
+    } finally {
+      client.release();
+    }
   }
 }

@@ -1,7 +1,7 @@
 import type { Candle } from "@/types/trade";
 
 /* -------------------------------------------------
-STRUCTURE TYPES
+TYPES
 -------------------------------------------------- */
 
 type StructureInput = {
@@ -16,6 +16,17 @@ type StructureSignal = {
   sl: number;
   tp1: number;
   reason: string;
+};
+
+type SwingPoint = {
+  index: number;
+  price: number;
+  type: "HIGH" | "LOW";
+};
+
+type SetupCandidate = {
+  signal: StructureSignal;
+  breakIndex: number;
 };
 
 /* -------------------------------------------------
@@ -41,184 +52,501 @@ const MIN_CLOSE_STRENGTH = 0.6;
 const MAX_RETEST_CANDLES = 12;
 
 /* -------------------------------------------------
-UTILS
+NUMERIC HELPERS
 -------------------------------------------------- */
 
-function safeNum(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+function safeNum(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function bodySize(c: Candle) {
-  const open = safeNum(c.open);
-  const close = safeNum(c.close);
-  if (open === null || close === null) return null;
-  return Math.abs(close - open);
+function candleValues(candle: Candle) {
+  const open = safeNum(candle.open);
+  const high = safeNum(candle.high);
+  const low = safeNum(candle.low);
+  const close = safeNum(candle.close);
+
+  if (open === null || high === null || low === null || close === null) {
+    return null;
+  }
+
+  if (high < low) {
+    return null;
+  }
+
+  return {
+    open,
+    high,
+    low,
+    close,
+  };
 }
 
-function candleRange(c: Candle) {
-  const high = safeNum(c.high);
-  const low = safeNum(c.low);
-  if (high === null || low === null) return null;
-  return Math.max(0, high - low);
-}
+/* -------------------------------------------------
+ATR
+-------------------------------------------------- */
 
-function calculateATR(candles: Candle[], period: number) {
-  if (candles.length < period + 1) return null;
+function calculateATR(candles: Candle[], period: number): number | null {
+  if (candles.length < period + 1) {
+    return null;
+  }
 
-  const trs: number[] = [];
+  const trueRanges: number[] = [];
 
   for (let i = candles.length - period; i < candles.length; i++) {
-    const c = candles[i];
-    const prev = candles[i - 1];
+    const current = candleValues(candles[i]);
+    const previousClose = safeNum(candles[i - 1]?.close);
 
-    const high = safeNum(c.high);
-    const low = safeNum(c.low);
-    const prevClose = safeNum(prev.close);
+    if (!current || previousClose === null) {
+      return null;
+    }
 
-    if (high === null || low === null || prevClose === null) return null;
-
-    trs.push(
+    trueRanges.push(
       Math.max(
-        high - low,
-        Math.abs(high - prevClose),
-        Math.abs(low - prevClose),
+        current.high - current.low,
+        Math.abs(current.high - previousClose),
+        Math.abs(current.low - previousClose),
       ),
     );
   }
 
-  return trs.reduce((a, b) => a + b, 0) / trs.length;
+  if (!trueRanges.length) {
+    return null;
+  }
+
+  return trueRanges.reduce((sum, value) => sum + value, 0) / trueRanges.length;
 }
 
-type SwingPoint = {
-  index: number;
-  price: number;
-  type: "HIGH" | "LOW";
-};
+/* -------------------------------------------------
+SWINGS
+-------------------------------------------------- */
 
-function findSwings(candles: Candle[]) {
+function findSwings(candles: Candle[]): SwingPoint[] {
   const swings: SwingPoint[] = [];
 
   for (let i = SWING_LEFT; i < candles.length - SWING_RIGHT; i++) {
-    const high = safeNum(candles[i].high);
-    const low = safeNum(candles[i].low);
+    const current = candleValues(candles[i]);
 
-    if (high === null || low === null) continue;
+    if (!current) {
+      continue;
+    }
 
     let isSwingHigh = true;
     let isSwingLow = true;
 
     for (let j = i - SWING_LEFT; j <= i + SWING_RIGHT; j++) {
-      if (j === i) continue;
+      if (j === i) {
+        continue;
+      }
 
-      const otherHigh = safeNum(candles[j].high);
-      const otherLow = safeNum(candles[j].low);
+      const comparison = candleValues(candles[j]);
 
-      if (otherHigh === null || otherLow === null) {
+      if (!comparison) {
         isSwingHigh = false;
         isSwingLow = false;
         break;
       }
 
-      if (otherHigh >= high) isSwingHigh = false;
-      if (otherLow <= low) isSwingLow = false;
+      if (comparison.high >= current.high) {
+        isSwingHigh = false;
+      }
+
+      if (comparison.low <= current.low) {
+        isSwingLow = false;
+      }
     }
 
     if (isSwingHigh) {
-      swings.push({ index: i, price: high, type: "HIGH" });
+      swings.push({
+        index: i,
+        price: current.high,
+        type: "HIGH",
+      });
     }
 
     if (isSwingLow) {
-      swings.push({ index: i, price: low, type: "LOW" });
+      swings.push({
+        index: i,
+        price: current.low,
+        type: "LOW",
+      });
     }
   }
 
   return swings;
 }
 
-function strongBullishConfirmation(c: Candle) {
-  const open = safeNum(c.open);
-  const close = safeNum(c.close);
-  const high = safeNum(c.high);
-  const low = safeNum(c.low);
+/* -------------------------------------------------
+CONFIRMATION CANDLES
+-------------------------------------------------- */
 
-  if (open === null || close === null || high === null || low === null) {
+function strongBullishConfirmation(candle: Candle): boolean {
+  const values = candleValues(candle);
+
+  if (!values) {
     return false;
   }
 
-  const range = high - low;
-  if (!(range > 0)) return false;
+  const range = values.high - values.low;
 
-  const body = Math.abs(close - open);
-  const closeStrength = (close - low) / range;
+  if (!(range > 0)) {
+    return false;
+  }
+
+  const body = Math.abs(values.close - values.open);
+  const bodyRatio = body / range;
+  const closeStrength = (values.close - values.low) / range;
 
   return (
-    close > open &&
-    body / range >= MIN_BODY_RATIO &&
+    values.close > values.open &&
+    bodyRatio >= MIN_BODY_RATIO &&
     closeStrength >= MIN_CLOSE_STRENGTH
   );
 }
 
-function strongBearishConfirmation(c: Candle) {
-  const open = safeNum(c.open);
-  const close = safeNum(c.close);
-  const high = safeNum(c.high);
-  const low = safeNum(c.low);
+function strongBearishConfirmation(candle: Candle): boolean {
+  const values = candleValues(candle);
 
-  if (open === null || close === null || high === null || low === null) {
+  if (!values) {
     return false;
   }
 
-  const range = high - low;
-  if (!(range > 0)) return false;
+  const range = values.high - values.low;
 
-  const body = Math.abs(close - open);
-  const closeStrength = (high - close) / range;
+  if (!(range > 0)) {
+    return false;
+  }
+
+  const body = Math.abs(values.close - values.open);
+  const bodyRatio = body / range;
+  const closeStrength = (values.high - values.close) / range;
 
   return (
-    close < open &&
-    body / range >= MIN_BODY_RATIO &&
+    values.close < values.open &&
+    bodyRatio >= MIN_BODY_RATIO &&
     closeStrength >= MIN_CLOSE_STRENGTH
   );
 }
 
-function touchedLevel(c: Candle, level: number, buffer: number) {
-  const high = safeNum(c.high);
-  const low = safeNum(c.low);
+/* -------------------------------------------------
+BREAK DETECTION
+The current candle is reserved for confirmation,
+so breaks are searched only up to currentIndex - 1.
+-------------------------------------------------- */
 
-  if (high === null || low === null) return false;
+function findBullishBreakIndex(
+  candles: Candle[],
+  swing: SwingPoint,
+  breakBuffer: number,
+): number | null {
+  const finalBreakIndex = candles.length - 2;
 
-  return low <= level + buffer && high >= level - buffer;
+  for (let i = finalBreakIndex; i > swing.index; i--) {
+    const close = safeNum(candles[i]?.close);
+
+    if (close !== null && close > swing.price + breakBuffer) {
+      return i;
+    }
+  }
+
+  return null;
 }
 
-function findRecentRetest(
+function findBearishBreakIndex(
+  candles: Candle[],
+  swing: SwingPoint,
+  breakBuffer: number,
+): number | null {
+  const finalBreakIndex = candles.length - 2;
+
+  for (let i = finalBreakIndex; i > swing.index; i--) {
+    const close = safeNum(candles[i]?.close);
+
+    if (close !== null && close < swing.price - breakBuffer) {
+      return i;
+    }
+  }
+
+  return null;
+}
+
+/* -------------------------------------------------
+RETEST DETECTION
+Retests begin strictly after the break candle.
+-------------------------------------------------- */
+
+function findBullishRetestIndex(
   candles: Candle[],
   level: number,
   breakIndex: number,
   atr: number,
-) {
-  const start = Math.max(breakIndex + 1, candles.length - MAX_RETEST_CANDLES);
+): number | null {
+  const currentIndex = candles.length - 1;
+  const earliestAllowed = Math.max(
+    breakIndex + 1,
+    currentIndex - MAX_RETEST_CANDLES + 1,
+  );
+
   const buffer = atr * RETEST_BUFFER_ATR;
 
-  for (let i = start; i < candles.length; i++) {
-    if (touchedLevel(candles[i], level, buffer)) {
-      return true;
+  for (let i = earliestAllowed; i <= currentIndex; i++) {
+    const values = candleValues(candles[i]);
+
+    if (!values) {
+      continue;
+    }
+
+    const touched =
+      values.low <= level + buffer && values.high >= level - buffer;
+
+    const heldLevel = values.close >= level - buffer;
+
+    if (touched && heldLevel) {
+      return i;
     }
   }
 
-  return false;
+  return null;
 }
 
-function riskValid(entry: number, sl: number) {
-  const risk = Math.abs(entry - sl);
-  if (!(risk > 0)) return false;
+function findBearishRetestIndex(
+  candles: Candle[],
+  level: number,
+  breakIndex: number,
+  atr: number,
+): number | null {
+  const currentIndex = candles.length - 1;
+  const earliestAllowed = Math.max(
+    breakIndex + 1,
+    currentIndex - MAX_RETEST_CANDLES + 1,
+  );
 
-  const riskPct = risk / entry;
+  const buffer = atr * RETEST_BUFFER_ATR;
+
+  for (let i = earliestAllowed; i <= currentIndex; i++) {
+    const values = candleValues(candles[i]);
+
+    if (!values) {
+      continue;
+    }
+
+    const touched =
+      values.high >= level - buffer && values.low <= level + buffer;
+
+    const heldLevel = values.close <= level + buffer;
+
+    if (touched && heldLevel) {
+      return i;
+    }
+  }
+
+  return null;
+}
+
+/* -------------------------------------------------
+STRUCTURAL STOP HELPERS
+-------------------------------------------------- */
+
+function lowestLow(
+  candles: Candle[],
+  fromIndex: number,
+  toIndex: number,
+): number | null {
+  let lowest: number | null = null;
+
+  for (let i = fromIndex; i <= toIndex; i++) {
+    const low = safeNum(candles[i]?.low);
+
+    if (low === null) {
+      continue;
+    }
+
+    lowest = lowest === null ? low : Math.min(lowest, low);
+  }
+
+  return lowest;
+}
+
+function highestHigh(
+  candles: Candle[],
+  fromIndex: number,
+  toIndex: number,
+): number | null {
+  let highest: number | null = null;
+
+  for (let i = fromIndex; i <= toIndex; i++) {
+    const high = safeNum(candles[i]?.high);
+
+    if (high === null) {
+      continue;
+    }
+
+    highest = highest === null ? high : Math.max(highest, high);
+  }
+
+  return highest;
+}
+
+function riskValid(entry: number, stop: number): boolean {
+  const riskDistance = Math.abs(entry - stop);
+
+  if (!(riskDistance > 0)) {
+    return false;
+  }
+
+  const riskPct = riskDistance / entry;
+
   return riskPct >= MIN_RISK_PCT && riskPct <= MAX_RISK_PCT;
 }
 
-function latestOf(swings: SwingPoint[], type: "HIGH" | "LOW") {
-  return [...swings].reverse().find((s) => s.type === type) ?? null;
+/* -------------------------------------------------
+BUY SETUP
+-------------------------------------------------- */
+
+function findBuySetup(params: {
+  symbol: string;
+  candles: Candle[];
+  swings: SwingPoint[];
+  atr: number;
+  breakBuffer: number;
+  slBuffer: number;
+}): SetupCandidate | null {
+  const { symbol, candles, swings, atr, breakBuffer, slBuffer } = params;
+
+  const currentIndex = candles.length - 1;
+  const current = candleValues(candles[currentIndex]);
+
+  if (!current || !strongBullishConfirmation(candles[currentIndex])) {
+    return null;
+  }
+
+  const swingHighs = swings.filter((swing) => swing.type === "HIGH").reverse();
+
+  for (const swingHigh of swingHighs) {
+    const breakIndex = findBullishBreakIndex(candles, swingHigh, breakBuffer);
+
+    if (breakIndex === null) {
+      continue;
+    }
+
+    const retestIndex = findBullishRetestIndex(
+      candles,
+      swingHigh.price,
+      breakIndex,
+      atr,
+    );
+
+    if (retestIndex === null) {
+      continue;
+    }
+
+    /*
+    Current confirmation must close back above the
+    broken structure level.
+    */
+    if (current.close <= swingHigh.price) {
+      continue;
+    }
+
+    const structuralLow = lowestLow(candles, breakIndex + 1, currentIndex);
+
+    if (structuralLow === null) {
+      continue;
+    }
+
+    const stop = structuralLow - slBuffer;
+
+    if (!riskValid(current.close, stop)) {
+      continue;
+    }
+
+    return {
+      breakIndex,
+
+      signal: {
+        symbol,
+        direction: "BUY",
+        sl: stop,
+        tp1: current.close + Math.abs(current.close - stop),
+        reason: "BOS_RETEST_BUY",
+      },
+    };
+  }
+
+  return null;
+}
+
+/* -------------------------------------------------
+SELL SETUP
+-------------------------------------------------- */
+
+function findSellSetup(params: {
+  symbol: string;
+  candles: Candle[];
+  swings: SwingPoint[];
+  atr: number;
+  breakBuffer: number;
+  slBuffer: number;
+}): SetupCandidate | null {
+  const { symbol, candles, swings, atr, breakBuffer, slBuffer } = params;
+
+  const currentIndex = candles.length - 1;
+  const current = candleValues(candles[currentIndex]);
+
+  if (!current || !strongBearishConfirmation(candles[currentIndex])) {
+    return null;
+  }
+
+  const swingLows = swings.filter((swing) => swing.type === "LOW").reverse();
+
+  for (const swingLow of swingLows) {
+    const breakIndex = findBearishBreakIndex(candles, swingLow, breakBuffer);
+
+    if (breakIndex === null) {
+      continue;
+    }
+
+    const retestIndex = findBearishRetestIndex(
+      candles,
+      swingLow.price,
+      breakIndex,
+      atr,
+    );
+
+    if (retestIndex === null) {
+      continue;
+    }
+
+    if (current.close >= swingLow.price) {
+      continue;
+    }
+
+    const structuralHigh = highestHigh(candles, breakIndex + 1, currentIndex);
+
+    if (structuralHigh === null) {
+      continue;
+    }
+
+    const stop = structuralHigh + slBuffer;
+
+    if (!riskValid(current.close, stop)) {
+      continue;
+    }
+
+    return {
+      breakIndex,
+
+      signal: {
+        symbol,
+        direction: "SELL",
+        sl: stop,
+        tp1: current.close - Math.abs(stop - current.close),
+        reason: "BOS_RETEST_SELL",
+      },
+    };
+  }
+
+  return null;
 }
 
 /* -------------------------------------------------
@@ -235,81 +563,49 @@ export function runStructureCheck(
   }
 
   const recent = candles.slice(-STRUCTURE_LOOKBACK);
-  const last = recent[recent.length - 1];
-
-  const lastClose = safeNum(last.close);
-  if (lastClose === null) return null;
 
   const atr = calculateATR(recent, ATR_PERIOD);
-  if (atr === null || !(atr > 0)) return null;
+
+  if (atr === null || !(atr > 0)) {
+    return null;
+  }
 
   const swings = findSwings(recent);
 
-  const lastSwingHigh = latestOf(swings, "HIGH");
-  const lastSwingLow = latestOf(swings, "LOW");
-
-  if (!lastSwingHigh || !lastSwingLow) return null;
+  if (!swings.length) {
+    return null;
+  }
 
   const breakBuffer = atr * BREAK_BUFFER_ATR;
   const slBuffer = atr * SL_BUFFER_ATR;
 
-  /* -------------------------------------------------
-  BUY: break previous swing high, retest, strong close
-  -------------------------------------------------- */
+  const buySetup = findBuySetup({
+    symbol,
+    candles: recent,
+    swings,
+    atr,
+    breakBuffer,
+    slBuffer,
+  });
 
-  const brokeHigh = lastClose > lastSwingHigh.price + breakBuffer;
+  const sellSetup = findSellSetup({
+    symbol,
+    candles: recent,
+    swings,
+    atr,
+    breakBuffer,
+    slBuffer,
+  });
 
-  if (brokeHigh && strongBullishConfirmation(last)) {
-    const retested = findRecentRetest(
-      recent,
-      lastSwingHigh.price,
-      lastSwingHigh.index,
-      atr,
-    );
-
-    if (retested) {
-      const sl = lastSwingLow.price - slBuffer;
-
-      if (riskValid(lastClose, sl)) {
-        return {
-          symbol,
-          direction: "BUY",
-          sl,
-          tp1: lastClose + Math.abs(lastClose - sl),
-          reason: "BOS_RETEST_BUY",
-        };
-      }
-    }
+  if (buySetup && sellSetup) {
+    /*
+    If both appear valid, use whichever structure
+    break happened more recently.
+    */
+    return buySetup.breakIndex >= sellSetup.breakIndex
+      ? buySetup.signal
+      : sellSetup.signal;
   }
 
-  /* -------------------------------------------------
-  SELL: break previous swing low, retest, strong close
-  -------------------------------------------------- */
-
-  const brokeLow = lastClose < lastSwingLow.price - breakBuffer;
-
-  if (brokeLow && strongBearishConfirmation(last)) {
-    const retested = findRecentRetest(
-      recent,
-      lastSwingLow.price,
-      lastSwingLow.index,
-      atr,
-    );
-
-    if (retested) {
-      const sl = lastSwingHigh.price + slBuffer;
-
-      if (riskValid(lastClose, sl)) {
-        return {
-          symbol,
-          direction: "SELL",
-          sl,
-          tp1: lastClose - Math.abs(sl - lastClose),
-          reason: "BOS_RETEST_SELL",
-        };
-      }
-    }
-  }
-
-  return null;
+  return buySetup?.signal ?? sellSetup?.signal ?? null;
 }

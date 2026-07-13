@@ -4,54 +4,77 @@ import type { OrderSide } from "@/providers/execution/broker.interface";
 import { getSymbolConfig } from "@/lib/trading/config/symbolConfig";
 
 /* -------------------------------------------------
-   TYPES
+TYPES
 -------------------------------------------------- */
 
 export type OpenResult =
-  | { success: true; tradeId: number }
-  | { success: false; error: string };
+  | {
+      success: true;
+      tradeId: number;
+    }
+  | {
+      success: false;
+      error: string;
+    };
 
-export type CloseResult = { success: true } | { success: false; error: string };
+export type CloseResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      error: string;
+    };
 
 /* -------------------------------------------------
-   HELPERS
+HELPERS
 -------------------------------------------------- */
 
 function reverseSide(side: OrderSide): OrderSide {
   return side === "BUY" ? "SELL" : "BUY";
 }
 
-function assertFinite(n: unknown, err: string): number {
-  const v = Number(n);
-  if (!Number.isFinite(v)) throw new Error(err);
-  return v;
+function assertFinite(value: unknown, errorMessage: string): number {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(errorMessage);
+  }
+
+  return parsed;
 }
 
-function assertPositive(n: number, err: string) {
-  if (!(n > 0)) throw new Error(err);
+function assertPositive(value: number, errorMessage: string): void {
+  if (!(value > 0)) {
+    throw new Error(errorMessage);
+  }
 }
 
-function cleanZero(n: number) {
-  return Math.abs(n) < 0.0000001 ? 0 : n;
+function cleanZero(value: number): number {
+  return Math.abs(value) < 0.0000001 ? 0 : value;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function validateLevelDistance(params: {
   entry: number;
   level: number;
   label: "SL" | "TP1";
-}) {
+}): void {
   const { entry, level, label } = params;
 
   assertPositive(entry, "ENTRY_NON_POSITIVE");
   assertPositive(level, `${label}_NON_POSITIVE`);
 
-  const dist = Math.abs(entry - level);
+  const distance = Math.abs(entry - level);
 
-  if (dist < entry * 0.00003) {
+  if (distance < entry * 0.00003) {
     throw new Error(`${label}_TOO_CLOSE`);
   }
 
-  if (dist > entry * 0.5) {
+  if (distance > entry * 0.5) {
     throw new Error(`${label}_TOO_FAR`);
   }
 }
@@ -61,23 +84,29 @@ function validateTradeGeometry(params: {
   entry: number;
   sl: number;
   tp1: number | null;
-}) {
+}): void {
   const { side, entry, sl, tp1 } = params;
 
-  const geometryOk =
+  const valid =
     side === "BUY"
-      ? sl < entry && (tp1 ?? Infinity) > entry
-      : sl > entry && (tp1 ?? -Infinity) < entry;
+      ? sl < entry && (tp1 === null || tp1 > entry)
+      : sl > entry && (tp1 === null || tp1 < entry);
 
-  if (!geometryOk) {
+  if (!valid) {
     throw new Error(
-      `INVALID_GEOMETRY entry=${entry} sl=${sl} tp1=${tp1 ?? "null"} side=${side}`,
+      [
+        "INVALID_GEOMETRY",
+        `entry=${entry}`,
+        `sl=${sl}`,
+        `tp1=${tp1 ?? "null"}`,
+        `side=${side}`,
+      ].join(" "),
     );
   }
 }
 
 /* -------------------------------------------------
-   SYMBOL-AWARE RISK MODEL
+SYMBOL-AWARE RISK
 -------------------------------------------------- */
 
 function calculateRiskAmount(params: {
@@ -85,7 +114,7 @@ function calculateRiskAmount(params: {
   entry: number;
   sl: number;
   qtyLots: number;
-}) {
+}): number {
   const config = getSymbolConfig(params.symbol);
 
   if (!config) {
@@ -98,7 +127,7 @@ function calculateRiskAmount(params: {
 }
 
 /* -------------------------------------------------
-   SYMBOL-AWARE REALISED PNL
+SYMBOL-AWARE PNL
 -------------------------------------------------- */
 
 function calculateRealisedPl(params: {
@@ -107,7 +136,7 @@ function calculateRealisedPl(params: {
   entry: number;
   exit: number;
   qty: number;
-}) {
+}): number {
   const config = getSymbolConfig(params.symbol);
 
   if (!config) {
@@ -121,13 +150,11 @@ function calculateRealisedPl(params: {
 
   const pipMove = priceMove / config.pipSize;
 
-  const pnl = pipMove * (params.qty * config.pipValuePerLot);
-
-  return cleanZero(pnl);
+  return cleanZero(pipMove * params.qty * config.pipValuePerLot);
 }
 
 /* -------------------------------------------------
-   OPEN TRADE
+OPEN TRADE
 -------------------------------------------------- */
 
 export async function executeTradeIntent(intent: {
@@ -151,20 +178,34 @@ export async function executeTradeIntent(intent: {
 
     const qty = assertFinite(intent.qty, "INVALID_QTY");
 
-    if (qty <= 0) {
-      return { success: false, error: "INVALID_QTY" };
+    if (!(qty > 0)) {
+      return {
+        success: false,
+        error: "INVALID_QTY",
+      };
     }
 
     const entry = assertFinite(intent.entryPrice, "INVALID_ENTRY");
+
     const sl = assertFinite(intent.rawSl, "INVALID_SL");
 
     const tp1 =
-      intent.rawTp1 != null ? assertFinite(intent.rawTp1, "INVALID_TP") : null;
+      intent.rawTp1 === null || intent.rawTp1 === undefined
+        ? null
+        : assertFinite(intent.rawTp1, "INVALID_TP");
 
-    validateLevelDistance({ entry, level: sl, label: "SL" });
+    validateLevelDistance({
+      entry,
+      level: sl,
+      label: "SL",
+    });
 
-    if (tp1 != null) {
-      validateLevelDistance({ entry, level: tp1, label: "TP1" });
+    if (tp1 !== null) {
+      validateLevelDistance({
+        entry,
+        level: tp1,
+        label: "TP1",
+      });
     }
 
     validateTradeGeometry({
@@ -175,12 +216,17 @@ export async function executeTradeIntent(intent: {
     });
 
     const broker = getBroker();
-    const res = await broker.placeOrder(intent.symbol, qty, intent.side);
 
-    if (!res.success) {
+    const brokerResult = await broker.placeOrder(
+      intent.symbol,
+      qty,
+      intent.side,
+    );
+
+    if (!brokerResult.success) {
       return {
         success: false,
-        error: res.error ?? "ORDER_FAILED",
+        error: brokerResult.error ?? "ORDER_FAILED",
       };
     }
 
@@ -192,71 +238,106 @@ export async function executeTradeIntent(intent: {
     });
 
     const rr =
-      tp1 != null ? Math.abs(tp1 - entry) / Math.abs(entry - sl) : null;
+      tp1 === null ? null : Math.abs(tp1 - entry) / Math.abs(entry - sl);
 
-    const { rows } = await pool.query(
-      `
-      INSERT INTO paper_trades (
-        signal_id,
-        symbol,
-        side,
-        entry_price,
-        qty,
-        sl,
-        tp1,
-        rr,
-        risk_amount,
-        is_closed,
-        realised_pl
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,false,NULL)
-      RETURNING id
-      `,
-      [
-        intent.signalId,
-        intent.symbol,
-        intent.side,
-        entry,
-        qty,
-        sl,
-        tp1,
-        rr,
-        riskAmount,
-      ],
-    );
+    const client = await pool.connect();
 
-    const tradeId = assertFinite(rows[0]?.id, "TRADE_ID_MISSING");
+    try {
+      await client.query("BEGIN");
 
-    await pool.query(
-      `
-  INSERT INTO trade_executions (
-    trade_id,
-    side,
-    qty,
-    price,
-    broker,
-    order_id,
-    status,
-    risk_amount,
-    error,
-    timestamp
-  )
-  VALUES ($1,$2,$3,$4,'paper',$5,'FILLED',$6,NULL,NOW())
-  `,
-      [tradeId, intent.side, qty, entry, res.orderId ?? null, riskAmount],
-    );
+      const { rows } = await client.query(
+        `
+        INSERT INTO paper_trades (
+          signal_id,
+          symbol,
+          side,
+          entry_price,
+          qty,
+          sl,
+          tp1,
+          rr,
+          risk_amount,
+          is_closed,
+          realised_pl
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,
+          false,
+          NULL
+        )
+        RETURNING id
+        `,
+        [
+          intent.signalId,
+          intent.symbol,
+          intent.side,
+          entry,
+          qty,
+          sl,
+          tp1,
+          rr,
+          riskAmount,
+        ],
+      );
 
-    return { success: true, tradeId };
-  } catch (err: any) {
+      const tradeId = assertFinite(rows[0]?.id, "TRADE_ID_MISSING");
+
+      await client.query(
+        `
+        INSERT INTO trade_executions (
+          trade_id,
+          side,
+          qty,
+          price,
+          broker,
+          order_id,
+          status,
+          risk_amount,
+          error,
+          timestamp
+        )
+        VALUES (
+          $1,$2,$3,$4,
+          'paper',
+          $5,
+          'FILLED',
+          $6,
+          NULL,
+          NOW()
+        )
+        `,
+        [
+          tradeId,
+          intent.side,
+          qty,
+          entry,
+          brokerResult.orderId ?? null,
+          riskAmount,
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        success: true,
+        tradeId,
+      };
+    } catch (error: unknown) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error: unknown) {
     return {
       success: false,
-      error: err.message ?? "OPEN_FAILED",
+      error: getErrorMessage(error, "OPEN_FAILED"),
     };
   }
 }
 
 /* -------------------------------------------------
-   CLOSE TRADE
+CLOSE TRADE
 -------------------------------------------------- */
 
 export async function closeTrade(
@@ -268,6 +349,7 @@ export async function closeTrade(
 
   try {
     const id = assertFinite(tradeId, "INVALID_TRADE_ID");
+
     const exit = assertFinite(exitPrice, "INVALID_EXIT_PRICE");
 
     await client.query("BEGIN");
@@ -283,7 +365,7 @@ export async function closeTrade(
         risk_amount
       FROM paper_trades
       WHERE id = $1
-      AND is_closed = false
+        AND is_closed = false
       FOR UPDATE
       `,
       [id],
@@ -291,6 +373,7 @@ export async function closeTrade(
 
     if (!rows.length) {
       await client.query("ROLLBACK");
+
       return {
         success: false,
         error: "TRADE_ALREADY_CLOSED",
@@ -300,18 +383,22 @@ export async function closeTrade(
     const trade = rows[0];
 
     const symbol = String(trade.symbol);
+
+    const side = String(trade.side) as OrderSide;
+
     const qty = assertFinite(trade.qty, "INVALID_QTY");
+
     const entry = assertFinite(trade.entry_price, "INVALID_ENTRY_PRICE");
 
-    const realised = calculateRealisedPl({
+    const realisedPl = calculateRealisedPl({
       symbol,
-      side: trade.side,
+      side,
       entry,
       exit,
       qty,
     });
 
-    const updateRes = await client.query(
+    const updateResult = await client.query(
       `
       UPDATE paper_trades
       SET
@@ -321,13 +408,14 @@ export async function closeTrade(
         exit_reason = $3,
         closed_at = NOW()
       WHERE id = $4
-      AND is_closed = false
+        AND is_closed = false
       `,
-      [realised, exit, reason, id],
+      [realisedPl, exit, reason, id],
     );
 
-    if (updateRes.rowCount !== 1) {
+    if (updateResult.rowCount !== 1) {
       await client.query("ROLLBACK");
+
       return {
         success: false,
         error: "CLOSE_UPDATE_FAILED",
@@ -347,20 +435,36 @@ export async function closeTrade(
         risk_amount,
         timestamp
       )
-      VALUES ($1,NULL,$2,$3,$4,'paper','FILLED',$5,NOW())
+      VALUES (
+        $1,
+        NULL,
+        $2,
+        $3,
+        $4,
+        'paper',
+        'FILLED',
+        $5,
+        NOW()
+      )
       `,
-      [id, reverseSide(trade.side), qty, exit, trade.risk_amount],
+      [id, reverseSide(side), qty, exit, trade.risk_amount],
     );
 
     await client.query("COMMIT");
 
-    return { success: true };
-  } catch (err: any) {
-    await client.query("ROLLBACK");
+    return {
+      success: true,
+    };
+  } catch (error: unknown) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      console.error("[CLOSE_ROLLBACK_FAILED]", rollbackError);
+    }
 
     return {
       success: false,
-      error: err.message ?? "CLOSE_FAILED",
+      error: getErrorMessage(error, "CLOSE_FAILED"),
     };
   } finally {
     client.release();

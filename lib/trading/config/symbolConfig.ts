@@ -132,7 +132,7 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
   },
 };
 
-export const ACTIVE_SYMBOLS: TradeSymbol[] = ["EURUSD", "GBPUSD", "XAUUSD"];
+export const ACTIVE_SYMBOLS: TradeSymbol[] = ["EURUSD"];
 
 export function getSymbolConfig(symbol: string): SymbolConfig | null {
   return SYMBOL_CONFIG[symbol as TradeSymbol] ?? null;
