@@ -2,16 +2,16 @@
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
-
 export async function sendEmail(subject: string, body: string) {
-  if (!process.env.RESEND_API_KEY) return;
-  if (!process.env.NOTIFY_EMAIL_TO) return;
+  const apiKey = process.env.RESEND_API_KEY;
+  const recipient = process.env.NOTIFY_EMAIL_TO;
+  if (!apiKey || !recipient) return;
 
   try {
+    const resend = new Resend(apiKey);
     await resend.emails.send({
       from: "Omega <omega@legxcysol.dev>",
-      to: process.env.NOTIFY_EMAIL_TO,
+      to: recipient,
       subject,
       html: `<p>${body}</p>`,
     });
