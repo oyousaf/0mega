@@ -56,6 +56,8 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
 
   return (
     <div
+      role="img"
+      aria-label="Portfolio drawdown percentage over time"
       style={{
         width: "100%",
         height: "100%",
@@ -73,7 +75,12 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
       </div>
 
       <div ref={ref} style={{ flex: 1, padding: "0 0.75rem 0.75rem" }}>
-        {size.width > 0 && size.height > 0 && (
+        {safeData.length === 0 && (
+          <div className="flex h-full items-center justify-center text-sm text-omega-gold opacity-60">
+            No closed-trade data yet
+          </div>
+        )}
+        {safeData.length > 0 && size.width > 0 && size.height > 0 && (
           <AreaChart width={size.width} height={size.height} data={safeData}>
             <CartesianGrid stroke={omega.grid} horizontal vertical={false} />
 
@@ -86,13 +93,13 @@ export default function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
               tickLine={false}
               domain={[maxDD, 0]}
               width={40}
-              tickFormatter={(v: any) =>
+              tickFormatter={(v: unknown) =>
                 Number.isFinite(v) ? `${Math.abs(Number(v))}%` : "—"
               }
             />
 
             <Tooltip
-              formatter={(v: any) =>
+              formatter={(v: unknown) =>
                 Number.isFinite(v) ? `${Math.abs(Number(v)).toFixed(2)}%` : "—"
               }
               contentStyle={{

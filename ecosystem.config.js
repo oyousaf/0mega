@@ -8,17 +8,9 @@ module.exports = {
       post_update: ["npm install", "npm run build"],
       env: {
         NODE_ENV: "production",
+        DATABASE_SSL: "false",
+        OMEGA_ENGINE_ENABLED: "true",
       },
-    },
-
-    {
-      name: "omega-boot",
-      cwd: "/apps/0mega",
-      script: "bash",
-      args: "-c 'sleep 5 && curl -s http://localhost:3000/api/engine/boot'",
-
-      autorestart: false,
-      watch: false,
     },
   ],
 };

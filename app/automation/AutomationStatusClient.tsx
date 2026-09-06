@@ -37,22 +37,23 @@ export default function AutomationStatusClient() {
     setStatus(json);
   }
 
-  async function runTestTick() {
+  async function refreshStatus() {
     setLoading(true);
     try {
-      const res = await fetch("/api/automation/tick", { method: "GET" });
-      const json = await res.json();
-      setLastRun(json.timestamp ?? new Date().toISOString());
       await loadStatus();
+      setLastRun(new Date().toISOString());
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadStatus();
+    const initial = window.setTimeout(() => void loadStatus(), 0);
     const id = setInterval(loadStatus, 5000);
-    return () => clearInterval(id);
+    return () => {
+      window.clearTimeout(initial);
+      clearInterval(id);
+    };
   }, []);
 
   if (!status) return null;
@@ -150,7 +151,7 @@ export default function AutomationStatusClient() {
       {/* ACTIONS */}
       <div className="flex flex-col items-center gap-3 mt-6">
         <Button
-          onClick={runTestTick}
+          onClick={refreshStatus}
           disabled={loading}
           sx={{
             backgroundColor: "var(--omega-gold)",
@@ -161,7 +162,7 @@ export default function AutomationStatusClient() {
             "&:hover": { opacity: 0.9 },
           }}
         >
-          {loading ? "RUNNING…" : "TEST AUTOMATION"}
+          {loading ? "REFRESHING…" : "REFRESH STATUS"}
         </Button>
 
         <div className="text-xs opacity-70">

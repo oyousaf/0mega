@@ -1,50 +1,21 @@
-"use client";
-
-import dynamic from "next/dynamic";
-import { motion } from "framer-motion";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-
-const MatrixRain = dynamic(() => import("react-matrix-rain"), {
-  ssr: false,
-});
-
 export default function GlobalLoading() {
-  const [show, setShow] = useState(true);
-
-  useEffect(() => {
-    const t = setTimeout(() => setShow(false), 1400);
-    return () => clearTimeout(t);
-  }, []);
-
-  if (!show) return null;
-
   return (
-    <motion.div
-      initial={{ opacity: 1 }}
-      animate={{ opacity: 0 }}
-      transition={{ duration: 0.6 }}
-      className="fixed inset-0 flex items-center justify-center bg-black z-9999"
+    <main
+      className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-5 px-3 py-4 sm:px-6"
+      aria-busy="true"
+      aria-label="Loading trading dashboard"
     >
-      {/* Matrix rain */}
-      <div className="absolute inset-0 pointer-events-none">
-        <MatrixRain />
+      <div className="h-14 animate-pulse rounded-2xl border border-omega-dark-gold bg-omega-green" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div
+            key={index}
+            className="h-28 animate-pulse rounded-2xl border border-omega-dark-gold bg-omega-green"
+          />
+        ))}
       </div>
-
-      {/* Centre logo */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        <Image
-          src="/logo.png"
-          alt="Omega Logo"
-          width={160}
-          height={160}
-          priority
-        />
-      </motion.div>
-    </motion.div>
+      <div className="h-72 animate-pulse rounded-2xl border border-omega-dark-gold bg-omega-green" />
+      <span className="sr-only">Loading dashboard data…</span>
+    </main>
   );
 }

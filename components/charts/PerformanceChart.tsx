@@ -63,6 +63,8 @@ export default function PerformanceChart({ data }: Props) {
 
   return (
     <motion.div
+      role="img"
+      aria-label="Account equity over time"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
@@ -83,7 +85,12 @@ export default function PerformanceChart({ data }: Props) {
       </div>
 
       <div ref={ref} style={{ flex: 1, padding: "0 1rem 1rem" }}>
-        {size.width > 0 && size.height > 0 && (
+        {formatted.length === 0 && (
+          <div className="flex h-full items-center justify-center text-sm text-omega-gold opacity-60">
+            No closed-trade data yet
+          </div>
+        )}
+        {formatted.length > 0 && size.width > 0 && size.height > 0 && (
           <LineChart
             width={size.width}
             height={size.height}
@@ -115,7 +122,7 @@ export default function PerformanceChart({ data }: Props) {
                 color: omega.gold,
                 fontSize: 12,
               }}
-              formatter={(v: any) => [`£${fmtMoney(Number(v))}`, "Equity"]}
+              formatter={(v: unknown) => [`£${fmtMoney(Number(v))}`, "Equity"]}
             />
 
             <Line

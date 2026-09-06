@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -42,7 +42,7 @@ function pnlPercent(pl: number, risk: number | null | undefined) {
 export default function TradeHistoryWidget() {
   const dashboard = useDashboard(15000) as DashboardPayload | null;
 
-  const [items, setItems] = useState<Trade[]>([]);
+  const [additionalItems, setAdditionalItems] = useState<Trade[]>([]);
   const [openRow, setOpenRow] = useState<number | null>(null);
 
   const [offset, setOffset] = useState(0);
@@ -56,20 +56,20 @@ export default function TradeHistoryWidget() {
     return isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-GB");
   };
 
-  /* ---------------------------------------
-INITIAL DASHBOARD LOAD
---------------------------------------- */
-
-  useEffect(() => {
-    if (!dashboard?.tradeHistory) return;
-    setItems(dashboard.tradeHistory as Trade[]);
-  }, [dashboard]);
+  const items = useMemo(() => {
+    const all = [...(dashboard?.tradeHistory ?? []), ...additionalItems];
+    return all.filter(
+      (trade, index) =>
+        all.findIndex((candidate) => candidate.trade_id === trade.trade_id) ===
+        index,
+    );
+  }, [additionalItems, dashboard?.tradeHistory]);
 
   /* ---------------------------------------
 LOAD MORE HISTORY
 --------------------------------------- */
 
-  async function loadMore() {
+  const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
 
     setLoadingMore(true);
@@ -83,7 +83,7 @@ LOAD MORE HISTORY
       const json = await res.json();
       const trades: Trade[] = Array.isArray(json.trades) ? json.trades : [];
 
-      setItems((prev) => [...prev, ...trades]);
+      setAdditionalItems((prev) => [...prev, ...trades]);
       setHasMore(Boolean(json.hasMore));
       setOffset((o) => o + PAGE_SIZE);
     } catch (err) {
@@ -91,7 +91,7 @@ LOAD MORE HISTORY
     } finally {
       setLoadingMore(false);
     }
-  }
+  }, [hasMore, loadingMore, offset]);
 
   /* ---------------------------------------
 INFINITE SCROLL
@@ -111,7 +111,7 @@ INFINITE SCROLL
 
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
-  }, [offset, hasMore, loadingMore]);
+  }, [hasMore, loadMore, loadingMore]);
 
   const pnlSummary = dashboard?.pnlSummary ?? {
     daily: 0,
@@ -158,14 +158,14 @@ UI
           style={{ maxHeight: 520, paddingRight: 6 }}
         >
           {items.map((t, index) => {
-            const tradeId = Number((t as any).id ?? index);
+            const tradeId = Number(t.trade_id ?? t.id ?? index);
             const isOpen = openRow === tradeId;
 
             const pl =
               t.realised_pl != null ? cleanZero(num(t.realised_pl)) : null;
 
             const pnlPct =
-              pl !== null ? pnlPercent(pl, (t as any).risk_amount) : null;
+              pl !== null ? pnlPercent(pl, t.risk_amount) : null;
 
             return (
               <div
@@ -174,9 +174,12 @@ UI
               >
                 {/* HEADER */}
 
-                <div
-                  className="flex justify-between items-center cursor-pointer"
+                <button
+                  type="button"
+                  className="flex w-full justify-between items-center rounded-md text-left"
                   onClick={() => setOpenRow(isOpen ? null : tradeId)}
+                  aria-expanded={isOpen}
+                  aria-controls={`trade-details-${tradeId}`}
                 >
                   <div>
                     <div className="font-bold">{t.symbol}</div>
@@ -205,12 +208,15 @@ UI
 
                     {isOpen ? <FiChevronUp /> : <FiChevronDown />}
                   </div>
-                </div>
+                </button>
 
                 {/* DETAILS */}
 
                 <Collapse in={isOpen}>
-                  <div className="mt-2 text-xs opacity-80 space-y-1">
+                  <div
+                    id={`trade-details-${tradeId}`}
+                    className="mt-2 text-xs opacity-80 space-y-1"
+                  >
                     <div className="flex justify-between">
                       <span>Entry</span>
                       <span>{fmtPrice(t.entry_price, t.symbol)}</span>
@@ -235,7 +241,7 @@ UI
 
                     <div className="flex justify-between">
                       <span>Result</span>
-                      <span>{(t as any).exit_reason ?? "—"}</span>
+                      <span>{t.exit_reason ?? "—"}</span>
                     </div>
 
                     <div className="flex justify-between">
@@ -248,13 +254,13 @@ UI
                       <span>{fmtDate(t.closed_at)}</span>
                     </div>
 
-                    {(t as any).executions?.length > 0 && (
+                    {(t.executions?.length ?? 0) > 0 && (
                       <>
                         <Divider
                           sx={{ borderColor: "var(--omega-dark-gold)" }}
                         />
 
-                        {(t as any).executions.map((e: any, i: number) => (
+                        {t.executions?.map((e, i) => (
                           <div
                             key={`exec-${tradeId}-${e.exec_id ?? i}`}
                             className="flex justify-between py-1 border-b border-omega-dark-gold/20"
@@ -267,7 +273,7 @@ UI
                               Qty {fmtQty(e.qty)} • {e.broker}
                               <br />
                               <span className="opacity-60">
-                                {fmtDate(e.timestamp ?? e.time)}
+                                {fmtDate(e.timestamp)}
                               </span>
                             </div>
                           </div>

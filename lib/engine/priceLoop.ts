@@ -2,15 +2,20 @@ import { getPriceProvider } from "@/lib/prices/provider";
 import type { Candle } from "@/types/trade";
 import { runStructureCheck } from "@/lib/strategies/marketStructure";
 import { riskGate } from "@/lib/trading/risk/riskGate";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 import { runExitWatcher } from "./exitWatcher";
 import { executeTradeIntent } from "@/lib/trading/automation/executionHelpers";
 import type { OrderSide } from "@/providers/execution/broker.interface";
+import {
+  estimateSpread,
+  executableEntryPrice,
+} from "@/lib/market/executionCosts";
 import {
   ACTIVE_SYMBOLS,
   SYMBOL_CONFIG,
   type SymbolConfig,
 } from "@/lib/trading/config/symbolConfig";
+import { RISK_CONFIG } from "@/lib/trading/config/riskConfig";
 
 import type { PoolClient } from "pg";
 
@@ -25,9 +30,9 @@ const ENGINE = {
 
   spikeMultiplier: 3,
 
-  paperAccountEquity: 10000,
+  paperAccountEquity: RISK_CONFIG.initialEquity,
 
-  riskPerTrade: 0.005,
+  riskPerTrade: RISK_CONFIG.riskPerTrade,
 
   apiFetchEveryNMinutes: 2,
 
@@ -47,9 +52,7 @@ ENGINE STATE
 let running = false;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __OMEGA_PRICE_LOOP_ID__: number | undefined;
-  // eslint-disable-next-line no-var
   var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
 }
 
@@ -140,9 +143,15 @@ function calculateEMA(values: number[], period: number) {
 }
 
 function sessionOpen(config: SymbolConfig) {
-  const hour = new Date().getUTCHours();
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: config.sessionTimeZone,
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date()),
+  );
 
-  return hour >= config.sessionStartUtc && hour < config.sessionEndUtc;
+  return hour >= config.sessionStartHour && hour < config.sessionEndHour;
 }
 
 /* ---------------------------------------
@@ -167,27 +176,52 @@ function newsSpike(values: number[], config: SymbolConfig) {
   );
 }
 
-function spreadPips(candle: Candle, config: SymbolConfig) {
-  if (
-    typeof candle.bid !== "number" ||
-    typeof candle.ask !== "number" ||
-    !Number.isFinite(candle.bid) ||
-    !Number.isFinite(candle.ask)
-  ) {
-    return null;
-  }
-
-  return (candle.ask - candle.bid) / config.pipSize;
-}
-
-function calculateLotSize(entry: number, stop: number, config: SymbolConfig) {
-  const riskAmount = ENGINE.paperAccountEquity * ENGINE.riskPerTrade;
+function calculateLotSize(
+  entry: number,
+  stop: number,
+  config: SymbolConfig,
+  accountEquity: number,
+) {
+  const riskAmount = accountEquity * ENGINE.riskPerTrade;
   const stopPips = Math.abs(entry - stop) / config.pipSize;
 
   if (!(stopPips > 0)) return 0;
 
   const lots = riskAmount / (stopPips * config.pipValuePerLot);
   return Number(lots.toFixed(3));
+}
+
+async function accountEquity() {
+  const { rows } = await pool.query(`
+    SELECT $1::numeric + COALESCE(SUM(realised_pl), 0) AS equity
+    FROM paper_trades
+    WHERE is_closed = true
+  `, [ENGINE.paperAccountEquity]);
+
+  const equity = Number(rows[0]?.equity);
+  return Number.isFinite(equity) && equity > 0
+    ? equity
+    : ENGINE.paperAccountEquity;
+}
+
+async function activeEventBlackout(symbol: string) {
+  const currencies = [symbol.slice(0, 3), symbol.slice(3, 6)];
+  const { rows } = await pool.query(
+    `
+    SELECT title, starts_at, ends_at
+    FROM market_events
+    WHERE enabled = true
+      AND impact = 'HIGH'
+      AND currency = ANY($1::text[])
+      AND NOW() BETWEEN starts_at - INTERVAL '15 minutes'
+                    AND ends_at + INTERVAL '15 minutes'
+    ORDER BY starts_at ASC
+    LIMIT 1
+    `,
+    [currencies],
+  );
+
+  return rows[0] ?? null;
 }
 
 function fmt(n: number, dp = 5) {
@@ -356,8 +390,9 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
 
       console.log("[SKIP] session closed", {
         SYMBOL: symbol,
-        SESSION_START_UTC: config.sessionStartUtc,
-        SESSION_END_UTC: config.sessionEndUtc,
+        SESSION_TIME_ZONE: config.sessionTimeZone,
+        SESSION_START_HOUR: config.sessionStartHour,
+        SESSION_END_HOUR: config.sessionEndHour,
       });
     }
 
@@ -405,6 +440,16 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
 
   const latestRaw = candles[candles.length - 1];
 
+  const latestAgeMs = Date.now() - Number(latestRaw.timestamp);
+  const maxCandleAgeMs = Number.parseInt(config.timeframe, 10) * 3 * 60_000;
+  if (!Number.isFinite(latestAgeMs) || latestAgeMs > maxCandleAgeMs) {
+    console.log("[SKIP] stale market data", {
+      SYMBOL: symbol,
+      AGE_MS: latestAgeMs,
+    });
+    return;
+  }
+
   const latest = {
     ...latestRaw,
     symbol,
@@ -416,13 +461,20 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
   runtime.lastCandleMinute = minute;
 
   const price = Number(latest.close);
-  const spread = spreadPips(latest, config);
+  const spread = estimateSpread(latest, candles, config);
+  const halfSpreadPrice = (spread.pips * config.pipSize) / 2;
+  const executionCandle: Candle = {
+    ...latest,
+    bid: price - halfSpreadPrice,
+    ask: price + halfSpreadPrice,
+  };
 
   console.log("[NEW_CANDLE]", {
     SYMBOL: symbol,
     TIMEFRAME: config.timeframe,
     CLOSE: fmt(price),
-    SPREAD_PIPS: spread === null ? null : fmt(spread, 2),
+    SPREAD_PIPS: fmt(spread.pips, 2),
+    SPREAD_SOURCE: spread.source,
     OPEN_TRADE: openTrade,
   });
 
@@ -433,20 +485,33 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
     return;
   }
 
-  const exited = await runExitWatcher(latest);
+  const exited = await runExitWatcher(executionCandle);
   if (exited) return;
 
   if (openTrade) {
     return;
   }
 
-  if (!ENGINE.testMode && spread !== null && spread > config.maxSpreadPips) {
+  if (!ENGINE.testMode && spread.pips > config.maxSpreadPips) {
     console.log("[SKIP] spread too wide", {
       SYMBOL: symbol,
-      spreadPips: fmt(spread, 2),
+      spreadPips: fmt(spread.pips, 2),
       maxSpreadPips: config.maxSpreadPips,
     });
     return;
+  }
+
+  if (!ENGINE.testMode) {
+    const event = await activeEventBlackout(symbol);
+    if (event) {
+      console.log("[SKIP] high-impact event blackout", {
+        SYMBOL: symbol,
+        EVENT: event.title,
+        STARTS_AT: event.starts_at,
+        ENDS_AT: event.ends_at,
+      });
+      return;
+    }
   }
 
   const closes = candles
@@ -591,7 +656,12 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
     }
   }
 
-  const entry = price;
+  const entry = executableEntryPrice({
+    midPrice: price,
+    side: signal.direction,
+    spreadPips: spread.pips,
+    config,
+  });
   const sl = Number(signal.sl);
 
   if (!Number.isFinite(sl)) {
@@ -630,7 +700,8 @@ async function processSymbol(runtime: SymbolRuntime, loopId: number) {
     return;
   }
 
-  const lotSize = calculateLotSize(entry, sl, config);
+  const equity = await accountEquity();
+  const lotSize = calculateLotSize(entry, sl, config, equity);
 
   if (!(lotSize > 0)) {
     console.log("[SKIP] lot size invalid", {

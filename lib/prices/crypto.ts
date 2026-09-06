@@ -1,64 +1,40 @@
-type Candle = {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
+import type { Candle } from "@/types/trade";
 
-const CACHE: Record<string, Candle[]> = {};
-const BASE_PRICE: Record<string, number> = {};
+const cache: Record<string, Candle[]> = {};
+const basePrice: Record<string, number> = {};
 
-/**
- * FAST DEBUG / PAPER MODE
- * - Every fetch advances price
- * - Every poll = new candle
- * - No timeframe gating
- * - Designed to populate DB + validate engine
- */
 export function getCryptoProvider(
   symbol: string,
-  _timeframe: "1m" | "5m" | "15m",
+  timeframe: "1m" | "5m" | "15m",
 ) {
+  void timeframe;
   return {
     async fetchCandles(): Promise<Candle[]> {
-      if (!CACHE[symbol]) {
-        const start = BASE_PRICE[symbol] ?? 50_000;
-        BASE_PRICE[symbol] = start;
-        CACHE[symbol] = seedCandles(start);
-        return CACHE[symbol];
+      if (!cache[symbol]) {
+        const start = basePrice[symbol] ?? 50_000;
+        basePrice[symbol] = start;
+        cache[symbol] = seedCandles(start);
+        return cache[symbol];
       }
-
-      advanceCandle(CACHE[symbol]);
-      return CACHE[symbol];
+      advanceCandle(cache[symbol]);
+      return cache[symbol];
     },
   };
 }
 
-/* ---------------------------------------
-   Helpers
----------------------------------------- */
-
 function seedCandles(startPrice: number): Candle[] {
   let price = startPrice;
   const now = Date.now();
-
-  return Array.from({ length: 50 }).map((_, i) => {
+  return Array.from({ length: 50 }).map((_, index) => {
     const open = price;
     const close = open + randomStep(open);
     const wick = Math.abs(randomStep(open) * 0.3);
-
-    const high = Math.max(open, close) + wick;
-    const low = Math.min(open, close) - wick;
-
     price = close;
-
     return {
-      timestamp: now - (50 - i) * 1000,
+      timestamp: now - (50 - index) * 1000,
       open,
-      high,
-      low,
+      high: Math.max(open, close) + wick,
+      low: Math.min(open, close) - wick,
       close,
       volume: 1,
     };
@@ -66,12 +42,9 @@ function seedCandles(startPrice: number): Candle[] {
 }
 
 function advanceCandle(candles: Candle[]) {
-  const last = candles[candles.length - 1];
-  const open = last.close;
-
+  const open = candles[candles.length - 1].close;
   const close = open + randomStep(open);
   const wick = Math.abs(randomStep(open) * 0.3);
-
   candles.push({
     timestamp: Date.now(),
     open,
@@ -80,14 +53,9 @@ function advanceCandle(candles: Candle[]) {
     close,
     volume: 1,
   });
-
   candles.shift();
 }
 
-/**
- * ~ ±0.15% per tick
- * Tuned to hit SL/TP regularly
- */
 function randomStep(price: number) {
   return price * ((Math.random() - 0.5) * 0.003);
 }

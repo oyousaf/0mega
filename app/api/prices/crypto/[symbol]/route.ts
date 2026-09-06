@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { symbol } = await params;
 
-  let pair = symbol.toUpperCase().replace("/", "");
+  const pair = symbol.toUpperCase().replace("/", "");
   const cacheKey = `crypto_${pair}`;
 
   // CACHE FIRST

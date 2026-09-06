@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 
 /* -------------------------------------------------------
 HELPERS
 ------------------------------------------------------- */
 
-const n = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-const iso = (v: any) => {
-  const d = new Date(v);
+const iso = (v: unknown) => {
+  const d = new Date(String(v));
   return isNaN(d.getTime()) ? null : d.toISOString();
 };
 
@@ -103,7 +103,17 @@ export async function GET(req: Request) {
        3. GROUP EXECUTIONS
     -------------------------------------------------- */
 
-    const execMap: Record<number, any[]> = {};
+    const execMap: Record<
+      number,
+      Array<{
+        exec_id: number;
+        side: "BUY" | "SELL";
+        qty: number;
+        price: number;
+        broker: string;
+        timestamp: string | null;
+      }>
+    > = {};
 
     for (const r of execRows) {
       if (!execMap[r.trade_id]) execMap[r.trade_id] = [];
@@ -161,11 +171,11 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ trades, hasMore });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("History route error:", err);
 
     return NextResponse.json(
-      { error: err.message || String(err) },
+      { error: err instanceof Error ? err.message : "History unavailable" },
       { status: 500 },
     );
   }

@@ -1,4 +1,4 @@
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 import { closeTrade } from "@/lib/trading/automation/executionHelpers";
 import type { Candle } from "@/types/trade";
 
@@ -25,6 +25,12 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
   const high = Number(candle.high);
   const low = Number(candle.low);
   const close = Number(candle.close);
+  const bid = Number(candle.bid);
+  const ask = Number(candle.ask);
+  const halfSpread =
+    Number.isFinite(bid) && Number.isFinite(ask) && ask > bid
+      ? (ask - bid) / 2
+      : 0;
 
   if (
     !Number.isFinite(high) ||
@@ -56,7 +62,7 @@ export async function runExitWatcher(candle: Candle): Promise<boolean> {
     let closedAny = false;
 
     for (const trade of rows) {
-      const exit = checkExit(trade, high, low);
+      const exit = checkExit(trade, high, low, halfSpread);
       if (!exit) continue;
 
       const exitPrice = getExitPrice(trade, exit, close);
@@ -94,6 +100,7 @@ function checkExit(
   trade: Pick<OpenTradeRow, "side" | "sl" | "tp1">,
   high: number,
   low: number,
+  halfSpread: number,
 ): ExitResult {
   const sl = Number(trade.sl);
   const tp1 = trade.tp1 === null ? null : Number(trade.tp1);
@@ -102,12 +109,16 @@ function checkExit(
   if (tp1 !== null && !Number.isFinite(tp1)) return null;
 
   if (trade.side === "BUY") {
+    const executableHigh = high - halfSpread;
+    const executableLow = low - halfSpread;
     // Conservative rule when both levels occur in one candle.
-    if (low <= sl) return "SL_HIT";
-    if (tp1 !== null && high >= tp1) return "TP_HIT";
+    if (executableLow <= sl) return "SL_HIT";
+    if (tp1 !== null && executableHigh >= tp1) return "TP_HIT";
   } else {
-    if (high >= sl) return "SL_HIT";
-    if (tp1 !== null && low <= tp1) return "TP_HIT";
+    const executableHigh = high + halfSpread;
+    const executableLow = low + halfSpread;
+    if (executableHigh >= sl) return "SL_HIT";
+    if (tp1 !== null && executableLow <= tp1) return "TP_HIT";
   }
 
   return null;

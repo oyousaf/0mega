@@ -1,4 +1,4 @@
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 import { getBroker } from "@/providers/execution/router";
 import type { OrderSide } from "@/providers/execution/broker.interface";
 import { getSymbolConfig } from "@/lib/trading/config/symbolConfig";
@@ -221,6 +221,7 @@ export async function executeTradeIntent(intent: {
       intent.symbol,
       qty,
       intent.side,
+      entry,
     );
 
     if (!brokerResult.success) {

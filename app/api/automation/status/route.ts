@@ -1,7 +1,7 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 import { getBroker } from "@/providers/execution/router";
 import { startPriceLoop, stopPriceLoop } from "@/lib/engine/priceLoop";
 
@@ -11,7 +11,6 @@ GLOBAL ENGINE STATE
 
 declare global {
   var __OMEGA_ENGINE_RUNNING__: boolean | undefined;
-  var __OMEGA_BOOT_CHECKED__: boolean | undefined;
 }
 
 /* -------------------------------------------------
@@ -37,24 +36,6 @@ export async function GET() {
     ]);
 
     const enabled = Boolean(automationRows[0]?.enabled);
-    const engineRunning = Boolean(globalThis.__OMEGA_ENGINE_RUNNING__);
-
-    /* --------------------------
-       BOOT RECOVERY (CORE)
-    --------------------------- */
-
-    if (enabled && !engineRunning && !globalThis.__OMEGA_BOOT_CHECKED__) {
-      globalThis.__OMEGA_BOOT_CHECKED__ = true;
-
-      console.log("[ENGINE_BOOT] recovering engine");
-
-      setTimeout(() => {
-        void startPriceLoop().catch((err) => {
-          console.error("[ENGINE_BOOT_FAILED]", err);
-        });
-      }, 300);
-    }
-
     return NextResponse.json({
       success: true,
 
@@ -80,11 +61,14 @@ export async function GET() {
 
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AUTOMATION_STATUS_ERROR]", err);
 
     return NextResponse.json(
-      { success: false, error: err.message ?? String(err) },
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Status unavailable",
+      },
       { status: 500 },
     );
   }
@@ -117,8 +101,6 @@ export async function POST(req: Request) {
     if (nextState && !engineRunning) {
       console.log("[AUTOMATION] starting engine");
 
-      globalThis.__OMEGA_BOOT_CHECKED__ = true;
-
       setTimeout(() => {
         void startPriceLoop().catch((err) => {
           console.error("[ENGINE_START_FAILED]", err);
@@ -131,8 +113,6 @@ export async function POST(req: Request) {
 
       stopPriceLoop();
 
-      // allow future boot recovery
-      globalThis.__OMEGA_BOOT_CHECKED__ = false;
     }
 
     return NextResponse.json({
@@ -140,11 +120,14 @@ export async function POST(req: Request) {
       enabled: nextState,
       engineRunning: Boolean(globalThis.__OMEGA_ENGINE_RUNNING__),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AUTOMATION_TOGGLE_ERROR]", err);
 
     return NextResponse.json(
-      { success: false, error: err.message ?? String(err) },
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Toggle failed",
+      },
       { status: 500 },
     );
   }

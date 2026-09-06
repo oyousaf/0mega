@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 import { getDailyRisk } from "@/lib/engine/risk/dailyRisk";
+import { RISK_CONFIG } from "@/lib/trading/config/riskConfig";
 
-const ASSUMED_EQUITY = 100000;
-const MAX_DAILY_LOSS_PCT = 0.02;
+const ASSUMED_EQUITY = RISK_CONFIG.initialEquity;
+const MAX_DAILY_LOSS_PCT = RISK_CONFIG.maxDailyLossPct;
 
 /* -------------------------------------------------
    TODAY ENGINE STATUS

@@ -1,13 +1,26 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
+import { RISK_CONFIG } from "@/lib/trading/config/riskConfig";
 
 /* ---------------------------------------------
    CONFIG (aligned with trading engine)
 --------------------------------------------- */
 
-const ACCOUNT_BALANCE = 10000;
+const ACCOUNT_BALANCE = RISK_CONFIG.initialEquity;
 const PIP_SIZE = 0.0001;
 const PIP_VALUE_PER_LOT = 10;
+
+type OpenTradeRow = {
+  trade_id: number;
+  symbol: string;
+  side: "BUY" | "SELL";
+  entry_price: number;
+  qty: number;
+  opened_at: string;
+  sl: number | null;
+  tp1: number | null;
+  rr: number | null;
+};
 
 /* ---------------------------------------------
    PRICE RESOLVER
@@ -69,7 +82,7 @@ export async function GET(req: Request) {
   try {
     const origin = new URL(req.url).origin;
 
-    const { rows } = await pool.query(`
+    const { rows } = await pool.query<OpenTradeRow>(`
       SELECT
         id AS trade_id,
         symbol,
@@ -86,7 +99,7 @@ export async function GET(req: Request) {
     `);
 
     const positions = await Promise.all(
-      rows.map(async (t: any) => {
+      rows.map(async (t) => {
         const entry = Number(t.entry_price);
         const qty = Number(t.qty);
 
@@ -115,11 +128,11 @@ export async function GET(req: Request) {
       positions,
       balance: ACCOUNT_BALANCE,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Open trades route failed", err);
 
     return NextResponse.json(
-      { error: err.message || String(err) },
+      { error: err instanceof Error ? err.message : "Positions unavailable" },
       { status: 500 },
     );
   }

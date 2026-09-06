@@ -1,4 +1,5 @@
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
+import { RISK_CONFIG } from "@/lib/trading/config/riskConfig";
 
 /* -------------------------------------------------
 CONFIG
@@ -6,13 +7,13 @@ CONFIG
 
 const RISK_ENABLED = true;
 
-const COOLDOWN_MINUTES = 10;
+const COOLDOWN_MINUTES = RISK_CONFIG.cooldownMinutes;
 
-const MAX_TRADES_PER_DAY = 25;
-const MAX_CONSECUTIVE_LOSSES = 3;
+const MAX_TRADES_PER_DAY = RISK_CONFIG.maxTradesPerDay;
+const MAX_CONSECUTIVE_LOSSES = RISK_CONFIG.maxConsecutiveLosses;
 
-const MAX_DAILY_LOSS_PCT = 0.03;
-const ACCOUNT_EQUITY = 10000;
+const MAX_DAILY_LOSS_PCT = RISK_CONFIG.maxDailyLossPct;
+const ACCOUNT_EQUITY = RISK_CONFIG.initialEquity;
 
 /* -------------------------------------------------
 TYPES
@@ -215,13 +216,13 @@ export async function riskGate(
     return {
       allowed: true,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[RISK_GATE_ERROR]", err);
 
     return {
       allowed: false,
       reason:
-        err?.message ??
+        (err instanceof Error ? err.message : null) ??
         "RISK_GATE_ERROR",
     };
   }

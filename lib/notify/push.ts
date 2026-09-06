@@ -1,7 +1,7 @@
 "use server";
 
 import webpush from "web-push";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 
 webpush.setVapidDetails(
   process.env.VAPID_PUBLIC_EMAIL!,

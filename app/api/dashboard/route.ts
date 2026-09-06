@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
+import { RISK_CONFIG } from "@/lib/trading/config/riskConfig";
 
 export async function GET() {
   try {
@@ -19,7 +20,7 @@ export async function GET() {
        AUTOMATION + OPEN TRADES
     ---------------------------------- */
 
-    const [automationRes, openTradesRes] = await Promise.all([
+    const [automationRes, openTradesRes, eventRes] = await Promise.all([
       pool.query(`
         SELECT enabled
         FROM automation_state
@@ -41,6 +42,24 @@ export async function GET() {
         WHERE is_closed = false
         ORDER BY opened_at DESC
       `),
+
+      pool.query(`
+        SELECT
+          id,
+          currency,
+          title,
+          impact,
+          starts_at,
+          ends_at,
+          NOW() BETWEEN starts_at - INTERVAL '15 minutes'
+                    AND ends_at + INTERVAL '15 minutes' AS is_active
+        FROM market_events
+        WHERE enabled = true
+          AND impact = 'HIGH'
+          AND ends_at >= NOW() - INTERVAL '15 minutes'
+        ORDER BY starts_at ASC
+        LIMIT 5
+      `),
     ]);
 
     const automationEnabled = Boolean(automationRes.rows?.[0]?.enabled);
@@ -58,7 +77,7 @@ export async function GET() {
         COUNT(*) FILTER (WHERE realised_pl > 0)::float /
         NULLIF(COUNT(*),0) * 100 AS win_rate,
 
-        AVG(realised_pl) AS expectancy,
+        AVG(realised_pl / NULLIF(risk_amount, 0)) AS expectancy,
 
         SUM(CASE WHEN realised_pl > 0 THEN realised_pl END) /
         NULLIF(ABS(SUM(CASE WHEN realised_pl < 0 THEN realised_pl END)),0)
@@ -104,22 +123,37 @@ export async function GET() {
         FROM paper_trades
         WHERE is_closed = true
         ORDER BY closed_at DESC
-  
+        LIMIT 20
       `),
 
       pool.query(`
+        WITH points AS (
+          SELECT
+            closed_at,
+            $1::numeric + SUM(realised_pl) OVER (
+              ORDER BY closed_at, id
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS equity
+          FROM paper_trades
+          WHERE is_closed = true
+        ), curve AS (
+          SELECT
+            closed_at,
+            equity,
+            MAX(equity) OVER (
+              ORDER BY closed_at
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS peak_equity
+          FROM points
+        )
         SELECT
           closed_at,
-          SUM(realised_pl)
-          OVER (
-            ORDER BY closed_at
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-          ) AS equity
-        FROM paper_trades
-        WHERE is_closed = true
+          equity,
+          ((equity - peak_equity) / NULLIF(peak_equity, 0)) * 100 AS drawdown
+        FROM curve
         ORDER BY closed_at ASC
         LIMIT 500
-      `),
+      `, [RISK_CONFIG.initialEquity]),
 
       pool.query(
         `
@@ -143,7 +177,7 @@ export async function GET() {
     const balance =
       equityCurve.length > 0
         ? Number(equityCurve[equityCurve.length - 1].equity)
-        : 0;
+        : RISK_CONFIG.initialEquity;
 
     /* ----------------------------------
        RESPONSE
@@ -156,6 +190,15 @@ export async function GET() {
         openTrades: openTrades.length,
         tradesToday,
         pnlToday: pnlSummary.daily,
+        lossUsedPct: Math.min(
+          100,
+          Math.max(
+            0,
+            (-pnlSummary.daily /
+              (RISK_CONFIG.initialEquity * RISK_CONFIG.maxDailyLossPct)) *
+              100,
+          ),
+        ),
         lastTick: now.toISOString(),
       },
 
@@ -173,6 +216,7 @@ export async function GET() {
       },
 
       equityCurve,
+      marketEvents: eventRes.rows,
     });
   } catch (err) {
     console.error("Dashboard route failed", err);

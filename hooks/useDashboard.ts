@@ -1,4 +1,19 @@
 import { useEffect, useState } from "react";
+import type { Trade } from "@/types/trade";
+
+export type OpenTrade = {
+  trade_id: number;
+  symbol: string;
+  side: "BUY" | "SELL";
+  entry_price: number;
+  qty: number;
+  opened_at: string;
+  sl: number | null;
+  tp1: number | null;
+  rr: number | null;
+  mark_price?: number | null;
+  unrealised_pl?: number | null;
+};
 
 /* ---------------------------------------
 DASHBOARD PAYLOAD TYPE
@@ -26,8 +41,8 @@ export type DashboardPayload = {
     halaalRatio?: number | string;
   };
 
-  openTrades?: any[];
-  tradeHistory?: any[];
+  openTrades?: OpenTrade[];
+  tradeHistory?: Trade[];
 
   pnlSummary?: {
     daily?: number;
@@ -44,6 +59,16 @@ export type DashboardPayload = {
     equity: number;
     drawdown: number;
   }[];
+
+  marketEvents?: {
+    id: number;
+    currency: string;
+    title: string;
+    impact: "HIGH" | "MEDIUM" | "LOW";
+    starts_at: string;
+    ends_at: string;
+    is_active: boolean;
+  }[];
 };
 
 /* ---------------------------------------
@@ -52,7 +77,7 @@ SHARED STATE (SINGLETON)
 
 let cache: DashboardPayload | null = null;
 
-let listeners = new Set<(d: DashboardPayload | null) => void>();
+const listeners = new Set<(d: DashboardPayload | null) => void>();
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -81,7 +106,8 @@ async function fetchDashboard() {
       json.engine?.openTrades !== cache.engine?.openTrades ||
       json.engine?.pnlToday !== cache.engine?.pnlToday ||
       json.tradeHistory?.length !== cache.tradeHistory?.length ||
-      json.automation?.enabled !== cache.automation?.enabled;
+      json.automation?.enabled !== cache.automation?.enabled ||
+      json.marketEvents?.[0]?.id !== cache.marketEvents?.[0]?.id;
 
     if (changed) {
       cache = json;

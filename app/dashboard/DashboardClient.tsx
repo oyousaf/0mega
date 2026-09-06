@@ -16,6 +16,8 @@ import ChartWrapper from "@/components/layout/ChartWrapper";
 import OpenTradesWidget from "@/components/dashboard/OpenTradesWidget";
 import TradeHistoryWidget from "@/components/dashboard/TradeHistoryWidget";
 import TodayStatusWidget from "@/components/dashboard/TodayStatusWidget";
+import EventRiskWidget from "@/components/dashboard/EventRiskWidget";
+import GlobalLoading from "@/app/loading";
 
 const PerformanceChart = dynamic(
   () => import("@/components/charts/PerformanceChart"),
@@ -29,6 +31,8 @@ const DrawdownChart = dynamic(
 
 export default function DashboardClient() {
   const dashboard = useDashboard(15000) as DashboardPayload | null;
+
+  if (!dashboard) return <GlobalLoading />;
 
   const equity = dashboard?.equityCurve ?? [];
   const trades = dashboard?.tradeHistory ?? [];
@@ -51,6 +55,8 @@ export default function DashboardClient() {
         className="px-2 sm:px-4 pb-[env(safe-area-inset-bottom)] space-y-4 sm:space-y-6"
       >
         <TodayStatusWidget />
+
+        <EventRiskWidget />
 
         <MetricsCards />
 

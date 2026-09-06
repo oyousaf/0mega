@@ -5,7 +5,28 @@ type CacheEntry = {
   lastFetchMinute: number;
 };
 
+type TwelveDataCandle = {
+  datetime?: unknown;
+  open?: unknown;
+  high?: unknown;
+  low?: unknown;
+  close?: unknown;
+  volume?: unknown;
+};
+
+type TwelveDataResponse = {
+  code?: unknown;
+  message?: unknown;
+  values?: unknown;
+};
+
 const CACHE = new Map<string, CacheEntry>();
+
+function parseUtcTimestamp(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return Number.NaN;
+  return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`).getTime();
+}
 
 export function getForexProvider(symbol: string, timeframe: string) {
   const intervalMap: Record<string, string> = {
@@ -15,6 +36,7 @@ export function getForexProvider(symbol: string, timeframe: string) {
   };
 
   const interval = intervalMap[timeframe];
+  const intervalMs = Number.parseInt(timeframe, 10) * 60_000;
 
   const symbolMap: Record<string, string> = {
     EURUSD: "EUR/USD",
@@ -47,6 +69,7 @@ export function getForexProvider(symbol: string, timeframe: string) {
           `?symbol=${apiSymbol}` +
           `&interval=${interval}` +
           `&outputsize=250` +
+          `&timezone=UTC` +
           `&apikey=${process.env.TWELVE_DATA_API_KEY}`;
 
         const res = await fetch(url, {
@@ -68,10 +91,10 @@ export function getForexProvider(symbol: string, timeframe: string) {
 
         const text = await res.text();
 
-        let data: any;
+        let data: TwelveDataResponse;
 
         try {
-          data = JSON.parse(text);
+          data = JSON.parse(text) as TwelveDataResponse;
         } catch {
           console.warn("[FOREX_PROVIDER_INVALID_JSON]", {
             symbol: apiSymbol,
@@ -99,19 +122,27 @@ export function getForexProvider(symbol: string, timeframe: string) {
           return cached?.candles ?? [];
         }
 
-        const candles: Candle[] = data.values.reverse().map((c: any) => ({
-          timestamp: new Date(c.datetime).getTime(),
-
-          open: Number(c.open),
-          high: Number(c.high),
-          low: Number(c.low),
-          close: Number(c.close),
-
-          bid: Number(c.close),
-          ask: Number(c.close),
-
-          volume: c.volume ? Number(c.volume) : 0,
-        }));
+        const completedBefore = Date.now() - 2_000;
+        const candles: Candle[] = (data.values as TwelveDataCandle[])
+          .map((c) => ({
+            timestamp: parseUtcTimestamp(c.datetime),
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+            volume: c.volume ? Number(c.volume) : 0,
+          }))
+          .filter(
+            (c) =>
+              Number.isFinite(c.timestamp) &&
+              Number.isFinite(c.open) &&
+              Number.isFinite(c.high) &&
+              Number.isFinite(c.low) &&
+              Number.isFinite(c.close) &&
+              c.high >= c.low &&
+              c.timestamp + intervalMs <= completedBefore,
+          )
+          .sort((a, b) => a.timestamp - b.timestamp);
 
         CACHE.set(cacheKey, {
           candles,
@@ -119,10 +150,10 @@ export function getForexProvider(symbol: string, timeframe: string) {
         });
 
         return candles;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn("[FOREX_PROVIDER_FETCH_ERROR]", {
           symbol: apiSymbol,
-          message: err?.message,
+          message: err instanceof Error ? err.message : "Unknown fetch error",
         });
 
         return cached?.candles ?? [];

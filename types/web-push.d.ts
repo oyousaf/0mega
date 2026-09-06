@@ -55,10 +55,10 @@ declare module "web-push" {
      * Send a push notification.
      */
     sendNotification(
-      subscription: PushSubscription | any,
+      subscription: PushSubscription | Record<string, unknown>,
       payload?: string | Buffer,
       options?: PushOptions,
-    ): Promise<any>;
+    ): Promise<unknown>;
   }
 
   const webpush: WebPush;

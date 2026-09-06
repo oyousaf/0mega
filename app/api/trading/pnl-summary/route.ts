@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/neon";
+import { pool } from "@/lib/db";
 
 /* ------------------------------------------------
    SAFE NUMBER
@@ -49,11 +49,11 @@ export async function GET() {
       weekly,
       monthly,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("PNL summary error:", err);
 
     return NextResponse.json(
-      { error: err.message || String(err) },
+      { error: err instanceof Error ? err.message : "Summary unavailable" },
       { status: 500 },
     );
   }

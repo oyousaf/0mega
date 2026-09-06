@@ -1,6 +1,6 @@
 export type TradeSymbol = "EURUSD" | "GBPUSD" | "XAUUSD";
 
-export type Timeframe = "1m" | "5m" | "15m";
+type Timeframe = "1m" | "5m" | "15m";
 
 export type SymbolConfig = {
   symbol: TradeSymbol;
@@ -14,6 +14,7 @@ export type SymbolConfig = {
   emaPeriod: number;
 
   maxSpreadPips: number;
+  baseSpreadPips: number;
 
   volWindow: number;
   minVolPct: number;
@@ -30,8 +31,9 @@ export type SymbolConfig = {
   newsLookback: number;
   newsSpikePips: number;
 
-  sessionStartUtc: number;
-  sessionEndUtc: number;
+  sessionTimeZone: string;
+  sessionStartHour: number;
+  sessionEndHour: number;
 };
 
 export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
@@ -47,6 +49,7 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
     emaPeriod: 200,
 
     maxSpreadPips: 1.5,
+    baseSpreadPips: 0.8,
 
     volWindow: 20,
     minVolPct: 0.00005,
@@ -63,8 +66,9 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
     newsLookback: 5,
     newsSpikePips: 18,
 
-    sessionStartUtc: 6,
-    sessionEndUtc: 21,
+    sessionTimeZone: "Europe/London",
+    sessionStartHour: 7,
+    sessionEndHour: 17,
   },
 
   GBPUSD: {
@@ -79,6 +83,7 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
     emaPeriod: 200,
 
     maxSpreadPips: 2.0,
+    baseSpreadPips: 1.0,
 
     volWindow: 20,
     minVolPct: 0.00006,
@@ -95,8 +100,9 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
     newsLookback: 5,
     newsSpikePips: 22,
 
-    sessionStartUtc: 6,
-    sessionEndUtc: 21,
+    sessionTimeZone: "Europe/London",
+    sessionStartHour: 7,
+    sessionEndHour: 17,
   },
 
   XAUUSD: {
@@ -111,6 +117,7 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
     emaPeriod: 200,
 
     maxSpreadPips: 35,
+    baseSpreadPips: 20,
 
     volWindow: 20,
     minVolPct: 0.00008,
@@ -127,8 +134,9 @@ export const SYMBOL_CONFIG: Record<TradeSymbol, SymbolConfig> = {
     newsLookback: 5,
     newsSpikePips: 250,
 
-    sessionStartUtc: 6,
-    sessionEndUtc: 21,
+    sessionTimeZone: "America/New_York",
+    sessionStartHour: 8,
+    sessionEndHour: 17,
   },
 };
 

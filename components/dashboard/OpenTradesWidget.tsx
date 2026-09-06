@@ -2,26 +2,16 @@
 
 import { Card, CardContent, Divider, Typography } from "@mui/material";
 import { fmtPrice, fmtQty, fmtPnL } from "@/lib/format";
-import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
-
-type Trade = {
-  id: number;
-  symbol: string;
-  side: "BUY" | "SELL";
-  entry_price: number;
-  qty: number;
-  opened_at: string;
-  sl: number | null;
-  tp1: number | null;
-  rr: number | null;
-  mark_price: number | null;
-  unrealised_pl: number | null;
-};
+import {
+  useDashboard,
+  type DashboardPayload,
+  type OpenTrade,
+} from "@/hooks/useDashboard";
 
 export default function OpenTradesWidget() {
   const data = useDashboard(15000) as DashboardPayload | null;
 
-  const trades = (data?.openTrades ?? []) as Trade[];
+  const trades: OpenTrade[] = data?.openTrades ?? [];
   const balance = Number(data?.account?.balance ?? 0);
 
   return (
@@ -64,7 +54,7 @@ export default function OpenTradesWidget() {
 
             return (
               <div
-                key={`${t.id}-${t.opened_at}`}
+                key={`${t.trade_id}-${t.opened_at}`}
                 className="rounded-lg border border-omega-dark-gold/40 px-3 py-2 flex flex-col gap-2"
               >
                 <div className="flex justify-between items-center">

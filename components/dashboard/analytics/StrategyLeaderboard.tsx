@@ -23,22 +23,11 @@ function strategyName(s?: string | null) {
   return s?.trim() || "Structure";
 }
 
-/*
-Prefer RR when available.
-Fallback to risk calculation.
-*/
 function pnlPct(t: Trade): number | null {
   const realised = num(t.realised_pl);
   if (!realised) return null;
 
-  const rr = num(t.rr);
-  if (rr) return rr * 100;
-
-  const entry = num(t.entry_price);
-  const sl = num(t.sl);
-  const qty = num(t.qty);
-
-  const risk = Math.abs(entry - sl) * qty;
+  const risk = num(t.risk_amount);
 
   if (risk <= 0) return null;
 
@@ -197,10 +186,16 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
             <motion.div
               key={row.strategy}
               layout
-              className="rounded-lg border border-omega-dark-gold bg-black/40 p-4 cursor-pointer"
-              onClick={() => setExpanded(open ? null : row.strategy)}
+              className="rounded-lg border border-omega-dark-gold bg-black/40 p-4"
             >
-              <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                className="w-full rounded-md text-left"
+                onClick={() => setExpanded(open ? null : row.strategy)}
+                aria-expanded={open}
+                aria-controls={`strategy-${row.strategy}`}
+              >
+                <div className="flex items-center justify-between gap-3">
                 <p className="font-semibold text-omega-gold truncate">
                   {row.strategy}
                 </p>
@@ -208,9 +203,9 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
                 <span className="text-xs text-omega-gold/70">
                   {row.trades} trades
                 </span>
-              </div>
+                </div>
 
-              <div className="mt-3 grid grid-cols-5 gap-2 text-sm">
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
                 <div className="text-omega-gold">
                   Win{" "}
                   <span className="font-semibold">
@@ -240,11 +235,13 @@ export default function StrategyLeaderboard({ trades }: { trades: Trade[] }) {
                     {fmtPrice(row.profitFactor)}
                   </span>
                 </div>
-              </div>
+                </div>
+              </button>
 
               <AnimatePresence>
                 {open && (
                   <motion.div
+                    id={`strategy-${row.strategy}`}
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}

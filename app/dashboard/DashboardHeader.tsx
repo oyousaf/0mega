@@ -65,8 +65,14 @@ export default function DashboardHeader() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.25 }}
           className="absolute top-1/2 left-1/2 w-[90%] max-w-lg -translate-x-1/2 -translate-y-1/2 bg-omega-green border border-neutral-700 rounded-xl p-6 shadow-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-title"
         >
-          <h2 className="text-2xl font-semibold text-omega-gold mb-4 text-center">
+          <h2
+            id="settings-title"
+            className="text-2xl font-semibold text-omega-gold mb-4 text-center"
+          >
             Settings
           </h2>
 
@@ -95,6 +101,7 @@ export default function DashboardHeader() {
               whileTap={{ scale: 0.92 }}
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
+              aria-label="Scroll to dashboard top"
             >
               <FiHome size={16} />
             </motion.button>
@@ -116,6 +123,8 @@ export default function DashboardHeader() {
                 disabled={busy}
                 onClick={toggleAutomation}
                 title={enabled ? "Stop trading engine" : "Start trading engine"}
+                aria-label={enabled ? "Stop trading engine" : "Start trading engine"}
+                aria-pressed={enabled}
                 className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold ${cpuColor} ${pulse} hover-omega disabled:opacity-50`}
               >
                 <FiCpu size={16} />
@@ -126,6 +135,7 @@ export default function DashboardHeader() {
                 whileTap={{ scale: 0.92 }}
                 onClick={() => setOpenSettings(true)}
                 className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-omega-dark-gold text-omega-gold hover-omega"
+                aria-label="Open notification settings"
               >
                 <FiSettings size={16} />
               </motion.button>

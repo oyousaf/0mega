@@ -7,10 +7,8 @@ import type {
 } from "./broker.interface";
 import { getPrice } from "@/providers";
 import { detectAsset } from "@/lib/trading/detectAssetType";
-
-function opposite(side: OrderSide): OrderSide {
-  return side === "BUY" ? "SELL" : "BUY";
-}
+import { pool } from "@/lib/db";
+import { RISK_CONFIG } from "@/lib/trading/config/riskConfig";
 
 /**
  * PaperBroker
@@ -22,8 +20,13 @@ function opposite(side: OrderSide): OrderSide {
  */
 export class PaperBroker implements Broker {
   async fetchBalance(): Promise<Balance> {
-    // Balance truth lives elsewhere (or fixed demo value)
-    return { equity: 100_000, cash: 100_000 };
+    const { rows } = await pool.query(`
+      SELECT $1::numeric + COALESCE(SUM(realised_pl), 0) AS equity
+      FROM paper_trades
+      WHERE is_closed = true
+    `, [RISK_CONFIG.initialEquity]);
+    const equity = Number(rows[0]?.equity ?? RISK_CONFIG.initialEquity);
+    return { equity, cash: equity };
   }
 
   async fetchPositions(): Promise<Position[]> {
@@ -42,9 +45,12 @@ export class PaperBroker implements Broker {
     symbol: string,
     qty: number,
     side: OrderSide,
+    executionPrice?: number,
   ): Promise<ExecutionResult> {
-    const asset = detectAsset(symbol);
-    const price = await getPrice(symbol, asset);
+    void side;
+    const price = Number.isFinite(executionPrice)
+      ? Number(executionPrice)
+      : (await this.fetchPrice(symbol))?.price;
     if (!Number.isFinite(price)) {
       return { success: false, error: "PRICE_UNAVAILABLE" };
     }
@@ -52,7 +58,7 @@ export class PaperBroker implements Broker {
     return {
       success: true,
       orderId: `paper-${Date.now()}`,
-      price,
+      price: Number(price),
       qty,
     };
   }

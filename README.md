@@ -31,8 +31,8 @@ The system prioritises:
 - 🧪 Paper trading broker (single authority)
 - 📐 Risk-based position sizing
 - ⛔ Daily loss & consecutive-loss guards
-- 🎯 SL / TP enforcement (partial & full closes)
-- 📉 Realistic execution modelling (spread, slippage, fees)
+- 🎯 SL / TP enforcement
+- 📉 Conservative spread-aware paper execution modelling
 - 🔁 Deterministic backtesting & forward testing
 - 📊 Analytics & performance review dashboard
 - 🧾 Fully auditable trade & execution state
@@ -55,8 +55,13 @@ The system prioritises:
 
 - ▲ Next.js API Routes
 - ⚙️ Server Actions
-- 🐘 Neon (PostgreSQL)
+- 🐘 Self-hosted PostgreSQL
 - 🧠 Typed execution engine
+
+The public dashboard may run on both Vercel and the VPS. In production, set
+`OMEGA_API_ORIGIN` on Vercel to the HTTPS origin of the VPS so both frontends
+use the single VPS API and trading engine. Leave it unset on the VPS so API
+requests stay local.
 
 ---
 
@@ -94,7 +99,7 @@ Analytics are used for **validation and decision-making**, not optimisation.
 - 🔄 Forward testing in progress
 - 🔒 Logic frozen during evaluation windows
 - 🚫 No live broker connectivity enabled
-- ⏳ Currently running unattended toward **300-trade evaluation threshold**
+- ⏳ Fresh forward-test dataset begins after the VPS PostgreSQL cutover
 
 ---
 

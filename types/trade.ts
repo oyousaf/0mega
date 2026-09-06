@@ -1,7 +1,7 @@
 /* -------------------------------------------------
    EXECUTION
 -------------------------------------------------- */
-export interface TradeExecution {
+interface TradeExecution {
   exec_id: number;
 
   trade_id: number;
@@ -24,6 +24,7 @@ export interface TradeExecution {
 -------------------------------------------------- */
 export interface Trade {
   trade_id: number;
+  id?: number;
 
   symbol: string;
   side: "BUY" | "SELL";
@@ -40,13 +41,14 @@ export interface Trade {
   risk_amount: number;
 
   realised_pl: number | null;
+  exit_reason?: string | null;
 
   opened_at: string;
   closed_at: string | null;
   is_closed: boolean;
   halaal?: boolean;
 
-  executions: TradeExecution[];
+  executions?: TradeExecution[];
 }
 
 /* -------------------------------------------------

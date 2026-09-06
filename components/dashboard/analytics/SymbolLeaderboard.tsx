@@ -79,9 +79,15 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
             <motion.div
               key={row.symbol}
               layout
-              className="rounded-lg border border-omega-dark-gold bg-black/40 p-4 cursor-pointer"
-              onClick={() => setExpanded(open ? null : row.symbol)}
+              className="rounded-lg border border-omega-dark-gold bg-black/40 p-4"
             >
+              <button
+                type="button"
+                className="w-full rounded-md text-left"
+                onClick={() => setExpanded(open ? null : row.symbol)}
+                aria-expanded={open}
+                aria-controls={`symbol-${row.symbol}`}
+              >
               {/* HEADER */}
               <div className="flex items-center justify-between gap-3">
                 <p className="font-semibold text-omega-gold truncate">
@@ -112,11 +118,13 @@ export default function SymbolLeaderboard({ trades }: { trades: Trade[] }) {
                   <span className="ml-1 font-semibold">{row.losses}</span>
                 </div>
               </div>
+              </button>
 
               {/* EXPAND DETAILS */}
               <AnimatePresence>
                 {open && (
                   <motion.div
+                    id={`symbol-${row.symbol}`}
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}

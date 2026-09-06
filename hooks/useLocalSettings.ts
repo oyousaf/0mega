@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 const KEY = "omega-settings";
 
@@ -20,31 +20,49 @@ const DEFAULTS: OmegaSettings = {
   tone: "tone1",
 };
 
+let currentSettings: OmegaSettings = DEFAULTS;
+let loaded = false;
+const listeners = new Set<() => void>();
+
+function loadSettings() {
+  if (loaded || typeof window === "undefined") return;
+  loaded = true;
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) currentSettings = { ...DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    currentSettings = DEFAULTS;
+  }
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  loadSettings();
+  return currentSettings;
+}
+
+function getServerSnapshot() {
+  return DEFAULTS;
+}
+
 export function useLocalSettings() {
-  const [settings, setSettings] = useState<OmegaSettings>(DEFAULTS);
-  const [ready, setReady] = useState(false);
-
-  // Load from localStorage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setSettings({ ...DEFAULTS, ...parsed });
-      }
-    } catch {}
-
-    setReady(true);
-  }, []);
+  const settings = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot,
+  );
 
   // Safe setter
   function save(updates: Partial<OmegaSettings>) {
     const next = { ...settings, ...updates };
-    setSettings(next);
+    currentSettings = next;
     localStorage.setItem(KEY, JSON.stringify(next));
+    listeners.forEach((listener) => listener());
   }
 
-  return { settings, save, ready };
+  return { settings, save, ready: typeof window !== "undefined" };
 }

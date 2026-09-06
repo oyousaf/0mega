@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import AppProviders from "@/components/AppProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "𝛀mega",
-  description: "Escaping The Matrix",
+  title: "Omega Trading Research",
+  description: "Paper-trading research, risk controls, and execution analytics.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -40,7 +41,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#004830",
+  themeColor: "#07110e",
 };
 
 export default function RootLayout({
@@ -49,11 +50,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="min-h-0 min-w-0">
+    <html lang="en-GB" className="min-h-full min-w-0">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-0 min-w-0`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-full min-w-0 antialiased`}
       >
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

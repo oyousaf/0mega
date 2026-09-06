@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { getCached, setCached } from "@/lib/rateLimitCache";
 
-const safe = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : null);
+type StockPriceResponse = {
+  c?: unknown;
+  quotes?: Array<{
+    price?: unknown;
+    last?: { price?: unknown };
+  }>;
+};
+
+const safe = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
 export async function GET(
   _req: Request,
@@ -12,7 +20,7 @@ export async function GET(
   const cacheKey = `stock_${upper}`;
 
   // CACHE
-  const cached = getCached(cacheKey);
+  const cached = getCached<Record<string, unknown>>(cacheKey);
   if (cached) return NextResponse.json({ ...cached, cached: true });
 
   // 1. Finnhub
@@ -21,8 +29,8 @@ export async function GET(
     const res = await fetch(url, { cache: "no-store" });
 
     if (res.ok) {
-      const j = await res.json();
-      const price = safe(j?.c);
+      const j = (await res.json()) as StockPriceResponse;
+      const price = safe(j.c);
 
       if (price) {
         const result = {
@@ -45,10 +53,10 @@ export async function GET(
 
     const res = await fetch(url, { cache: "no-store" });
     if (res.ok) {
-      const j = await res.json();
+      const j = (await res.json()) as StockPriceResponse;
       const price =
-        safe(j?.quotes?.[0]?.last?.price) ??
-        safe(j?.quotes?.[0]?.price) ??
+        safe(j.quotes?.[0]?.last?.price) ??
+        safe(j.quotes?.[0]?.price) ??
         null;
 
       if (price) {
@@ -66,15 +74,14 @@ export async function GET(
     }
   } catch {}
 
-  // 3. Synthetic fallback (never break UI)
+  // Never turn a provider failure into a fabricated market price.
   return NextResponse.json(
     {
       source: "stocks_fallback",
       symbol: upper,
-      price: 1,
       halaal: true,
-      fallback: true,
+      error: "price_unavailable",
     },
-    { status: 200 }
+    { status: 503 }
   );
 }

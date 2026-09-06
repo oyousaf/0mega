@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCached, setCached } from "@/lib/rateLimitCache";
 
-const safe = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : null);
+type ForexPriceResponse = {
+  price?: unknown;
+  rates?: Record<string, unknown>;
+};
+
+const safe = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
 function normalise(raw: string) {
   const p = raw.toUpperCase().trim();
@@ -20,7 +25,7 @@ export async function GET(
   const cacheKey = `forex_${normal}`;
 
   // CACHE
-  const cached = getCached(cacheKey);
+  const cached = getCached<Record<string, unknown>>(cacheKey);
   if (cached) return NextResponse.json({ ...cached, cached: true });
 
   // 1. Frankfurter
@@ -29,8 +34,8 @@ export async function GET(
     const res = await fetch(url, { cache: "no-store" });
 
     if (res.ok) {
-      const j = await res.json();
-      const px = safe(j?.rates?.[quote]);
+      const j = (await res.json()) as ForexPriceResponse;
+      const px = safe(j.rates?.[quote]);
 
       if (px) {
         const result = {
@@ -53,8 +58,8 @@ export async function GET(
     const res = await fetch(tUrl, { cache: "no-store" });
 
     if (res.ok) {
-      const j = await res.json();
-      const px = safe(j?.price);
+      const j = (await res.json()) as ForexPriceResponse;
+      const px = safe(j.price);
 
       if (px) {
         const result = {
@@ -71,15 +76,14 @@ export async function GET(
     }
   } catch {}
 
-  // 3. Synthetic fallback (do NOT break the UI)
+  // Never turn a provider failure into a fabricated market price.
   return NextResponse.json(
     {
       source: "forex_fallback",
       pair: normal,
-      price: 1,
       halaal: true,
-      fallback: true,
+      error: "price_unavailable",
     },
-    { status: 200 }
+    { status: 503 }
   );
 }

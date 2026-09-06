@@ -13,27 +13,13 @@ export default function NotificationsPanel() {
     new Notification("Omega Web Test", { body: "Web notifications OK." });
   }
 
-  async function testPush() {
-    const { sendPushNotification } = await import("@/lib/notify/push");
-    await sendPushNotification("Omega Push Test", "Push OK.");
-  }
-
-  async function testEmail() {
-    const { sendEmail } = await import("@/lib/notify/email");
-    await sendEmail("Omega Email Test", "Email OK.");
-  }
-
-  async function testTelegram() {
-    const { sendTelegram } = await import("@/lib/notify/telegram");
-    await sendTelegram("*Omega Telegram Test*\nBot OK.");
-  }
-
-  async function testFullPipeline() {
-    const { notify } = await import("@/lib/notify");
-    await notify({
-      title: "Omega Pipeline Test",
-      body: "Web + Push + Email + Telegram",
+  async function testChannel(channel: "push" | "email" | "telegram" | "all") {
+    const response = await fetch("/api/notifications/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel }),
     });
+    if (!response.ok) throw new Error("Notification test failed");
   }
 
   return (
@@ -75,19 +61,19 @@ export default function NotificationsPanel() {
           <button className="omega-test-btn" onClick={testWeb}>
             Test Web
           </button>
-          <button className="omega-test-btn" onClick={testPush}>
+          <button className="omega-test-btn" onClick={() => void testChannel("push")}>
             Test Push
           </button>
-          <button className="omega-test-btn" onClick={testEmail}>
+          <button className="omega-test-btn" onClick={() => void testChannel("email")}>
             Test Email
           </button>
-          <button className="omega-test-btn" onClick={testTelegram}>
+          <button className="omega-test-btn" onClick={() => void testChannel("telegram")}>
             Test Telegram
           </button>
         </div>
 
         <button
-          onClick={testFullPipeline}
+          onClick={() => void testChannel("all")}
           className="w-full mt-3 omega-button transition-colors duration-300"
         >
           Run Full Pipeline Test
