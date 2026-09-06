@@ -14,7 +14,7 @@
   --omega-gold-soft: rgba(240, 207, 116, 0.11);
   --omega-dark-gold: #7c6834;
 
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-sans: var(--font-geist-sans, system-ui), sans-serif;
 }
 
 /* =========================================================

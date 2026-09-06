@@ -50,10 +50,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en-GB" className="min-h-full min-w-0">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-full min-w-0 antialiased`}
-      >
+    <html
+      lang="en-GB"
+      className={`${geistSans.variable} ${geistMono.variable} min-h-full min-w-0`}
+    >
+      <body className="min-h-full min-w-0 antialiased">
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
