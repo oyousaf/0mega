@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { fmtPnL } from "@/lib/format";
 import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 

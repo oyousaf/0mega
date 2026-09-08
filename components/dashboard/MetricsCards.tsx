@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, Typography, Grid } from "@mui/material";
-import { motion, easeOut, useInView } from "framer-motion";
+import { motion, easeOut, useInView } from "motion/react";
 import { useRef } from "react";
 import { useDashboard, DashboardPayload } from "@/hooks/useDashboard";
 

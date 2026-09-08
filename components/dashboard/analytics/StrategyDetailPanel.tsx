@@ -1,7 +1,7 @@
 "use client";
 
 import { omegaAnalytics as omega } from "./theme";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Box } from "@mui/material";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { Trade } from "@/types/trade";
