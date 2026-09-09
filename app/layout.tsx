@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Omega Trading Research",
+  title: "Omega",
   description: "Paper-trading research, risk controls, and execution analytics.",
   icons: {
     icon: [
