@@ -48,7 +48,7 @@ The system prioritises:
 - 🟦 TypeScript
 - 💨 Tailwind CSS
 - 🧩 MUI
-- 🎬 Framer Motion
+- 🎬 Motion
 - 📈 Recharts
 
 ### 🛠️ Backend
